@@ -57,17 +57,37 @@ class ConventionEventAdmin(admin.ModelAdmin):
     date_hierarchy = 'date_start'
     autocomplete_fields = ('convention', 'city')
     filter_horizontal = ('runs',)
-    fieldsets = (
-        ('Основная информация', {
-            'fields': ('convention', 'city')
-        }),
-        ('Даты', {
-            'fields': (('date_start', 'date_end'),)
-        }),
-        ('Прогоны', {
-            'fields': ('runs',)
-        }),
-    )
+
+    def get_fields(self, request, obj=None):
+        fields = ['convention', 'city', 'date_start', 'date_end']
+        if not obj:  # Только для новых объектов
+            fields.append('selected_games')
+        fields.append('runs')
+        return fields
+
+    def get_fieldsets(self, request, obj=None):
+        fieldsets = (
+            ('Основная информация', {
+                'fields': ('convention', 'city')
+            }),
+            ('Даты', {
+                'fields': (('date_start', 'date_end'),)
+            }),
+            ('Прогоны', {
+                'fields': ('runs',)
+            }),
+        )
+
+        # Добавляем секцию создания прогонов только для новых объектов
+        if not obj:
+            fieldsets = fieldsets[:2] + (
+                ('Создание прогонов', {
+                    'fields': ('selected_games',),
+                    'description': 'Выберите игры для автоматического создания прогонов на дату начала конвента'
+                }),
+            ) + fieldsets[2:]
+
+        return fieldsets
 
     def get_form(self, request, obj=None, **kwargs):
         form = super().get_form(request, obj, **kwargs)
