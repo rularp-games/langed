@@ -94,12 +94,6 @@ class ConventionEvent(models.Model):
         related_name='convention_events',
         verbose_name='Город'
     )
-    games = models.ManyToManyField(
-        'Game',
-        related_name='convention_events',
-        verbose_name='Игры',
-        blank=True
-    )
     runs = models.ManyToManyField(
         'Run',
         related_name='convention_events',

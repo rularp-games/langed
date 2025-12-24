@@ -1,4 +1,8 @@
 from django.contrib import admin
+from django import forms
+from django.contrib import messages
+from django.utils import timezone
+from datetime import time
 from .models import Game, City, Convention, ConventionEvent, Run
 
 
@@ -52,18 +56,69 @@ class ConventionEventAdmin(admin.ModelAdmin):
     ordering = ('date_start',)
     date_hierarchy = 'date_start'
     autocomplete_fields = ('convention', 'city')
-    filter_horizontal = ('games', 'runs')
+    filter_horizontal = ('runs',)
     fieldsets = (
         ('Основная информация', {
-            'fields': ('convention', 'city', 'games')
-        }),
-        ('Прогоны', {
-            'fields': ('runs',)
+            'fields': ('convention', 'city')
         }),
         ('Даты', {
             'fields': (('date_start', 'date_end'),)
         }),
+        ('Создание прогонов', {
+            'fields': ('selected_games',),
+            'description': 'Выберите игры для автоматического создания прогонов на дату начала конвента'
+        }),
+        ('Прогоны', {
+            'fields': ('runs',)
+        }),
     )
+
+    def get_form(self, request, obj=None, **kwargs):
+        form = super().get_form(request, obj, **kwargs)
+        form.base_fields['selected_games'] = forms.ModelMultipleChoiceField(
+            queryset=Game.objects.all(),
+            widget=forms.SelectMultiple(attrs={'size': 10}),
+            required=False,
+            label='Выбрать игры для создания прогонов',
+            help_text='При сохранении будут созданы прогоны выбранных игр на дату начала конвента'
+        )
+        return form
+
+    def save_model(self, request, obj, form, change):
+        super().save_model(request, obj, form, change)
+
+        # Создаем прогоны для выбранных игр
+        selected_games = form.cleaned_data.get('selected_games')
+        if selected_games:
+            created_runs = []
+            for game in selected_games:
+                # Создаем прогон на дату начала конвента в 10:00
+                run_date = timezone.make_aware(timezone.datetime.combine(obj.date_start, time(10, 0)))
+                run, created = Run.objects.get_or_create(
+                    game=game,
+                    date=run_date,
+                    city=obj.city,
+                    convention_event=obj,
+                    defaults={
+                        'game': game,
+                        'date': run_date,
+                        'city': obj.city,
+                        'convention_event': obj
+                    }
+                )
+                if created:
+                    created_runs.append(run)
+
+            if created_runs:
+                messages.success(
+                    request,
+                    f'Создано {len(created_runs)} прогонов для выбранных игр на {run_date.strftime("%d.%m.%Y %H:%M")}.'
+                )
+            else:
+                messages.info(
+                    request,
+                    'Все выбранные игры уже имеют прогоны на эту дату.'
+                )
 
     def runs_count(self, obj):
         return obj.runs.count()
