@@ -2,7 +2,7 @@
   <div id="app">
     <nav>
       <router-link to="/">Home</router-link> |
-      <router-link to="/cyberwordly">Cyberwordly</router-link> |
+      <router-link to="/afisha">Афиша</router-link> |
       <router-link to="/games">Игры</router-link>
     </nav>
     <router-view/>

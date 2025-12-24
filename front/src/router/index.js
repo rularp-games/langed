@@ -1,7 +1,7 @@
 import { createRouter, createWebHistory } from 'vue-router'
 import HelloWorld from '../components/HelloWorld.vue'
-import Cyberwordly from '../components/Cyberwordly.vue'
 import Games from '../components/Games.vue'
+import Afisha from '../components/Afisha.vue'
 
 const routes = [
   {
@@ -11,14 +11,14 @@ const routes = [
     props: { msg: 'Welcome to Your Vue.js App' }
   },
   {
-    path: '/cyberwordly',
-    name: 'Cyberwordly',
-    component: Cyberwordly
-  },
-  {
     path: '/games',
     name: 'Games',
     component: Games
+  },
+  {
+    path: '/afisha',
+    name: 'Afisha',
+    component: Afisha
   }
 ]
 

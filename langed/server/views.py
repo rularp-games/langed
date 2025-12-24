@@ -15,18 +15,28 @@ class GameViewSet(viewsets.ReadOnlyModelViewSet):
 
 
 class RunViewSet(viewsets.ReadOnlyModelViewSet):
-    """API для просмотра прогонов"""
-    queryset = Run.objects.select_related('game').all()
+    """API для просмотра прогонов с фильтрацией"""
     serializer_class = RunSerializer
-
-
-class AfishaViewSet(viewsets.ViewSet):
-    """API для афиши — предстоящие прогоны"""
     
-    def list(self, request):
-        """Получить список предстоящих прогонов"""
-        runs = Run.objects.select_related('game').filter(
-            date__gte=timezone.now()
-        ).order_by('date')
-        serializer = RunSerializer(runs, many=True)
-        return Response(serializer.data)
+    def get_queryset(self):
+        queryset = Run.objects.select_related('game').all()
+        
+        # Фильтр по городу
+        city = self.request.query_params.get('city')
+        if city:
+            queryset = queryset.filter(city__iexact=city)
+        
+        # Фильтр по времени: upcoming (предстоящие) или past (прошедшие)
+        time_filter = self.request.query_params.get('time')
+        if time_filter == 'upcoming':
+            queryset = queryset.filter(date__gte=timezone.now())
+        elif time_filter == 'past':
+            queryset = queryset.filter(date__lt=timezone.now())
+        
+        return queryset.order_by('date')
+    
+    @action(detail=False, methods=['get'])
+    def cities(self, request):
+        """Получить список уникальных городов"""
+        cities = Run.objects.values_list('city', flat=True).distinct().order_by('city')
+        return Response(list(cities))
