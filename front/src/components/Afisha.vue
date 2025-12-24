@@ -178,45 +178,55 @@
         <p>Конвенты не найдены</p>
       </div>
 
-      <!-- Карточки конвентов -->
+      <!-- Карточки проведений конвентов -->
       <div v-else class="conventions-grid">
         <div 
-          v-for="convention in conventions" 
-          :key="convention.id" 
+          v-for="event in conventions" 
+          :key="event.id" 
           class="convention-card"
-          :class="{ 'past-card': isConventionPast(convention.date_end) }"
-          @click="selectedConvention = convention"
+          :class="{ 'past-card': isConventionPast(event.date_end) }"
+          @click="selectedConvention = event"
         >
           <div class="convention-dates">
-            {{ formatConventionDates(convention.date_start, convention.date_end) }}
+            {{ formatConventionDates(event.date_start, event.date_end) }}
           </div>
-          <h2 class="convention-title">{{ convention.name }}</h2>
-          <div class="convention-city">📍 {{ convention.city }}</div>
+          <h2 class="convention-title">{{ event.convention_name }}</h2>
+          <div class="convention-city">📍 {{ event.city }}</div>
           <div class="convention-stats">
             <span class="runs-count">
-              {{ convention.runs_count }} {{ pluralizeRuns(convention.runs_count) }}
+              {{ event.runs_count }} {{ pluralizeRuns(event.runs_count) }}
             </span>
-            <span :class="['status-badge', isConventionPast(convention.date_end) ? 'past' : 'upcoming']">
-              {{ isConventionPast(convention.date_end) ? 'Завершён' : getConventionStatus(convention) }}
+            <span :class="['status-badge', isConventionPast(event.date_end) ? 'past' : 'upcoming']">
+              {{ isConventionPast(event.date_end) ? 'Завершён' : getConventionStatus(event) }}
             </span>
           </div>
         </div>
       </div>
     </template>
 
-    <!-- Модальное окно с деталями конвента -->
+    <!-- Модальное окно с деталями проведения конвента -->
     <div v-if="selectedConvention" class="modal-overlay" @click.self="selectedConvention = null">
       <div class="modal-content">
         <button class="modal-close" @click="selectedConvention = null">×</button>
         <div class="modal-dates">
           {{ formatConventionDates(selectedConvention.date_start, selectedConvention.date_end) }}
         </div>
-        <h2>{{ selectedConvention.name }}</h2>
+        <h2>{{ selectedConvention.convention_name }}</h2>
         <div class="modal-city">📍 {{ selectedConvention.city }}</div>
         
         <div class="modal-section" v-if="selectedConvention.description">
           <h3>Описание</h3>
           <p>{{ selectedConvention.description }}</p>
+        </div>
+        
+        <div class="modal-section" v-if="selectedConvention.games && selectedConvention.games.length > 0">
+          <h3>Игры на конвенте ({{ selectedConvention.games.length }})</h3>
+          <div class="modal-games-list">
+            <div v-for="game in selectedConvention.games" :key="game.id" class="modal-game-item">
+              <span class="modal-game-name">{{ game.name }}</span>
+              <span class="modal-game-players">{{ game.players_min }}–{{ game.players_max }} игроков</span>
+            </div>
+          </div>
         </div>
         
         <div class="modal-section" v-if="selectedConvention.runs && selectedConvention.runs.length > 0">
@@ -308,10 +318,10 @@ export default {
       this.fetchRuns()
     },
     
-    // === Конвенты ===
+    // === Конвенты (проведения) ===
     async fetchConventionCities() {
       try {
-        const response = await fetch('/api/conventions/cities/')
+        const response = await fetch('/api/convention-events/cities/')
         if (response.ok) {
           this.conventionCities = await response.json()
         }
@@ -331,7 +341,7 @@ export default {
           params.append('time', this.conventionTimeFilter)
         }
         
-        const url = '/api/conventions/' + (params.toString() ? '?' + params.toString() : '')
+        const url = '/api/convention-events/' + (params.toString() ? '?' + params.toString() : '')
         const response = await fetch(url)
         
         if (!response.ok) {
@@ -922,6 +932,32 @@ export default {
   color: #ccc;
   line-height: 1.6;
   white-space: pre-wrap;
+}
+
+.modal-games-list {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.modal-game-item {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: 12px;
+  background: rgba(0, 0, 0, 0.3);
+  border-radius: 8px;
+  border-left: 3px solid #00ccff;
+}
+
+.modal-game-name {
+  color: #e0e0e0;
+  font-weight: 600;
+}
+
+.modal-game-players {
+  color: #888;
+  font-size: 0.85rem;
 }
 
 .modal-runs-list {

@@ -5,8 +5,11 @@ from django.shortcuts import get_object_or_404
 from django.utils import timezone
 from datetime import date
 
-from .models import Game, Run, Convention
-from .serializers import GameSerializer, RunSerializer, ConventionSerializer
+from .models import Game, Run, Convention, ConventionEvent, City
+from .serializers import (
+    GameSerializer, RunSerializer, 
+    ConventionSerializer, ConventionEventSerializer
+)
 
 
 class GameViewSet(viewsets.ReadOnlyModelViewSet):
@@ -20,12 +23,14 @@ class RunViewSet(viewsets.ReadOnlyModelViewSet):
     serializer_class = RunSerializer
     
     def get_queryset(self):
-        queryset = Run.objects.select_related('game', 'convention').all()
+        queryset = Run.objects.select_related(
+            'game', 'city', 'convention_event', 'convention_event__convention'
+        ).all()
         
         # Фильтр по городу
         city = self.request.query_params.get('city')
         if city:
-            queryset = queryset.filter(city__iexact=city)
+            queryset = queryset.filter(city__name__iexact=city)
         
         # Фильтр по времени: upcoming (предстоящие) или past (прошедшие)
         time_filter = self.request.query_params.get('time')
@@ -39,21 +44,36 @@ class RunViewSet(viewsets.ReadOnlyModelViewSet):
     @action(detail=False, methods=['get'])
     def cities(self, request):
         """Получить список уникальных городов"""
-        cities = Run.objects.values_list('city', flat=True).distinct().order_by('city')
+        cities = City.objects.filter(
+            runs__isnull=False
+        ).distinct().values_list('name', flat=True).order_by('name')
         return Response(list(cities))
 
 
 class ConventionViewSet(viewsets.ReadOnlyModelViewSet):
-    """API для просмотра конвентов с фильтрацией"""
+    """API для просмотра конвентов (справочник)"""
     serializer_class = ConventionSerializer
+    queryset = Convention.objects.prefetch_related('events').all()
+
+
+class ConventionEventViewSet(viewsets.ReadOnlyModelViewSet):
+    """API для просмотра проведений конвентов с фильтрацией"""
+    serializer_class = ConventionEventSerializer
     
     def get_queryset(self):
-        queryset = Convention.objects.prefetch_related('runs', 'runs__game').all()
+        queryset = ConventionEvent.objects.select_related(
+            'convention', 'city'
+        ).prefetch_related('runs', 'runs__game', 'games').all()
+        
+        # Фильтр по конвенту
+        convention_id = self.request.query_params.get('convention')
+        if convention_id:
+            queryset = queryset.filter(convention_id=convention_id)
         
         # Фильтр по городу
         city = self.request.query_params.get('city')
         if city:
-            queryset = queryset.filter(city__iexact=city)
+            queryset = queryset.filter(city__name__iexact=city)
         
         # Фильтр по времени: upcoming (предстоящие) или past (прошедшие)
         time_filter = self.request.query_params.get('time')
@@ -67,6 +87,8 @@ class ConventionViewSet(viewsets.ReadOnlyModelViewSet):
     
     @action(detail=False, methods=['get'])
     def cities(self, request):
-        """Получить список уникальных городов конвентов"""
-        cities = Convention.objects.values_list('city', flat=True).distinct().order_by('city')
+        """Получить список уникальных городов проведений конвентов"""
+        cities = City.objects.filter(
+            convention_events__isnull=False
+        ).distinct().values_list('name', flat=True).order_by('name')
         return Response(list(cities))

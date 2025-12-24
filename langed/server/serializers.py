@@ -1,5 +1,11 @@
 from rest_framework import serializers
-from .models import Game, Run, Convention
+from .models import Game, Run, Convention, ConventionEvent, City
+
+
+class CitySerializer(serializers.ModelSerializer):
+    class Meta:
+        model = City
+        fields = ['id', 'name', 'region']
 
 
 class GameSerializer(serializers.ModelSerializer):
@@ -25,6 +31,60 @@ class GameSerializer(serializers.ModelSerializer):
         return None
 
 
+class GameBriefSerializer(serializers.ModelSerializer):
+    """Краткий сериализатор игры"""
+    class Meta:
+        model = Game
+        fields = ['id', 'name', 'players_min', 'players_max']
+
+
+class ConventionSerializer(serializers.ModelSerializer):
+    """Сериализатор конвента (без дат - просто справочник)"""
+    events_count = serializers.IntegerField(source='events.count', read_only=True)
+    
+    class Meta:
+        model = Convention
+        fields = [
+            'id', 'name', 'description', 'events_count',
+            'created_at', 'updated_at'
+        ]
+        read_only_fields = ['id', 'created_at', 'updated_at']
+
+
+class RunBriefSerializer(serializers.ModelSerializer):
+    """Краткий сериализатор прогона для вложения в проведение конвента"""
+    game_name = serializers.CharField(source='game.name', read_only=True)
+    
+    class Meta:
+        model = Run
+        fields = ['id', 'game_name', 'date']
+
+
+class ConventionEventSerializer(serializers.ModelSerializer):
+    """Сериализатор проведения конвента"""
+    convention_name = serializers.CharField(source='convention.name', read_only=True)
+    city = serializers.CharField(source='city.name', read_only=True)
+    city_id = serializers.PrimaryKeyRelatedField(
+        queryset=City.objects.all(),
+        source='city',
+        write_only=True
+    )
+    games = GameBriefSerializer(many=True, read_only=True)
+    runs = RunBriefSerializer(many=True, read_only=True)
+    runs_count = serializers.IntegerField(source='runs.count', read_only=True)
+    description = serializers.CharField(source='convention.description', read_only=True)
+    
+    class Meta:
+        model = ConventionEvent
+        fields = [
+            'id', 'convention', 'convention_name', 'city', 'city_id',
+            'date_start', 'date_end', 'description',
+            'games', 'runs', 'runs_count',
+            'created_at', 'updated_at'
+        ]
+        read_only_fields = ['id', 'created_at', 'updated_at']
+
+
 class RunSerializer(serializers.ModelSerializer):
     game = GameSerializer(read_only=True)
     game_id = serializers.PrimaryKeyRelatedField(
@@ -32,50 +92,31 @@ class RunSerializer(serializers.ModelSerializer):
         source='game',
         write_only=True
     )
-    convention_id = serializers.PrimaryKeyRelatedField(
-        queryset=Convention.objects.all(),
-        source='convention',
+    city = serializers.CharField(source='city.name', read_only=True)
+    city_id = serializers.PrimaryKeyRelatedField(
+        queryset=City.objects.all(),
+        source='city',
+        write_only=True
+    )
+    convention_event_id = serializers.PrimaryKeyRelatedField(
+        queryset=ConventionEvent.objects.all(),
+        source='convention_event',
         write_only=True,
         required=False,
         allow_null=True
     )
-    convention_name = serializers.CharField(source='convention.name', read_only=True, default=None)
+    convention_name = serializers.SerializerMethodField()
     
     class Meta:
         model = Run
         fields = [
-            'id', 'game', 'game_id', 'date', 'city', 
-            'convention', 'convention_id', 'convention_name',
+            'id', 'game', 'game_id', 'date', 'city', 'city_id',
+            'convention_event', 'convention_event_id', 'convention_name',
             'created_at', 'updated_at'
         ]
         read_only_fields = ['id', 'created_at', 'updated_at']
-
-
-class RunBriefSerializer(serializers.ModelSerializer):
-    """Краткий сериализатор прогона для вложения в конвент"""
-    game_name = serializers.CharField(source='game.name', read_only=True)
     
-    class Meta:
-        model = Run
-        fields = ['id', 'game_name', 'date', 'city']
-
-
-class ConventionSerializer(serializers.ModelSerializer):
-    runs = RunBriefSerializer(many=True, read_only=True)
-    runs_count = serializers.IntegerField(source='runs.count', read_only=True)
-    
-    class Meta:
-        model = Convention
-        fields = [
-            'id', 'name', 'city', 'date_start', 'date_end', 'description',
-            'runs', 'runs_count', 'created_at', 'updated_at'
-        ]
-        read_only_fields = ['id', 'created_at', 'updated_at']
-
-
-class ConventionBriefSerializer(serializers.ModelSerializer):
-    """Краткий сериализатор конвента для вложения в прогон"""
-    
-    class Meta:
-        model = Convention
-        fields = ['id', 'name', 'city', 'date_start', 'date_end']
+    def get_convention_name(self, obj):
+        if obj.convention_event:
+            return obj.convention_event.convention.name
+        return None

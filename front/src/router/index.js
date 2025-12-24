@@ -2,6 +2,7 @@ import { createRouter, createWebHistory } from 'vue-router'
 import HelloWorld from '../components/HelloWorld.vue'
 import Games from '../components/Games.vue'
 import Afisha from '../components/Afisha.vue'
+import Conventions from '../components/Conventions.vue'
 
 const routes = [
   {
@@ -19,6 +20,11 @@ const routes = [
     path: '/afisha',
     name: 'Afisha',
     component: Afisha
+  },
+  {
+    path: '/conventions',
+    name: 'Conventions',
+    component: Conventions
   }
 ]
 
@@ -28,4 +34,3 @@ const router = createRouter({
 })
 
 export default router
-
