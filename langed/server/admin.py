@@ -19,12 +19,6 @@ class ConventionEventForm(forms.ModelForm):
         model = ConventionEvent
         fields = ['convention', 'city', 'date_start', 'date_end', 'runs']
 
-    def __init__(self, *args, **kwargs):
-        super().__init__(*args, **kwargs)
-        # Поле selected_games показываем только для новых объектов
-        if self.instance and self.instance.pk:
-            self.fields.pop('selected_games', None)
-
 
 @admin.register(City)
 class CityAdmin(admin.ModelAdmin):
@@ -87,25 +81,20 @@ class ConventionEventAdmin(admin.ModelAdmin):
             ('Даты', {
                 'fields': (('date_start', 'date_end'),)
             }),
+            ('Создание прогонов', {
+                'fields': ('selected_games',),
+                'description': 'Выберите игры для автоматического создания прогонов на дату начала конвента'
+            }),
             ('Прогоны', {
                 'fields': ('runs',)
             }),
         )
 
-        # Добавляем секцию создания прогонов только для новых объектов
-        if not obj:
-            fieldsets = fieldsets[:2] + (
-                ('Создание прогонов', {
-                    'fields': ('selected_games',),
-                    'description': 'Выберите игры для автоматического создания прогонов на дату начала конвента'
-                }),
-            ) + fieldsets[2:]
-
         return fieldsets
 
     def save_model(self, request, obj, form, change):
-        # Создаем прогоны для выбранных игр только при создании нового объекта
-        if not change and 'selected_games' in form.cleaned_data:
+        # Создаем прогоны для выбранных игр
+        if 'selected_games' in form.cleaned_data:
             selected_games = form.cleaned_data.get('selected_games')
             if selected_games:
                 created_runs = []

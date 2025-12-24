@@ -69,12 +69,23 @@ class ConventionEventSerializer(serializers.ModelSerializer):
         source='city',
         write_only=True
     )
-    games = GameBriefSerializer(many=True, read_only=True)
+    games = serializers.SerializerMethodField()
     runs = RunBriefSerializer(many=True)
     scheduled_runs = RunBriefSerializer(many=True, read_only=True)
     scheduled_runs_count = serializers.IntegerField(source='scheduled_runs.count', read_only=True)
     description = serializers.CharField(source='convention.description', read_only=True)
-    
+
+    def get_games(self, obj):
+        """Получить уникальные игры из всех прогонов конвента"""
+        games = set()
+        # Игры из runs (ManyToMany)
+        for run in obj.runs.all():
+            games.add(run.game)
+        # Игры из scheduled_runs (reverse FK)
+        for run in obj.scheduled_runs.all():
+            games.add(run.game)
+        return GameBriefSerializer(list(games), many=True, context=self.context).data
+
     class Meta:
         model = ConventionEvent
         fields = [
