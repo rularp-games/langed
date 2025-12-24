@@ -1,6 +1,7 @@
 import { createRouter, createWebHistory } from 'vue-router'
 import HelloWorld from '../components/HelloWorld.vue'
 import Cyberwordly from '../components/Cyberwordly.vue'
+import Games from '../components/Games.vue'
 
 const routes = [
   {
@@ -13,6 +14,11 @@ const routes = [
     path: '/cyberwordly',
     name: 'Cyberwordly',
     component: Cyberwordly
+  },
+  {
+    path: '/games',
+    name: 'Games',
+    component: Games
   }
 ]
 
