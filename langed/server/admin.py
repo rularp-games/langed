@@ -64,10 +64,6 @@ class ConventionEventAdmin(admin.ModelAdmin):
         ('Даты', {
             'fields': (('date_start', 'date_end'),)
         }),
-        ('Создание прогонов', {
-            'fields': ('selected_games',),
-            'description': 'Выберите игры для автоматического создания прогонов на дату начала конвента'
-        }),
         ('Прогоны', {
             'fields': ('runs',)
         }),
