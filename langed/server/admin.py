@@ -1,5 +1,5 @@
 from django.contrib import admin
-from .models import Game, City, Convention, Run
+from .models import Game, City, Convention, ConventionEvent, Run
 
 
 @admin.register(City)
@@ -34,15 +34,28 @@ class GameAdmin(admin.ModelAdmin):
 
 @admin.register(Convention)
 class ConventionAdmin(admin.ModelAdmin):
-    list_display = ('name', 'city', 'date_start', 'date_end', 'created_at')
-    list_filter = ('city', 'date_start')
-    search_fields = ('name', 'description', 'city__name')
-    ordering = ('date_start',)
-    date_hierarchy = 'date_start'
-    autocomplete_fields = ('city',)
+    list_display = ('name', 'description', 'created_at')
+    search_fields = ('name', 'description')
+    ordering = ('name',)
     fieldsets = (
         ('Основная информация', {
-            'fields': ('name', 'city', 'description')
+            'fields': ('name', 'description')
+        }),
+    )
+
+
+@admin.register(ConventionEvent)
+class ConventionEventAdmin(admin.ModelAdmin):
+    list_display = ('convention', 'city', 'date_start', 'date_end', 'created_at')
+    list_filter = ('convention', 'city', 'date_start')
+    search_fields = ('convention__name', 'city__name')
+    ordering = ('date_start',)
+    date_hierarchy = 'date_start'
+    autocomplete_fields = ('convention', 'city')
+    filter_horizontal = ('games',)
+    fieldsets = (
+        ('Основная информация', {
+            'fields': ('convention', 'city', 'games')
         }),
         ('Даты', {
             'fields': (('date_start', 'date_end'),)
@@ -52,14 +65,14 @@ class ConventionAdmin(admin.ModelAdmin):
 
 @admin.register(Run)
 class RunAdmin(admin.ModelAdmin):
-    list_display = ('game', 'city', 'date', 'convention', 'created_at')
-    list_filter = ('city', 'convention', 'date')
-    search_fields = ('game__name', 'city__name', 'convention__name')
+    list_display = ('game', 'city', 'date', 'convention_event', 'created_at')
+    list_filter = ('city', 'convention_event', 'date')
+    search_fields = ('game__name', 'city__name', 'convention_event__convention__name')
     date_hierarchy = 'date'
-    autocomplete_fields = ('game', 'city', 'convention')
+    autocomplete_fields = ('game', 'city', 'convention_event')
     fieldsets = (
         ('Основная информация', {
-            'fields': ('game', 'city', 'convention')
+            'fields': ('game', 'city', 'convention_event')
         }),
         ('Дата', {
             'fields': ('date',)

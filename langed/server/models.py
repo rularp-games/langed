@@ -65,14 +65,6 @@ class Convention(models.Model):
     """Модель конвента"""
     
     name = models.CharField(max_length=255, verbose_name='Название')
-    city = models.ForeignKey(
-        City,
-        on_delete=models.PROTECT,
-        related_name='conventions',
-        verbose_name='Город'
-    )
-    date_start = models.DateField(verbose_name='Дата начала')
-    date_end = models.DateField(verbose_name='Дата окончания')
     description = models.TextField(blank=True, verbose_name='Описание')
     
     created_at = models.DateTimeField(auto_now_add=True, verbose_name='Дата создания')
@@ -81,10 +73,46 @@ class Convention(models.Model):
     class Meta:
         verbose_name = 'Конвент'
         verbose_name_plural = 'Конвенты'
+        ordering = ['name']
+
+    def __str__(self):
+        return self.name
+
+
+class ConventionEvent(models.Model):
+    """Модель проведения конвента"""
+    
+    convention = models.ForeignKey(
+        Convention,
+        on_delete=models.CASCADE,
+        related_name='events',
+        verbose_name='Конвент'
+    )
+    city = models.ForeignKey(
+        City,
+        on_delete=models.PROTECT,
+        related_name='convention_events',
+        verbose_name='Город'
+    )
+    games = models.ManyToManyField(
+        'Game',
+        related_name='convention_events',
+        verbose_name='Игры',
+        blank=True
+    )
+    date_start = models.DateField(verbose_name='Дата начала')
+    date_end = models.DateField(verbose_name='Дата окончания')
+    
+    created_at = models.DateTimeField(auto_now_add=True, verbose_name='Дата создания')
+    updated_at = models.DateTimeField(auto_now=True, verbose_name='Дата обновления')
+
+    class Meta:
+        verbose_name = 'Проведение конвента'
+        verbose_name_plural = 'Проведения конвентов'
         ordering = ['date_start']
 
     def __str__(self):
-        return f'{self.name} — {self.city.name} ({self.date_start.strftime("%d.%m.%Y")} - {self.date_end.strftime("%d.%m.%Y")})'
+        return f'{self.convention.name} — {self.city.name} ({self.date_start.strftime("%d.%m.%Y")} - {self.date_end.strftime("%d.%m.%Y")})'
 
     def clean(self):
         if self.date_start > self.date_end:
@@ -107,11 +135,11 @@ class Run(models.Model):
         related_name='runs',
         verbose_name='Город'
     )
-    convention = models.ForeignKey(
-        Convention,
+    convention_event = models.ForeignKey(
+        ConventionEvent,
         on_delete=models.SET_NULL,
         related_name='runs',
-        verbose_name='Конвент',
+        verbose_name='Проведение конвента',
         null=True,
         blank=True
     )
