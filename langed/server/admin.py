@@ -46,21 +46,28 @@ class ConventionAdmin(admin.ModelAdmin):
 
 @admin.register(ConventionEvent)
 class ConventionEventAdmin(admin.ModelAdmin):
-    list_display = ('convention', 'city', 'date_start', 'date_end', 'created_at')
+    list_display = ('convention', 'city', 'date_start', 'date_end', 'runs_count', 'created_at')
     list_filter = ('convention', 'city', 'date_start')
     search_fields = ('convention__name', 'city__name')
     ordering = ('date_start',)
     date_hierarchy = 'date_start'
     autocomplete_fields = ('convention', 'city')
-    filter_horizontal = ('games',)
+    filter_horizontal = ('games', 'runs')
     fieldsets = (
         ('Основная информация', {
             'fields': ('convention', 'city', 'games')
+        }),
+        ('Прогоны', {
+            'fields': ('runs',)
         }),
         ('Даты', {
             'fields': (('date_start', 'date_end'),)
         }),
     )
+
+    def runs_count(self, obj):
+        return obj.runs.count()
+    runs_count.short_description = 'Количество прогонов'
 
 
 @admin.register(Run)

@@ -71,7 +71,7 @@ class ConventionEventSerializer(serializers.ModelSerializer):
     )
     games = GameBriefSerializer(many=True, read_only=True)
     runs = RunBriefSerializer(many=True)
-    scheduled_runs = RunBriefSerializer(source='scheduled_runs', many=True, read_only=True)
+    scheduled_runs = RunBriefSerializer(many=True, read_only=True)
     scheduled_runs_count = serializers.IntegerField(source='scheduled_runs.count', read_only=True)
     description = serializers.CharField(source='convention.description', read_only=True)
     
