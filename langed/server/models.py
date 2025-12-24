@@ -2,6 +2,23 @@ from django.db import models
 from django.core.exceptions import ValidationError
 
 
+class City(models.Model):
+    """Модель города"""
+    
+    name = models.CharField(max_length=255, verbose_name='Название')
+    region = models.CharField(max_length=255, blank=True, verbose_name='Регион')
+    
+    class Meta:
+        verbose_name = 'Город'
+        verbose_name_plural = 'Города'
+        ordering = ['name']
+
+    def __str__(self):
+        if self.region:
+            return f'{self.name} ({self.region})'
+        return self.name
+
+
 class Game(models.Model):
     """Модель игры"""
     
@@ -48,7 +65,12 @@ class Convention(models.Model):
     """Модель конвента"""
     
     name = models.CharField(max_length=255, verbose_name='Название')
-    city = models.CharField(max_length=255, verbose_name='Город')
+    city = models.ForeignKey(
+        City,
+        on_delete=models.PROTECT,
+        related_name='conventions',
+        verbose_name='Город'
+    )
     date_start = models.DateField(verbose_name='Дата начала')
     date_end = models.DateField(verbose_name='Дата окончания')
     description = models.TextField(blank=True, verbose_name='Описание')
@@ -62,7 +84,7 @@ class Convention(models.Model):
         ordering = ['date_start']
 
     def __str__(self):
-        return f'{self.name} — {self.city} ({self.date_start.strftime("%d.%m.%Y")} - {self.date_end.strftime("%d.%m.%Y")})'
+        return f'{self.name} — {self.city.name} ({self.date_start.strftime("%d.%m.%Y")} - {self.date_end.strftime("%d.%m.%Y")})'
 
     def clean(self):
         if self.date_start > self.date_end:
@@ -79,9 +101,14 @@ class Run(models.Model):
         verbose_name='Игра'
     )
     date = models.DateTimeField(verbose_name='Дата и время прогона')
-    city = models.CharField(max_length=255, verbose_name='Город')
+    city = models.ForeignKey(
+        City,
+        on_delete=models.PROTECT,
+        related_name='runs',
+        verbose_name='Город'
+    )
     convention = models.ForeignKey(
-        'Convention',
+        Convention,
         on_delete=models.SET_NULL,
         related_name='runs',
         verbose_name='Конвент',
@@ -98,4 +125,4 @@ class Run(models.Model):
         ordering = ['date']
 
     def __str__(self):
-        return f'{self.game.name} — {self.city} ({self.date.strftime("%d.%m.%Y %H:%M")})'
+        return f'{self.game.name} — {self.city.name} ({self.date.strftime("%d.%m.%Y %H:%M")})'
