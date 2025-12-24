@@ -36,3 +36,27 @@ class Game(models.Model):
             raise ValidationError('Минимум женских ролей не может быть больше максимума')
         if self.male_roles_min > self.male_roles_max:
             raise ValidationError('Минимум мужских ролей не может быть больше максимума')
+
+
+class Run(models.Model):
+    """Модель прогона (сеанс игры)"""
+    
+    game = models.ForeignKey(
+        Game,
+        on_delete=models.CASCADE,
+        related_name='runs',
+        verbose_name='Игра'
+    )
+    date = models.DateTimeField(verbose_name='Дата и время прогона')
+    city = models.CharField(max_length=255, verbose_name='Город')
+    
+    created_at = models.DateTimeField(auto_now_add=True, verbose_name='Дата создания')
+    updated_at = models.DateTimeField(auto_now=True, verbose_name='Дата обновления')
+
+    class Meta:
+        verbose_name = 'Прогон'
+        verbose_name_plural = 'Прогоны'
+        ordering = ['date']
+
+    def __str__(self):
+        return f'{self.game.name} — {self.city} ({self.date.strftime("%d.%m.%Y %H:%M")})'

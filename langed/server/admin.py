@@ -1,5 +1,5 @@
 from django.contrib import admin
-from .models import Game
+from .models import Game, Run
 
 
 @admin.register(Game)
@@ -20,5 +20,19 @@ class GameAdmin(admin.ModelAdmin):
         }),
         ('Мужские роли', {
             'fields': (('male_roles_min', 'male_roles_max'),)
+        }),
+    )
+
+
+@admin.register(Run)
+class RunAdmin(admin.ModelAdmin):
+    list_display = ('game', 'city', 'date', 'created_at')
+    list_filter = ('city', 'date', 'game')
+    search_fields = ('game__name', 'city')
+    date_hierarchy = 'date'
+    autocomplete_fields = ['game']
+    fieldsets = (
+        ('Информация о прогоне', {
+            'fields': ('game', 'city', 'date')
         }),
     )
