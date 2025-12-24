@@ -3,16 +3,26 @@ from .models import Game, Run, Convention
 
 
 class GameSerializer(serializers.ModelSerializer):
+    poster_url = serializers.SerializerMethodField()
+    
     class Meta:
         model = Game
         fields = [
-            'id', 'name', 'announcement', 'red_flags',
+            'id', 'name', 'poster', 'poster_url', 'announcement', 'red_flags',
             'players_min', 'players_max',
             'female_roles_min', 'female_roles_max',
             'male_roles_min', 'male_roles_max',
             'created_at', 'updated_at'
         ]
-        read_only_fields = ['id', 'created_at', 'updated_at']
+        read_only_fields = ['id', 'created_at', 'updated_at', 'poster_url']
+    
+    def get_poster_url(self, obj):
+        if obj.poster:
+            request = self.context.get('request')
+            if request:
+                return request.build_absolute_uri(obj.poster.url)
+            return obj.poster.url
+        return None
 
 
 class RunSerializer(serializers.ModelSerializer):

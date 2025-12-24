@@ -6,6 +6,12 @@ class Game(models.Model):
     """Модель игры"""
     
     name = models.CharField(max_length=255, verbose_name='Название')
+    poster = models.ImageField(
+        upload_to='games/posters/',
+        blank=True,
+        null=True,
+        verbose_name='Постер'
+    )
     announcement = models.TextField(blank=True, verbose_name='Анонс')
     red_flags = models.TextField(blank=True, verbose_name='Красные флаги')
     

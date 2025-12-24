@@ -43,10 +43,11 @@ urlpatterns = [
     path('admin/', admin.site.urls),
     path('api/', include('server.urls')),
     # Catch-all для Vue Router — должен быть последним
-    re_path(r'^(?!admin/|api/|static/).*$', vue_app, name='vue_app'),
+    re_path(r'^(?!admin/|api/|static/|media/).*$', vue_app, name='vue_app'),
 ]
 
-# Для dev-режима: отдача статики Django
+# Для dev-режима: отдача статики и медиа Django
 if settings.DEBUG:
-    urlpatterns += static(settings.STATIC_URL)
+    urlpatterns += static(settings.STATIC_URL, document_root=settings.STATIC_ROOT)
+    urlpatterns += static(settings.MEDIA_URL, document_root=settings.MEDIA_ROOT)
 

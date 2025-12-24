@@ -24,21 +24,27 @@
         v-for="game in games" 
         :key="game.id" 
         class="game-card"
+        :class="{ 'has-poster': game.poster_url }"
         @click="selectedGame = game"
       >
-        <h2 class="game-title">{{ game.name }}</h2>
-        <div class="game-stats">
-          <div class="stat">
-            <span class="stat-label">Игроки</span>
-            <span class="stat-value">{{ game.players_min }} – {{ game.players_max }}</span>
-          </div>
-          <div class="stat">
-            <span class="stat-label">Жен. роли</span>
-            <span class="stat-value">{{ game.female_roles_min }} – {{ game.female_roles_max }}</span>
-          </div>
-          <div class="stat">
-            <span class="stat-label">Муж. роли</span>
-            <span class="stat-value">{{ game.male_roles_min }} – {{ game.male_roles_max }}</span>
+        <div v-if="game.poster_url" class="game-poster">
+          <img :src="game.poster_url" :alt="game.name" />
+        </div>
+        <div class="game-info">
+          <h2 class="game-title">{{ game.name }}</h2>
+          <div class="game-stats">
+            <div class="stat">
+              <span class="stat-label">Игроки</span>
+              <span class="stat-value">{{ game.players_min }} – {{ game.players_max }}</span>
+            </div>
+            <div class="stat">
+              <span class="stat-label">Жен. роли</span>
+              <span class="stat-value">{{ game.female_roles_min }} – {{ game.female_roles_max }}</span>
+            </div>
+            <div class="stat">
+              <span class="stat-label">Муж. роли</span>
+              <span class="stat-value">{{ game.male_roles_min }} – {{ game.male_roles_max }}</span>
+            </div>
           </div>
         </div>
       </div>
@@ -46,32 +52,39 @@
 
     <!-- Модальное окно с деталями игры -->
     <div v-if="selectedGame" class="modal-overlay" @click.self="selectedGame = null">
-      <div class="modal-content">
+      <div class="modal-content" :class="{ 'with-poster': selectedGame.poster_url }">
         <button class="modal-close" @click="selectedGame = null">×</button>
-        <h2>{{ selectedGame.name }}</h2>
         
-        <div class="modal-section" v-if="selectedGame.announcement">
-          <h3>Анонс</h3>
-          <p>{{ selectedGame.announcement }}</p>
+        <div v-if="selectedGame.poster_url" class="modal-poster">
+          <img :src="selectedGame.poster_url" :alt="selectedGame.name" />
         </div>
         
-        <div class="modal-section" v-if="selectedGame.red_flags">
-          <h3>Красные флаги</h3>
-          <p class="red-flags">{{ selectedGame.red_flags }}</p>
-        </div>
-        
-        <div class="modal-stats">
-          <div class="modal-stat">
-            <span class="modal-stat-label">Игроки</span>
-            <span class="modal-stat-value">{{ selectedGame.players_min }} – {{ selectedGame.players_max }}</span>
+        <div class="modal-body">
+          <h2>{{ selectedGame.name }}</h2>
+          
+          <div class="modal-section" v-if="selectedGame.announcement">
+            <h3>Анонс</h3>
+            <p>{{ selectedGame.announcement }}</p>
           </div>
-          <div class="modal-stat">
-            <span class="modal-stat-label">Женские роли</span>
-            <span class="modal-stat-value">{{ selectedGame.female_roles_min }} – {{ selectedGame.female_roles_max }}</span>
+          
+          <div class="modal-section" v-if="selectedGame.red_flags">
+            <h3>Красные флаги</h3>
+            <p class="red-flags">{{ selectedGame.red_flags }}</p>
           </div>
-          <div class="modal-stat">
-            <span class="modal-stat-label">Мужские роли</span>
-            <span class="modal-stat-value">{{ selectedGame.male_roles_min }} – {{ selectedGame.male_roles_max }}</span>
+          
+          <div class="modal-stats">
+            <div class="modal-stat">
+              <span class="modal-stat-label">Игроки</span>
+              <span class="modal-stat-value">{{ selectedGame.players_min }} – {{ selectedGame.players_max }}</span>
+            </div>
+            <div class="modal-stat">
+              <span class="modal-stat-label">Женские роли</span>
+              <span class="modal-stat-value">{{ selectedGame.female_roles_min }} – {{ selectedGame.female_roles_max }}</span>
+            </div>
+            <div class="modal-stat">
+              <span class="modal-stat-label">Мужские роли</span>
+              <span class="modal-stat-value">{{ selectedGame.male_roles_min }} – {{ selectedGame.male_roles_max }}</span>
+            </div>
           </div>
         </div>
       </div>
@@ -209,11 +222,16 @@ export default {
   background: linear-gradient(145deg, #1a1a2e, #16213e);
   border: 1px solid #ff6b3533;
   border-radius: 12px;
-  padding: 24px;
   cursor: pointer;
   transition: all 0.3s ease;
   position: relative;
   overflow: hidden;
+  display: flex;
+  flex-direction: column;
+}
+
+.game-card:not(.has-poster) {
+  padding: 24px;
 }
 
 .game-card::before {
@@ -225,6 +243,8 @@ export default {
   height: 100%;
   background: linear-gradient(90deg, transparent, rgba(255, 107, 53, 0.1), transparent);
   transition: left 0.5s;
+  z-index: 1;
+  pointer-events: none;
 }
 
 .game-card:hover::before {
@@ -235,6 +255,28 @@ export default {
   transform: translateY(-5px);
   border-color: #ff6b35;
   box-shadow: 0 10px 40px rgba(255, 107, 53, 0.2);
+}
+
+.game-poster {
+  width: 100%;
+  height: 200px;
+  overflow: hidden;
+  position: relative;
+}
+
+.game-poster img {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  transition: transform 0.3s ease;
+}
+
+.game-card:hover .game-poster img {
+  transform: scale(1.05);
+}
+
+.game-info {
+  padding: 24px;
 }
 
 .game-title {
@@ -288,7 +330,6 @@ export default {
   background: linear-gradient(145deg, #1a1a2e, #16213e);
   border: 2px solid #ff6b35;
   border-radius: 16px;
-  padding: 32px;
   max-width: 600px;
   width: 100%;
   max-height: 80vh;
@@ -297,17 +338,45 @@ export default {
   box-shadow: 0 0 60px rgba(255, 107, 53, 0.3);
 }
 
+.modal-content:not(.with-poster) {
+  padding: 32px;
+}
+
+.modal-poster {
+  width: 100%;
+  max-height: 300px;
+  overflow: hidden;
+  border-radius: 14px 14px 0 0;
+}
+
+.modal-poster img {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+}
+
+.modal-body {
+  padding: 32px;
+}
+
 .modal-close {
   position: absolute;
   top: 16px;
   right: 16px;
-  background: none;
+  background: rgba(0, 0, 0, 0.6);
   border: none;
   color: #ff6b35;
   font-size: 2rem;
   cursor: pointer;
   line-height: 1;
   transition: transform 0.2s;
+  width: 40px;
+  height: 40px;
+  border-radius: 50%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  z-index: 10;
 }
 
 .modal-close:hover {
@@ -319,6 +388,10 @@ export default {
   color: #ff6b35;
   font-size: 1.8rem;
   margin-bottom: 24px;
+  padding-right: 40px;
+}
+
+.modal-content:not(.with-poster) h2 {
   padding-right: 40px;
 }
 
