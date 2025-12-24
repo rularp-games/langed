@@ -1,5 +1,5 @@
 from django.contrib import admin
-from .models import Game, Run
+from .models import Game, Run, Convention
 
 
 @admin.register(Game)
@@ -24,15 +24,35 @@ class GameAdmin(admin.ModelAdmin):
     )
 
 
+@admin.register(Convention)
+class ConventionAdmin(admin.ModelAdmin):
+    list_display = ('name', 'city', 'date_start', 'date_end', 'runs_count', 'created_at')
+    list_filter = ('city', 'date_start', 'date_end')
+    search_fields = ('name', 'city', 'description')
+    date_hierarchy = 'date_start'
+    fieldsets = (
+        ('Основная информация', {
+            'fields': ('name', 'city', 'description')
+        }),
+        ('Даты проведения', {
+            'fields': (('date_start', 'date_end'),)
+        }),
+    )
+    
+    def runs_count(self, obj):
+        return obj.runs.count()
+    runs_count.short_description = 'Прогонов'
+
+
 @admin.register(Run)
 class RunAdmin(admin.ModelAdmin):
-    list_display = ('game', 'city', 'date', 'created_at')
-    list_filter = ('city', 'date', 'game')
-    search_fields = ('game__name', 'city')
+    list_display = ('game', 'city', 'date', 'convention', 'created_at')
+    list_filter = ('city', 'date', 'game', 'convention')
+    search_fields = ('game__name', 'city', 'convention__name')
     date_hierarchy = 'date'
-    autocomplete_fields = ['game']
+    autocomplete_fields = ['game', 'convention']
     fieldsets = (
         ('Информация о прогоне', {
-            'fields': ('game', 'city', 'date')
+            'fields': ('game', 'city', 'date', 'convention')
         }),
     )

@@ -38,6 +38,31 @@ class Game(models.Model):
             raise ValidationError('Минимум мужских ролей не может быть больше максимума')
 
 
+class Convention(models.Model):
+    """Модель конвента"""
+    
+    name = models.CharField(max_length=255, verbose_name='Название')
+    city = models.CharField(max_length=255, verbose_name='Город')
+    date_start = models.DateField(verbose_name='Дата начала')
+    date_end = models.DateField(verbose_name='Дата окончания')
+    description = models.TextField(blank=True, verbose_name='Описание')
+    
+    created_at = models.DateTimeField(auto_now_add=True, verbose_name='Дата создания')
+    updated_at = models.DateTimeField(auto_now=True, verbose_name='Дата обновления')
+
+    class Meta:
+        verbose_name = 'Конвент'
+        verbose_name_plural = 'Конвенты'
+        ordering = ['date_start']
+
+    def __str__(self):
+        return f'{self.name} — {self.city} ({self.date_start.strftime("%d.%m.%Y")} - {self.date_end.strftime("%d.%m.%Y")})'
+
+    def clean(self):
+        if self.date_start > self.date_end:
+            raise ValidationError('Дата начала не может быть позже даты окончания')
+
+
 class Run(models.Model):
     """Модель прогона (сеанс игры)"""
     
@@ -49,6 +74,14 @@ class Run(models.Model):
     )
     date = models.DateTimeField(verbose_name='Дата и время прогона')
     city = models.CharField(max_length=255, verbose_name='Город')
+    convention = models.ForeignKey(
+        'Convention',
+        on_delete=models.SET_NULL,
+        related_name='runs',
+        verbose_name='Конвент',
+        null=True,
+        blank=True
+    )
     
     created_at = models.DateTimeField(auto_now_add=True, verbose_name='Дата создания')
     updated_at = models.DateTimeField(auto_now=True, verbose_name='Дата обновления')

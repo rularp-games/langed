@@ -1,7 +1,8 @@
 <template>
-  <div class="games-page">
-    <div class="games-header">
+  <div class="page">
+    <div class="page-header">
       <h1>Игры</h1>
+      <p class="subtitle">Каталог ролевых игр</p>
     </div>
     
     <div v-if="loading" class="loading">
@@ -29,15 +30,15 @@
         <div class="game-stats">
           <div class="stat">
             <span class="stat-label">Игроки</span>
-            <span class="stat-value">{{ game.players_min }} - {{ game.players_max }}</span>
+            <span class="stat-value">{{ game.players_min }} – {{ game.players_max }}</span>
           </div>
           <div class="stat">
             <span class="stat-label">Жен. роли</span>
-            <span class="stat-value">{{ game.female_roles_min }} - {{ game.female_roles_max }}</span>
+            <span class="stat-value">{{ game.female_roles_min }} – {{ game.female_roles_max }}</span>
           </div>
           <div class="stat">
             <span class="stat-label">Муж. роли</span>
-            <span class="stat-value">{{ game.male_roles_min }} - {{ game.male_roles_max }}</span>
+            <span class="stat-value">{{ game.male_roles_min }} – {{ game.male_roles_max }}</span>
           </div>
         </div>
       </div>
@@ -62,15 +63,15 @@
         <div class="modal-stats">
           <div class="modal-stat">
             <span class="modal-stat-label">Игроки</span>
-            <span class="modal-stat-value">{{ selectedGame.players_min }} - {{ selectedGame.players_max }}</span>
+            <span class="modal-stat-value">{{ selectedGame.players_min }} – {{ selectedGame.players_max }}</span>
           </div>
           <div class="modal-stat">
             <span class="modal-stat-label">Женские роли</span>
-            <span class="modal-stat-value">{{ selectedGame.female_roles_min }} - {{ selectedGame.female_roles_max }}</span>
+            <span class="modal-stat-value">{{ selectedGame.female_roles_min }} – {{ selectedGame.female_roles_max }}</span>
           </div>
           <div class="modal-stat">
             <span class="modal-stat-label">Мужские роли</span>
-            <span class="modal-stat-value">{{ selectedGame.male_roles_min }} - {{ selectedGame.male_roles_max }}</span>
+            <span class="modal-stat-value">{{ selectedGame.male_roles_min }} – {{ selectedGame.male_roles_max }}</span>
           </div>
         </div>
       </div>
@@ -113,41 +114,50 @@ export default {
 </script>
 
 <style scoped>
-.games-page {
+/* ========== Базовые стили страницы ========== */
+.page {
   min-height: 100vh;
   background: linear-gradient(135deg, #0a0a0a 0%, #1a1a2e 50%, #0a0a0a 100%);
   padding: 40px 20px;
   color: #e0e0e0;
 }
 
-.games-header {
+.page-header {
   text-align: center;
   margin-bottom: 40px;
 }
 
-.games-header h1 {
+.page-header h1 {
   font-family: 'Orbitron', 'Courier New', monospace;
   font-size: 3rem;
-  color: #00ff88;
-  text-shadow: 0 0 20px rgba(0, 255, 136, 0.5);
-  letter-spacing: 0.3em;
+  color: #ff6b35;
+  text-shadow: 0 0 20px rgba(255, 107, 53, 0.5);
+  letter-spacing: 0.2em;
   text-transform: uppercase;
+  margin-bottom: 8px;
 }
 
+.subtitle {
+  color: #888;
+  font-size: 1.1rem;
+  letter-spacing: 0.1em;
+}
+
+/* ========== Загрузка / Ошибка / Пустой список ========== */
 .loading {
   display: flex;
   flex-direction: column;
   align-items: center;
   justify-content: center;
   min-height: 300px;
-  color: #00ff88;
+  color: #ff6b35;
 }
 
 .loading-spinner {
   width: 50px;
   height: 50px;
   border: 3px solid #1a1a2e;
-  border-top-color: #00ff88;
+  border-top-color: #ff6b35;
   border-radius: 50%;
   animation: spin 1s linear infinite;
 }
@@ -166,15 +176,16 @@ export default {
   margin-top: 20px;
   padding: 10px 30px;
   background: transparent;
-  border: 2px solid #00ff88;
-  color: #00ff88;
+  border: 2px solid #ff6b35;
+  color: #ff6b35;
   font-size: 1rem;
   cursor: pointer;
   transition: all 0.3s;
+  border-radius: 8px;
 }
 
 .retry-btn:hover {
-  background: #00ff88;
+  background: #ff6b35;
   color: #0a0a0a;
 }
 
@@ -185,6 +196,7 @@ export default {
   font-size: 1.2rem;
 }
 
+/* ========== Сетка игр ========== */
 .games-grid {
   display: grid;
   grid-template-columns: repeat(auto-fill, minmax(320px, 1fr));
@@ -195,7 +207,7 @@ export default {
 
 .game-card {
   background: linear-gradient(145deg, #1a1a2e, #16213e);
-  border: 1px solid #00ff8833;
+  border: 1px solid #ff6b3533;
   border-radius: 12px;
   padding: 24px;
   cursor: pointer;
@@ -211,7 +223,7 @@ export default {
   left: -100%;
   width: 100%;
   height: 100%;
-  background: linear-gradient(90deg, transparent, rgba(0, 255, 136, 0.1), transparent);
+  background: linear-gradient(90deg, transparent, rgba(255, 107, 53, 0.1), transparent);
   transition: left 0.5s;
 }
 
@@ -221,17 +233,17 @@ export default {
 
 .game-card:hover {
   transform: translateY(-5px);
-  border-color: #00ff88;
-  box-shadow: 0 10px 40px rgba(0, 255, 136, 0.2);
+  border-color: #ff6b35;
+  box-shadow: 0 10px 40px rgba(255, 107, 53, 0.2);
 }
 
 .game-title {
   font-family: 'Orbitron', 'Courier New', monospace;
   font-size: 1.4rem;
-  color: #00ff88;
+  color: #ff6b35;
   margin-bottom: 20px;
   padding-bottom: 12px;
-  border-bottom: 1px solid #00ff8833;
+  border-bottom: 1px solid #ff6b3533;
 }
 
 .game-stats {
@@ -257,7 +269,7 @@ export default {
   font-weight: bold;
 }
 
-/* Модальное окно */
+/* ========== Модальное окно ========== */
 .modal-overlay {
   position: fixed;
   top: 0;
@@ -274,7 +286,7 @@ export default {
 
 .modal-content {
   background: linear-gradient(145deg, #1a1a2e, #16213e);
-  border: 2px solid #00ff88;
+  border: 2px solid #ff6b35;
   border-radius: 16px;
   padding: 32px;
   max-width: 600px;
@@ -282,7 +294,7 @@ export default {
   max-height: 80vh;
   overflow-y: auto;
   position: relative;
-  box-shadow: 0 0 60px rgba(0, 255, 136, 0.3);
+  box-shadow: 0 0 60px rgba(255, 107, 53, 0.3);
 }
 
 .modal-close {
@@ -291,7 +303,7 @@ export default {
   right: 16px;
   background: none;
   border: none;
-  color: #00ff88;
+  color: #ff6b35;
   font-size: 2rem;
   cursor: pointer;
   line-height: 1;
@@ -304,7 +316,7 @@ export default {
 
 .modal-content h2 {
   font-family: 'Orbitron', 'Courier New', monospace;
-  color: #00ff88;
+  color: #ff6b35;
   font-size: 1.8rem;
   margin-bottom: 24px;
   padding-right: 40px;
@@ -315,7 +327,7 @@ export default {
 }
 
 .modal-section h3 {
-  color: #00ccff;
+  color: #ff6b35;
   font-size: 1rem;
   margin-bottom: 8px;
   text-transform: uppercase;
@@ -342,7 +354,7 @@ export default {
   gap: 16px;
   margin-top: 24px;
   padding-top: 24px;
-  border-top: 1px solid #00ff8833;
+  border-top: 1px solid #ff6b3533;
 }
 
 .modal-stat {
@@ -373,8 +385,23 @@ export default {
 }
 
 .modal-content::-webkit-scrollbar-thumb {
-  background: #00ff88;
+  background: #ff6b35;
   border-radius: 4px;
 }
-</style>
 
+/* ========== Адаптив ========== */
+@media (max-width: 768px) {
+  .page-header h1 {
+    font-size: 2rem;
+  }
+  
+  .games-grid {
+    grid-template-columns: 1fr;
+  }
+  
+  .modal-stats {
+    grid-template-columns: 1fr;
+    gap: 12px;
+  }
+}
+</style>
