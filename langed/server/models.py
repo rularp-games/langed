@@ -100,6 +100,12 @@ class ConventionEvent(models.Model):
         verbose_name='Игры',
         blank=True
     )
+    runs = models.ManyToManyField(
+        'Run',
+        related_name='convention_events',
+        verbose_name='Прогоны',
+        blank=True
+    )
     date_start = models.DateField(verbose_name='Дата начала')
     date_end = models.DateField(verbose_name='Дата окончания')
     
@@ -138,7 +144,7 @@ class Run(models.Model):
     convention_event = models.ForeignKey(
         ConventionEvent,
         on_delete=models.SET_NULL,
-        related_name='runs',
+        related_name='scheduled_runs',
         verbose_name='Проведение конвента',
         null=True,
         blank=True

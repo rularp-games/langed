@@ -70,8 +70,9 @@ class ConventionEventSerializer(serializers.ModelSerializer):
         write_only=True
     )
     games = GameBriefSerializer(many=True, read_only=True)
-    runs = RunBriefSerializer(many=True, read_only=True)
-    runs_count = serializers.IntegerField(source='runs.count', read_only=True)
+    runs = RunBriefSerializer(many=True)
+    scheduled_runs = RunBriefSerializer(source='scheduled_runs', many=True, read_only=True)
+    scheduled_runs_count = serializers.IntegerField(source='scheduled_runs.count', read_only=True)
     description = serializers.CharField(source='convention.description', read_only=True)
     
     class Meta:
@@ -79,7 +80,7 @@ class ConventionEventSerializer(serializers.ModelSerializer):
         fields = [
             'id', 'convention', 'convention_name', 'city', 'city_id',
             'date_start', 'date_end', 'description',
-            'games', 'runs', 'runs_count',
+            'games', 'runs', 'scheduled_runs', 'scheduled_runs_count',
             'created_at', 'updated_at'
         ]
         read_only_fields = ['id', 'created_at', 'updated_at']
