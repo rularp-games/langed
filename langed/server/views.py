@@ -1,6 +1,8 @@
+import csv
+import io
 from rest_framework import viewsets, status
 from rest_framework.decorators import action, api_view, permission_classes
-from rest_framework.permissions import AllowAny
+from rest_framework.permissions import AllowAny, IsAuthenticated
 from rest_framework.response import Response
 from django.shortcuts import get_object_or_404
 from django.utils import timezone
@@ -49,11 +51,76 @@ class GameViewSet(viewsets.ModelViewSet):
     serializer_class = GameSerializer
     
     def get_permissions(self):
-        if self.action in ['create', 'update', 'partial_update', 'destroy']:
+        if self.action in ['create', 'update', 'partial_update', 'destroy', 'import_csv']:
             # Для создания/изменения требуется авторизация
-            from rest_framework.permissions import IsAuthenticated
             return [IsAuthenticated()]
         return [AllowAny()]
+    
+    @action(detail=False, methods=['post'])
+    def import_csv(self, request):
+        """Импорт игр из CSV файла"""
+        csv_file = request.FILES.get('file')
+        if not csv_file:
+            return Response(
+                {'error': 'Файл не предоставлен'},
+                status=status.HTTP_400_BAD_REQUEST
+            )
+        
+        # Проверяем расширение
+        if not csv_file.name.endswith('.csv'):
+            return Response(
+                {'error': 'Файл должен быть в формате CSV'},
+                status=status.HTTP_400_BAD_REQUEST
+            )
+        
+        try:
+            # Читаем файл
+            decoded = csv_file.read().decode('utf-8')
+            reader = csv.DictReader(io.StringIO(decoded))
+            
+            created_count = 0
+            skipped_count = 0
+            created_games = []
+            
+            for row in reader:
+                name = row.get('название', '').strip()
+                if not name:
+                    continue
+                
+                announcement = row.get('анонс', '').strip()
+                red_flags = row.get('красные флаги', '').strip()
+                
+                # Создаем только если игры с таким именем нет
+                game, created = Game.objects.get_or_create(
+                    name=name,
+                    defaults={
+                        'announcement': announcement,
+                        'red_flags': red_flags,
+                    }
+                )
+                
+                if created:
+                    created_count += 1
+                    created_games.append(GameSerializer(game, context={'request': request}).data)
+                else:
+                    skipped_count += 1
+            
+            return Response({
+                'created': created_count,
+                'skipped': skipped_count,
+                'games': created_games
+            })
+            
+        except UnicodeDecodeError:
+            return Response(
+                {'error': 'Файл должен быть в кодировке UTF-8'},
+                status=status.HTTP_400_BAD_REQUEST
+            )
+        except Exception as e:
+            return Response(
+                {'error': f'Ошибка при обработке файла: {str(e)}'},
+                status=status.HTTP_400_BAD_REQUEST
+            )
 
 
 class RunViewSet(viewsets.ReadOnlyModelViewSet):

@@ -113,7 +113,26 @@
         <div class="modal-body">
           <h2>Добавить игру</h2>
           
-          <form @submit.prevent="submitGame" class="add-game-form">
+          <!-- Переключатель режима -->
+          <div class="mode-switcher">
+            <button 
+              type="button" 
+              :class="['mode-btn', { active: addMode === 'single' }]"
+              @click="addMode = 'single'"
+            >
+              Одну игру
+            </button>
+            <button 
+              type="button" 
+              :class="['mode-btn', { active: addMode === 'csv' }]"
+              @click="addMode = 'csv'"
+            >
+              Импорт из CSV
+            </button>
+          </div>
+          
+          <!-- Форма одной игры -->
+          <form v-if="addMode === 'single'" @submit.prevent="submitGame" class="add-game-form">
             <div class="form-group">
               <label for="game-name">Название *</label>
               <input 
@@ -124,6 +143,28 @@
                 class="form-input"
                 placeholder="Введите название игры"
               />
+            </div>
+
+            <div class="form-group">
+              <label>Постер</label>
+              <div class="poster-upload">
+                <div v-if="posterPreview" class="poster-preview">
+                  <img :src="posterPreview" alt="Превью постера" />
+                  <button type="button" @click="removePoster" class="poster-remove">×</button>
+                </div>
+                <label v-else class="poster-dropzone" for="game-poster">
+                  <span class="poster-icon">🖼</span>
+                  <span class="poster-text">Нажмите для выбора изображения</span>
+                  <span class="poster-hint">JPG, PNG до 5 МБ</span>
+                </label>
+                <input 
+                  id="game-poster"
+                  type="file"
+                  accept="image/jpeg,image/png,image/webp"
+                  @change="onPosterChange"
+                  class="poster-input"
+                />
+              </div>
             </div>
             
             <div class="form-group">
@@ -225,6 +266,55 @@
               </button>
             </div>
           </form>
+          
+          <!-- Форма импорта CSV -->
+          <div v-else class="csv-import-form">
+            <div class="csv-upload">
+              <label class="csv-dropzone" for="csv-file" :class="{ 'has-file': csvFile }">
+                <span class="csv-icon">📄</span>
+                <span v-if="csvFile" class="csv-filename">{{ csvFile.name }}</span>
+                <span v-else class="csv-text">Выберите CSV файл</span>
+                <span class="csv-hint">Формат: название, анонс, красные флаги</span>
+              </label>
+              <input 
+                id="csv-file"
+                type="file"
+                accept=".csv"
+                @change="onCsvChange"
+                class="csv-input"
+              />
+              <button 
+                v-if="csvFile" 
+                type="button" 
+                @click="removeCsv" 
+                class="csv-remove"
+              >
+                Удалить файл
+              </button>
+            </div>
+            
+            <div v-if="addError" class="form-error">{{ addError }}</div>
+            
+            <div v-if="csvResult" class="csv-result">
+              <p class="csv-result-success">Создано игр: {{ csvResult.created }}</p>
+              <p v-if="csvResult.skipped > 0" class="csv-result-skipped">
+                Пропущено (уже существуют): {{ csvResult.skipped }}
+              </p>
+            </div>
+            
+            <div class="form-actions">
+              <button type="button" @click="closeAddModal" class="btn btn-secondary">Закрыть</button>
+              <button 
+                type="button" 
+                @click="submitCsv" 
+                class="btn btn-primary" 
+                :disabled="addLoading || !csvFile"
+              >
+                <span v-if="addLoading">Импорт...</span>
+                <span v-else>Импортировать</span>
+              </button>
+            </div>
+          </div>
         </div>
       </div>
     </div>
@@ -245,7 +335,12 @@ export default {
       showAddModal: false,
       addLoading: false,
       addError: null,
-      newGame: this.getEmptyGame()
+      newGame: this.getEmptyGame(),
+      posterFile: null,
+      posterPreview: null,
+      addMode: 'single',
+      csvFile: null,
+      csvResult: null
     }
   },
   computed: {
@@ -298,24 +393,124 @@ export default {
     },
     openAddModal() {
       this.newGame = this.getEmptyGame()
+      this.posterFile = null
+      this.posterPreview = null
       this.addError = null
+      this.addMode = 'single'
+      this.csvFile = null
+      this.csvResult = null
       this.showAddModal = true
     },
     closeAddModal() {
       this.showAddModal = false
       this.addError = null
+      this.posterFile = null
+      this.posterPreview = null
+      this.csvFile = null
+      this.csvResult = null
+    },
+    onPosterChange(event) {
+      const file = event.target.files[0]
+      if (!file) return
+      
+      // Проверка размера (5 МБ)
+      if (file.size > 5 * 1024 * 1024) {
+        this.addError = 'Файл слишком большой. Максимум 5 МБ'
+        event.target.value = ''
+        return
+      }
+      
+      this.posterFile = file
+      this.posterPreview = URL.createObjectURL(file)
+    },
+    removePoster() {
+      if (this.posterPreview) {
+        URL.revokeObjectURL(this.posterPreview)
+      }
+      this.posterFile = null
+      this.posterPreview = null
+      // Сбросить input
+      const input = document.getElementById('game-poster')
+      if (input) input.value = ''
+    },
+    onCsvChange(event) {
+      const file = event.target.files[0]
+      if (!file) return
+      this.csvFile = file
+      this.csvResult = null
+      this.addError = null
+    },
+    removeCsv() {
+      this.csvFile = null
+      this.csvResult = null
+      const input = document.getElementById('csv-file')
+      if (input) input.value = ''
+    },
+    async submitCsv() {
+      if (!this.csvFile) return
+      
+      this.addLoading = true
+      this.addError = null
+      this.csvResult = null
+      
+      try {
+        const formData = new FormData()
+        formData.append('file', this.csvFile)
+        
+        const response = await fetch('/api/games/import_csv/', {
+          method: 'POST',
+          body: formData
+        })
+        
+        if (!response.ok) {
+          if (response.status === 401 || response.status === 403) {
+            throw new Error('Необходима авторизация для импорта')
+          }
+          const data = await response.json()
+          throw new Error(data.error || 'Ошибка при импорте')
+        }
+        
+        const result = await response.json()
+        this.csvResult = result
+        
+        // Добавляем новые игры в список
+        if (result.games && result.games.length > 0) {
+          this.games = [...result.games, ...this.games]
+        }
+        
+        // Очищаем файл
+        this.csvFile = null
+        const input = document.getElementById('csv-file')
+        if (input) input.value = ''
+      } catch (err) {
+        this.addError = err.message
+      } finally {
+        this.addLoading = false
+      }
     },
     async submitGame() {
       this.addLoading = true
       this.addError = null
       
       try {
+        const formData = new FormData()
+        formData.append('name', this.newGame.name)
+        formData.append('announcement', this.newGame.announcement || '')
+        formData.append('red_flags', this.newGame.red_flags || '')
+        formData.append('players_min', this.newGame.players_min)
+        formData.append('players_max', this.newGame.players_max)
+        formData.append('female_roles_min', this.newGame.female_roles_min)
+        formData.append('female_roles_max', this.newGame.female_roles_max)
+        formData.append('male_roles_min', this.newGame.male_roles_min)
+        formData.append('male_roles_max', this.newGame.male_roles_max)
+        
+        if (this.posterFile) {
+          formData.append('poster', this.posterFile)
+        }
+        
         const response = await fetch('/api/games/', {
           method: 'POST',
-          headers: {
-            'Content-Type': 'application/json',
-          },
-          body: JSON.stringify(this.newGame)
+          body: formData
         })
         
         if (!response.ok) {
@@ -742,10 +937,41 @@ export default {
 }
 
 .add-game-modal h2 {
-  margin-bottom: 28px;
+  margin-bottom: 20px;
 }
 
-.add-game-form {
+/* Переключатель режима */
+.mode-switcher {
+  display: flex;
+  gap: 8px;
+  margin-bottom: 24px;
+  padding: 4px;
+  background: rgba(10, 10, 10, 0.5);
+  border-radius: 10px;
+}
+
+.mode-btn {
+  flex: 1;
+  padding: 10px 16px;
+  background: transparent;
+  border: none;
+  border-radius: 8px;
+  color: #888;
+  font-size: 0.9rem;
+  cursor: pointer;
+  transition: all 0.3s ease;
+}
+
+.mode-btn:hover {
+  color: #ccc;
+}
+
+.mode-btn.active {
+  background: linear-gradient(145deg, #ff6b35, #e55a2b);
+  color: #fff;
+}
+
+.add-game-form, .csv-import-form {
   display: flex;
   flex-direction: column;
   gap: 20px;
@@ -813,6 +1039,184 @@ export default {
 .form-input.small {
   width: 80px;
   text-align: center;
+}
+
+/* Загрузка постера */
+.poster-upload {
+  position: relative;
+}
+
+.poster-input {
+  display: none;
+}
+
+.poster-dropzone {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  padding: 32px 24px;
+  background: rgba(10, 10, 10, 0.4);
+  border: 2px dashed #ff6b3555;
+  border-radius: 12px;
+  cursor: pointer;
+  transition: all 0.3s ease;
+}
+
+.poster-dropzone:hover {
+  border-color: #ff6b35;
+  background: rgba(255, 107, 53, 0.05);
+}
+
+.poster-icon {
+  font-size: 2.5rem;
+  opacity: 0.7;
+}
+
+.poster-text {
+  color: #aaa;
+  font-size: 0.95rem;
+}
+
+.poster-hint {
+  color: #666;
+  font-size: 0.8rem;
+}
+
+.poster-preview {
+  position: relative;
+  border-radius: 12px;
+  overflow: hidden;
+  max-height: 200px;
+}
+
+.poster-preview img {
+  width: 100%;
+  max-height: 200px;
+  object-fit: cover;
+  border-radius: 12px;
+}
+
+.poster-remove {
+  position: absolute;
+  top: 8px;
+  right: 8px;
+  width: 32px;
+  height: 32px;
+  background: rgba(255, 68, 68, 0.9);
+  border: none;
+  border-radius: 50%;
+  color: #fff;
+  font-size: 1.4rem;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  line-height: 1;
+  transition: transform 0.2s, background 0.2s;
+}
+
+.poster-remove:hover {
+  transform: scale(1.1);
+  background: #ff4444;
+}
+
+/* CSV импорт */
+.csv-import-form {
+  display: flex;
+  flex-direction: column;
+  gap: 20px;
+}
+
+.csv-upload {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+
+.csv-input {
+  display: none;
+}
+
+.csv-dropzone {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  padding: 40px 24px;
+  background: rgba(10, 10, 10, 0.4);
+  border: 2px dashed #ff6b3555;
+  border-radius: 12px;
+  cursor: pointer;
+  transition: all 0.3s ease;
+}
+
+.csv-dropzone:hover {
+  border-color: #ff6b35;
+  background: rgba(255, 107, 53, 0.05);
+}
+
+.csv-dropzone.has-file {
+  border-color: #00ccff;
+  background: rgba(0, 204, 255, 0.05);
+}
+
+.csv-icon {
+  font-size: 3rem;
+  opacity: 0.7;
+}
+
+.csv-text {
+  color: #aaa;
+  font-size: 1rem;
+}
+
+.csv-filename {
+  color: #00ccff;
+  font-size: 1rem;
+  font-weight: 600;
+}
+
+.csv-hint {
+  color: #666;
+  font-size: 0.85rem;
+}
+
+.csv-remove {
+  align-self: center;
+  padding: 8px 20px;
+  background: transparent;
+  border: 1px solid #ff4444;
+  border-radius: 6px;
+  color: #ff4444;
+  font-size: 0.9rem;
+  cursor: pointer;
+  transition: all 0.2s ease;
+}
+
+.csv-remove:hover {
+  background: #ff4444;
+  color: #fff;
+}
+
+.csv-result {
+  background: rgba(0, 204, 255, 0.1);
+  border: 1px solid #00ccff55;
+  border-radius: 8px;
+  padding: 16px;
+}
+
+.csv-result-success {
+  color: #00ccff;
+  font-size: 1rem;
+  margin-bottom: 4px;
+}
+
+.csv-result-skipped {
+  color: #888;
+  font-size: 0.9rem;
 }
 
 .form-error {
