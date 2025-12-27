@@ -155,10 +155,99 @@ class RunViewSet(viewsets.ReadOnlyModelViewSet):
         return Response(list(cities))
 
 
-class ConventionViewSet(viewsets.ReadOnlyModelViewSet):
-    """API для просмотра конвентов (справочник)"""
+class ConventionViewSet(viewsets.ModelViewSet):
+    """API для конвентов (просмотр и создание)"""
     serializer_class = ConventionSerializer
     queryset = Convention.objects.prefetch_related('events').all()
+    
+    def get_permissions(self):
+        if self.action in ['create', 'update', 'partial_update', 'destroy', 'import_csv']:
+            return [IsAuthenticated()]
+        return [AllowAny()]
+    
+    @action(detail=False, methods=['post'])
+    def import_csv(self, request):
+        """Импорт конвентов и проведений из CSV файла"""
+        csv_file = request.FILES.get('file')
+        if not csv_file:
+            return Response(
+                {'error': 'Файл не предоставлен'},
+                status=status.HTTP_400_BAD_REQUEST
+            )
+        
+        if not csv_file.name.endswith('.csv'):
+            return Response(
+                {'error': 'Файл должен быть в формате CSV'},
+                status=status.HTTP_400_BAD_REQUEST
+            )
+        
+        try:
+            decoded = csv_file.read().decode('utf-8')
+            reader = csv.DictReader(io.StringIO(decoded))
+            
+            conventions_created = 0
+            events_created = 0
+            events_skipped = 0
+            
+            for row in reader:
+                name = row.get('название мероприятия', '').strip()
+                city_name = row.get('город', '').strip()
+                date_start_str = row.get('дата начала', '').strip()
+                date_end_str = row.get('дата конца', '').strip()
+                
+                if not name or not city_name or not date_start_str or not date_end_str:
+                    continue
+                
+                try:
+                    from datetime import datetime
+                    date_start = datetime.strptime(date_start_str, '%Y-%m-%d').date()
+                    date_end = datetime.strptime(date_end_str, '%Y-%m-%d').date()
+                except ValueError:
+                    continue
+                
+                # Создаём или получаем конвент
+                convention, conv_created = Convention.objects.get_or_create(name=name)
+                if conv_created:
+                    conventions_created += 1
+                
+                # Создаём или получаем город
+                city, _ = City.objects.get_or_create(name=city_name)
+                
+                # Проверяем, есть ли уже такое проведение
+                event_exists = ConventionEvent.objects.filter(
+                    convention=convention,
+                    city=city,
+                    date_start=date_start,
+                    date_end=date_end
+                ).exists()
+                
+                if not event_exists:
+                    ConventionEvent.objects.create(
+                        convention=convention,
+                        city=city,
+                        date_start=date_start,
+                        date_end=date_end
+                    )
+                    events_created += 1
+                else:
+                    events_skipped += 1
+            
+            return Response({
+                'conventions_created': conventions_created,
+                'events_created': events_created,
+                'events_skipped': events_skipped
+            })
+            
+        except UnicodeDecodeError:
+            return Response(
+                {'error': 'Файл должен быть в кодировке UTF-8'},
+                status=status.HTTP_400_BAD_REQUEST
+            )
+        except Exception as e:
+            return Response(
+                {'error': f'Ошибка при обработке файла: {str(e)}'},
+                status=status.HTTP_400_BAD_REQUEST
+            )
 
 
 class ConventionEventViewSet(viewsets.ReadOnlyModelViewSet):

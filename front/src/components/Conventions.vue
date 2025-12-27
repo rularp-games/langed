@@ -5,7 +5,7 @@
       <p class="subtitle">Каталог ролевых конвентов</p>
     </div>
 
-    <!-- Поиск -->
+    <!-- Поиск и добавление -->
     <div class="search-container">
       <input 
         v-model="searchQuery" 
@@ -13,6 +13,10 @@
         placeholder="Поиск по названию..."
         class="search-input"
       />
+      <button v-if="isAuthenticated" @click="openAddModal" class="add-btn">
+        <span class="add-icon">+</span>
+        Добавить
+      </button>
     </div>
 
     <!-- Загрузка -->
@@ -92,12 +96,130 @@
         </div>
       </div>
     </div>
+
+    <!-- Модальное окно добавления конвента -->
+    <div v-if="showAddModal && isAuthenticated" class="modal-overlay" @click.self="closeAddModal">
+      <div class="modal-content add-convention-modal">
+        <button class="modal-close" @click="closeAddModal">×</button>
+        
+        <h2>Добавить конвент</h2>
+        
+        <!-- Переключатель режима -->
+        <div class="mode-switcher">
+          <button 
+            type="button" 
+            :class="['mode-btn', { active: addMode === 'single' }]"
+            @click="addMode = 'single'"
+          >
+            Один конвент
+          </button>
+          <button 
+            type="button" 
+            :class="['mode-btn', { active: addMode === 'csv' }]"
+            @click="addMode = 'csv'"
+          >
+            Импорт из CSV
+          </button>
+        </div>
+        
+        <!-- Форма одного конвента -->
+        <form v-if="addMode === 'single'" @submit.prevent="submitConvention" class="add-form">
+          <div class="form-group">
+            <label for="conv-name">Название *</label>
+            <input 
+              id="conv-name"
+              v-model="newConvention.name" 
+              type="text" 
+              required
+              class="form-input"
+              placeholder="Введите название конвента"
+            />
+          </div>
+          
+          <div class="form-group">
+            <label for="conv-description">Описание</label>
+            <textarea 
+              id="conv-description"
+              v-model="newConvention.description"
+              class="form-input form-textarea"
+              placeholder="Описание конвента"
+              rows="3"
+            ></textarea>
+          </div>
+          
+          <div v-if="addError" class="form-error">{{ addError }}</div>
+          
+          <div class="form-actions">
+            <button type="button" @click="closeAddModal" class="btn btn-secondary">Отмена</button>
+            <button type="submit" class="btn btn-primary" :disabled="addLoading">
+              <span v-if="addLoading">Сохранение...</span>
+              <span v-else>Добавить</span>
+            </button>
+          </div>
+        </form>
+        
+        <!-- Форма импорта CSV -->
+        <div v-else class="csv-import-form">
+          <div class="csv-upload">
+            <label class="csv-dropzone" for="csv-file" :class="{ 'has-file': csvFile }">
+              <span class="csv-icon">📄</span>
+              <span v-if="csvFile" class="csv-filename">{{ csvFile.name }}</span>
+              <span v-else class="csv-text">Выберите CSV файл</span>
+              <span class="csv-hint">Формат: название мероприятия, город, дата начала, дата конца</span>
+            </label>
+            <input 
+              id="csv-file"
+              type="file"
+              accept=".csv"
+              @change="onCsvChange"
+              class="csv-input"
+            />
+            <button 
+              v-if="csvFile" 
+              type="button" 
+              @click="removeCsv" 
+              class="csv-remove"
+            >
+              Удалить файл
+            </button>
+          </div>
+          
+          <div v-if="addError" class="form-error">{{ addError }}</div>
+          
+          <div v-if="csvResult" class="csv-result">
+            <p class="csv-result-success">
+              Конвентов создано: {{ csvResult.conventions_created }}
+            </p>
+            <p class="csv-result-success">
+              Проведений создано: {{ csvResult.events_created }}
+            </p>
+            <p v-if="csvResult.events_skipped > 0" class="csv-result-skipped">
+              Пропущено (уже существуют): {{ csvResult.events_skipped }}
+            </p>
+          </div>
+          
+          <div class="form-actions">
+            <button type="button" @click="closeAddModal" class="btn btn-secondary">Закрыть</button>
+            <button 
+              type="button" 
+              @click="submitCsv" 
+              class="btn btn-primary" 
+              :disabled="addLoading || !csvFile"
+            >
+              <span v-if="addLoading">Импорт...</span>
+              <span v-else>Импортировать</span>
+            </button>
+          </div>
+        </div>
+      </div>
+    </div>
   </div>
 </template>
 
 <script>
 export default {
   name: 'ConventionsPage',
+  inject: ['getUser'],
   data() {
     return {
       conventions: [],
@@ -105,10 +227,25 @@ export default {
       error: null,
       searchQuery: '',
       selectedConvention: null,
-      conventionEvents: []
+      conventionEvents: [],
+      showAddModal: false,
+      addMode: 'single',
+      addLoading: false,
+      addError: null,
+      newConvention: { name: '', description: '' },
+      csvFile: null,
+      csvResult: null
     }
   },
   computed: {
+    isAuthenticated() {
+      const user = this.getUser()
+      return user && user.is_authenticated
+    },
+    csrfToken() {
+      const match = document.cookie.match(/csrftoken=([^;]+)/)
+      return match ? match[1] : ''
+    },
     filteredConventions() {
       if (!this.searchQuery) {
         return this.conventions
@@ -199,6 +336,107 @@ export default {
       if (mod10 === 1) return 'прогон'
       if (mod10 >= 2 && mod10 <= 4) return 'прогона'
       return 'прогонов'
+    },
+    openAddModal() {
+      this.newConvention = { name: '', description: '' }
+      this.addMode = 'single'
+      this.addError = null
+      this.csvFile = null
+      this.csvResult = null
+      this.showAddModal = true
+    },
+    closeAddModal() {
+      this.showAddModal = false
+      this.addError = null
+      this.csvFile = null
+      this.csvResult = null
+    },
+    onCsvChange(event) {
+      const file = event.target.files[0]
+      if (!file) return
+      this.csvFile = file
+      this.csvResult = null
+      this.addError = null
+    },
+    removeCsv() {
+      this.csvFile = null
+      this.csvResult = null
+      const input = document.getElementById('csv-file')
+      if (input) input.value = ''
+    },
+    async submitConvention() {
+      this.addLoading = true
+      this.addError = null
+      
+      try {
+        const response = await fetch('/api/conventions/', {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+            'X-CSRFToken': this.csrfToken
+          },
+          body: JSON.stringify(this.newConvention)
+        })
+        
+        if (!response.ok) {
+          if (response.status === 401 || response.status === 403) {
+            throw new Error('Необходима авторизация для добавления конвента')
+          }
+          const data = await response.json()
+          throw new Error(data.detail || data.name?.[0] || 'Ошибка при сохранении')
+        }
+        
+        const createdConvention = await response.json()
+        this.conventions.unshift(createdConvention)
+        this.closeAddModal()
+      } catch (err) {
+        this.addError = err.message
+      } finally {
+        this.addLoading = false
+      }
+    },
+    async submitCsv() {
+      if (!this.csvFile) return
+      
+      this.addLoading = true
+      this.addError = null
+      this.csvResult = null
+      
+      try {
+        const formData = new FormData()
+        formData.append('file', this.csvFile)
+        
+        const response = await fetch('/api/conventions/import_csv/', {
+          method: 'POST',
+          headers: {
+            'X-CSRFToken': this.csrfToken
+          },
+          body: formData
+        })
+        
+        if (!response.ok) {
+          if (response.status === 401 || response.status === 403) {
+            throw new Error('Необходима авторизация для импорта')
+          }
+          const data = await response.json()
+          throw new Error(data.error || 'Ошибка при импорте')
+        }
+        
+        const result = await response.json()
+        this.csvResult = result
+        
+        // Обновляем список конвентов
+        await this.fetchConventions()
+        
+        // Очищаем файл
+        this.csvFile = null
+        const input = document.getElementById('csv-file')
+        if (input) input.value = ''
+      } catch (err) {
+        this.addError = err.message
+      } finally {
+        this.addLoading = false
+      }
     }
   }
 }
@@ -234,14 +472,17 @@ export default {
   letter-spacing: 0.1em;
 }
 
-/* ========== Поиск ========== */
+/* ========== Поиск и добавление ========== */
 .search-container {
-  max-width: 600px;
+  max-width: 800px;
   margin: 0 auto 40px;
+  display: flex;
+  gap: 16px;
+  align-items: center;
 }
 
 .search-input {
-  width: 100%;
+  flex: 1;
   padding: 16px 24px;
   background: rgba(26, 26, 46, 0.8);
   border: 2px solid #ff6b3555;
@@ -259,6 +500,36 @@ export default {
   outline: none;
   border-color: #ff6b35;
   box-shadow: 0 0 20px rgba(255, 107, 53, 0.2);
+}
+
+.add-btn {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 16px 24px;
+  background: linear-gradient(145deg, #ff6b35, #e55a2b);
+  border: none;
+  border-radius: 12px;
+  color: #fff;
+  font-size: 1rem;
+  font-weight: 600;
+  cursor: pointer;
+  transition: all 0.3s ease;
+  white-space: nowrap;
+}
+
+.add-btn:hover {
+  transform: translateY(-2px);
+  box-shadow: 0 8px 25px rgba(255, 107, 53, 0.4);
+}
+
+.add-btn:active {
+  transform: translateY(0);
+}
+
+.add-icon {
+  font-size: 1.4rem;
+  font-weight: bold;
 }
 
 /* ========== Загрузка / Ошибка / Пустой список ========== */
@@ -524,10 +795,254 @@ export default {
   border-radius: 4px;
 }
 
+/* ========== Форма добавления конвента ========== */
+.add-convention-modal {
+  max-width: 550px;
+}
+
+.add-convention-modal h2 {
+  margin-bottom: 20px;
+}
+
+/* Переключатель режима */
+.mode-switcher {
+  display: flex;
+  gap: 8px;
+  margin-bottom: 24px;
+  padding: 4px;
+  background: rgba(10, 10, 10, 0.5);
+  border-radius: 10px;
+}
+
+.mode-btn {
+  flex: 1;
+  padding: 10px 16px;
+  background: transparent;
+  border: none;
+  border-radius: 8px;
+  color: #888;
+  font-size: 0.9rem;
+  cursor: pointer;
+  transition: all 0.3s ease;
+}
+
+.mode-btn:hover {
+  color: #ccc;
+}
+
+.mode-btn.active {
+  background: linear-gradient(145deg, #ff6b35, #e55a2b);
+  color: #fff;
+}
+
+.add-form, .csv-import-form {
+  display: flex;
+  flex-direction: column;
+  gap: 20px;
+}
+
+.form-group {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.form-group label {
+  color: #ff6b35;
+  font-size: 0.9rem;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+}
+
+.form-input {
+  padding: 12px 16px;
+  background: rgba(10, 10, 10, 0.6);
+  border: 2px solid #ff6b3544;
+  border-radius: 8px;
+  color: #e0e0e0;
+  font-size: 1rem;
+  transition: border-color 0.3s, box-shadow 0.3s;
+}
+
+.form-input::placeholder {
+  color: #555;
+}
+
+.form-input:focus {
+  outline: none;
+  border-color: #ff6b35;
+  box-shadow: 0 0 15px rgba(255, 107, 53, 0.15);
+}
+
+.form-textarea {
+  resize: vertical;
+  min-height: 80px;
+  font-family: inherit;
+}
+
+.form-error {
+  background: rgba(255, 68, 68, 0.15);
+  border: 1px solid #ff4444;
+  border-radius: 8px;
+  padding: 12px 16px;
+  color: #ff6b6b;
+  font-size: 0.95rem;
+}
+
+.form-actions {
+  display: flex;
+  gap: 16px;
+  justify-content: flex-end;
+  margin-top: 12px;
+  padding-top: 20px;
+  border-top: 1px solid #ff6b3533;
+}
+
+.btn {
+  padding: 12px 28px;
+  border-radius: 8px;
+  font-size: 1rem;
+  font-weight: 600;
+  cursor: pointer;
+  transition: all 0.3s ease;
+}
+
+.btn-secondary {
+  background: transparent;
+  border: 2px solid #666;
+  color: #aaa;
+}
+
+.btn-secondary:hover {
+  border-color: #888;
+  color: #ccc;
+}
+
+.btn-primary {
+  background: linear-gradient(145deg, #ff6b35, #e55a2b);
+  border: none;
+  color: #fff;
+}
+
+.btn-primary:hover:not(:disabled) {
+  transform: translateY(-2px);
+  box-shadow: 0 6px 20px rgba(255, 107, 53, 0.35);
+}
+
+.btn-primary:disabled {
+  opacity: 0.6;
+  cursor: not-allowed;
+}
+
+/* CSV импорт */
+.csv-upload {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+
+.csv-input {
+  display: none;
+}
+
+.csv-dropzone {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  padding: 40px 24px;
+  background: rgba(10, 10, 10, 0.4);
+  border: 2px dashed #ff6b3555;
+  border-radius: 12px;
+  cursor: pointer;
+  transition: all 0.3s ease;
+}
+
+.csv-dropzone:hover {
+  border-color: #ff6b35;
+  background: rgba(255, 107, 53, 0.05);
+}
+
+.csv-dropzone.has-file {
+  border-color: #00ccff;
+  background: rgba(0, 204, 255, 0.05);
+}
+
+.csv-icon {
+  font-size: 3rem;
+  opacity: 0.7;
+}
+
+.csv-text {
+  color: #aaa;
+  font-size: 1rem;
+}
+
+.csv-filename {
+  color: #00ccff;
+  font-size: 1rem;
+  font-weight: 600;
+}
+
+.csv-hint {
+  color: #666;
+  font-size: 0.85rem;
+  text-align: center;
+}
+
+.csv-remove {
+  align-self: center;
+  padding: 8px 20px;
+  background: transparent;
+  border: 1px solid #ff4444;
+  border-radius: 6px;
+  color: #ff4444;
+  font-size: 0.9rem;
+  cursor: pointer;
+  transition: all 0.2s ease;
+}
+
+.csv-remove:hover {
+  background: #ff4444;
+  color: #fff;
+}
+
+.csv-result {
+  background: rgba(0, 204, 255, 0.1);
+  border: 1px solid #00ccff55;
+  border-radius: 8px;
+  padding: 16px;
+}
+
+.csv-result-success {
+  color: #00ccff;
+  font-size: 1rem;
+  margin-bottom: 4px;
+}
+
+.csv-result-skipped {
+  color: #888;
+  font-size: 0.9rem;
+}
+
 /* ========== Адаптив ========== */
 @media (max-width: 768px) {
   .page-header h1 {
     font-size: 2rem;
+  }
+  
+  .search-container {
+    flex-direction: column;
+  }
+  
+  .search-input {
+    width: 100%;
+  }
+  
+  .add-btn {
+    width: 100%;
+    justify-content: center;
   }
   
   .convention-header {
@@ -538,6 +1053,15 @@ export default {
   
   .convention-title {
     font-size: 1.2rem;
+  }
+  
+  .form-actions {
+    flex-direction: column-reverse;
+  }
+  
+  .btn {
+    width: 100%;
+    text-align: center;
   }
 }
 </style>
