@@ -9,7 +9,10 @@
       <div class="user-info">
         <template v-if="user && user.is_authenticated">
           <span class="username">{{ user.username }}</span>
-          <a href="/oidc/logout/" class="auth-btn logout-btn">Выйти</a>
+          <form action="/oidc/logout/" method="POST" class="logout-form">
+            <input type="hidden" name="csrfmiddlewaretoken" :value="csrfToken" />
+            <button type="submit" class="auth-btn logout-btn">Выйти</button>
+          </form>
         </template>
         <template v-else>
           <a href="/oidc/authenticate/" class="auth-btn login-btn">Войти</a>
@@ -26,6 +29,12 @@ export default {
   data() {
     return {
       user: null
+    }
+  },
+  computed: {
+    csrfToken() {
+      const match = document.cookie.match(/csrftoken=([^;]+)/)
+      return match ? match[1] : ''
     }
   },
   async created() {
@@ -146,10 +155,18 @@ nav {
   transform: translateY(-1px);
 }
 
+.logout-form {
+  display: inline;
+  margin: 0;
+  padding: 0;
+}
+
 .logout-btn {
   background: transparent;
   border: 1px solid #ff4444;
   color: #ff4444;
+  cursor: pointer;
+  font-family: 'Orbitron', 'Courier New', monospace;
 }
 
 .logout-btn:hover {

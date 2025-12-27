@@ -4,6 +4,16 @@
       <h1>Игры</h1>
       <p class="subtitle">Каталог ролевых игр</p>
     </div>
+
+    <!-- Поиск -->
+    <div class="search-container">
+      <input 
+        v-model="searchQuery" 
+        type="text" 
+        placeholder="Поиск по названию..."
+        class="search-input"
+      />
+    </div>
     
     <div v-if="loading" class="loading">
       <div class="loading-spinner"></div>
@@ -15,13 +25,14 @@
       <button @click="fetchGames" class="retry-btn">Повторить</button>
     </div>
     
-    <div v-else-if="games.length === 0" class="empty">
-      <p>Игры не найдены</p>
+    <div v-else-if="filteredGames.length === 0" class="empty">
+      <p v-if="searchQuery">Игры не найдены по запросу "{{ searchQuery }}"</p>
+      <p v-else>Игры пока не добавлены</p>
     </div>
     
     <div v-else class="games-grid">
       <div 
-        v-for="game in games" 
+        v-for="game in filteredGames" 
         :key="game.id" 
         class="game-card"
         :class="{ 'has-poster': game.poster_url }"
@@ -100,7 +111,20 @@ export default {
       games: [],
       loading: true,
       error: null,
+      searchQuery: '',
       selectedGame: null
+    }
+  },
+  computed: {
+    filteredGames() {
+      if (!this.searchQuery) {
+        return this.games
+      }
+      const query = this.searchQuery.toLowerCase()
+      return this.games.filter(g => 
+        g.name.toLowerCase().includes(query) ||
+        (g.announcement && g.announcement.toLowerCase().includes(query))
+      )
     }
   },
   mounted() {
@@ -154,6 +178,33 @@ export default {
   color: #888;
   font-size: 1.1rem;
   letter-spacing: 0.1em;
+}
+
+/* ========== Поиск ========== */
+.search-container {
+  max-width: 600px;
+  margin: 0 auto 40px;
+}
+
+.search-input {
+  width: 100%;
+  padding: 16px 24px;
+  background: rgba(26, 26, 46, 0.8);
+  border: 2px solid #ff6b3555;
+  border-radius: 12px;
+  color: #e0e0e0;
+  font-size: 1.1rem;
+  transition: border-color 0.3s, box-shadow 0.3s;
+}
+
+.search-input::placeholder {
+  color: #666;
+}
+
+.search-input:focus {
+  outline: none;
+  border-color: #ff6b35;
+  box-shadow: 0 0 20px rgba(255, 107, 53, 0.2);
 }
 
 /* ========== Загрузка / Ошибка / Пустой список ========== */

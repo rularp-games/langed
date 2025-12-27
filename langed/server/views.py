@@ -94,7 +94,7 @@ class ConventionEventViewSet(viewsets.ReadOnlyModelViewSet):
     def get_queryset(self):
         queryset = ConventionEvent.objects.select_related(
             'convention', 'city'
-        ).prefetch_related('scheduled_runs', 'scheduled_runs__game', 'runs', 'games').all()
+        ).prefetch_related('scheduled_runs', 'scheduled_runs__game', 'runs', 'runs__game').all()
         
         # Фильтр по конвенту
         convention_id = self.request.query_params.get('convention')
