@@ -33,3 +33,7 @@ OIDC_OP_USER_ENDPOINT = f'{KEYCLOAK_SERVER_URL}/realms/{KEYCLOAK_REALM}/protocol
 OIDC_OP_JWKS_ENDPOINT = f'{KEYCLOAK_SERVER_URL}/realms/{KEYCLOAK_REALM}/protocol/openid-connect/certs'
 OIDC_OP_LOGOUT_ENDPOINT = f'{KEYCLOAK_SERVER_URL}/realms/{KEYCLOAK_REALM}/protocol/openid-connect/logout'
 
+# CSRF trusted origins - add your domain here
+# Example: ['https://langed.example.com', 'https://www.langed.example.com']
+CSRF_TRUSTED_ORIGINS = ['{{ .Values.app.url }}']
+

@@ -2,9 +2,9 @@
   <div id="app">
     <nav>
       <div class="nav-links">
-        <router-link to="/">Home</router-link> |
-        <router-link to="/cyberwordly">Cyberwordly</router-link> |
+        <router-link to="/">Афиша</router-link>
         <router-link to="/games">Игры</router-link>
+        <router-link to="/conventions">Конвенты</router-link>
       </div>
       <div class="user-info">
         <template v-if="user && user.is_authenticated">
@@ -46,6 +46,8 @@ export default {
 </script>
 
 <style>
+@import url('https://fonts.googleapis.com/css2?family=Orbitron:wght@400;700&display=swap');
+
 * {
   margin: 0;
   padding: 0;
@@ -53,76 +55,123 @@ export default {
 }
 
 body {
-  background-color: #000000;
+  background: linear-gradient(135deg, #0a0a0a 0%, #1a1a2e 50%, #0a0a0a 100%);
   margin: 0;
   padding: 0;
 }
 
 #app {
-  font-family: Avenir, Helvetica, Arial, sans-serif;
+  font-family: 'Orbitron', 'Courier New', monospace;
   -webkit-font-smoothing: antialiased;
   -moz-osx-font-smoothing: grayscale;
   min-height: 100vh;
-  background-color: #000000;
+  background: transparent;
 }
 
 nav {
-  padding: 20px;
-  background-color: #000000;
+  padding: 16px 24px;
+  background: rgba(10, 10, 10, 0.95);
+  border-bottom: 1px solid #ff6b3533;
   z-index: 100;
-  position: relative;
+  position: sticky;
+  top: 0;
   display: flex;
   justify-content: space-between;
   align-items: center;
+  backdrop-filter: blur(10px);
+}
+
+.nav-links {
+  display: flex;
+  gap: 8px;
 }
 
 .nav-links a {
-  color: #00ff00;
+  color: #888;
   text-decoration: none;
-  margin: 0 10px;
-  font-weight: bold;
+  padding: 10px 20px;
+  font-weight: 600;
+  font-size: 0.9rem;
+  text-transform: uppercase;
+  letter-spacing: 0.1em;
+  border-radius: 6px;
+  transition: all 0.3s ease;
+  border: 1px solid transparent;
 }
 
-.nav-links a.router-link-active {
-  color: #42b983;
+.nav-links a:hover {
+  color: #ff6b35;
+  border-color: #ff6b3555;
+}
+
+.nav-links a.router-link-active,
+.nav-links a.router-link-exact-active {
+  background: linear-gradient(90deg, #ff6b35, #ff8c5a);
+  color: #0a0a0a;
+  border-color: #ff6b35;
 }
 
 .user-info {
   display: flex;
   align-items: center;
-  gap: 12px;
+  gap: 16px;
 }
 
 .username {
-  color: #00ff00;
-  font-weight: bold;
+  color: #ff6b35;
+  font-weight: 600;
+  font-size: 0.9rem;
+  letter-spacing: 0.05em;
 }
 
 .auth-btn {
-  padding: 6px 14px;
-  border-radius: 4px;
+  padding: 8px 18px;
+  border-radius: 6px;
   text-decoration: none;
-  font-weight: bold;
-  transition: all 0.2s ease;
+  font-weight: 600;
+  font-size: 0.85rem;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+  transition: all 0.3s ease;
 }
 
 .login-btn {
-  background-color: #00ff00;
-  color: #000000;
+  background: linear-gradient(90deg, #ff6b35, #ff8c5a);
+  color: #0a0a0a;
+  border: none;
 }
 
 .login-btn:hover {
-  background-color: #00cc00;
+  box-shadow: 0 0 20px rgba(255, 107, 53, 0.4);
+  transform: translateY(-1px);
 }
 
 .logout-btn {
-  background-color: transparent;
+  background: transparent;
   border: 1px solid #ff4444;
   color: #ff4444;
 }
 
 .logout-btn:hover {
-  background-color: #ff4444;
-  color: #000000;
+  background: #ff4444;
+  color: #0a0a0a;
+}
+
+@media (max-width: 768px) {
+  nav {
+    flex-direction: column;
+    gap: 16px;
+    padding: 16px;
+  }
+  
+  .nav-links {
+    flex-wrap: wrap;
+    justify-content: center;
+  }
+  
+  .nav-links a {
+    padding: 8px 14px;
+    font-size: 0.8rem;
+  }
 }
 </style>
