@@ -43,8 +43,11 @@ urlpatterns = [
     path('admin/', admin.site.urls),
     path('api/', include('server.urls')),
     path('oidc/', include('mozilla_django_oidc.urls')),
-    # Catch-all для Vue Router — должен быть последним
-    re_path(r'^(?!admin/|api/|static/|media/|oidc/).*$', vue_app, name='vue_app'),
+]
+
+# Catch-all для Vue Router — добавляется последним
+urlpatterns += [
+    re_path(r'^(?!(admin|api|static|media|oidc)/).*$', vue_app, name='vue_app'),
 ]
 
 # Для dev-режима: отдача статики и медиа Django
