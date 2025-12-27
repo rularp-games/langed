@@ -8,7 +8,7 @@
       </div>
       <div class="user-info">
         <template v-if="user && user.is_authenticated">
-          <span class="username">{{ user.username }}</span>
+          <span class="username">{{ user.first_name }} {{ user.last_name }}</span>
           <form action="/oidc/logout/" method="POST" class="logout-form">
             <input type="hidden" name="csrfmiddlewaretoken" :value="csrfToken" />
             <button type="submit" class="auth-btn logout-btn">Выйти</button>
