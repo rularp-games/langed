@@ -194,7 +194,7 @@ OIDC_STORE_ID_TOKEN = True
 # This prevents redirect loops and CORS issues when frontend calls API
 import re
 OIDC_EXEMPT_URLS = [
-    re.compile(r'^api/'),
+    re.compile(r'^/api/'),
 ]
 
 # Logging for OIDC debugging
