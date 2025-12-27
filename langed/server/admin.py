@@ -93,6 +93,9 @@ class ConventionEventAdmin(admin.ModelAdmin):
         return fieldsets
 
     def save_model(self, request, obj, form, change):
+        # Save the object first so it has a pk before creating related runs
+        super().save_model(request, obj, form, change)
+
         # Создаем прогоны для выбранных игр
         if 'selected_games' in form.cleaned_data:
             selected_games = form.cleaned_data.get('selected_games')
@@ -126,8 +129,6 @@ class ConventionEventAdmin(admin.ModelAdmin):
                         request,
                         'Все выбранные игры уже имеют прогоны на эту дату.'
                     )
-
-        super().save_model(request, obj, form, change)
 
     def runs_count(self, obj):
         return obj.runs.count()
