@@ -143,6 +143,12 @@ from langed.private_settings import (
     OIDC_OP_JWKS_ENDPOINT,
 )
 
+# OIDC Redirect URL (optional - import if defined)
+try:
+    from langed.private_settings import OIDC_REDIRECT_URL
+except ImportError:
+    OIDC_REDIRECT_URL = None
+
 # OIDC configuration
 OIDC_RP_SIGN_ALGO = 'RS256'
 OIDC_RP_SCOPES = 'openid email profile'

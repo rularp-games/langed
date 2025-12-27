@@ -37,3 +37,9 @@ OIDC_OP_LOGOUT_ENDPOINT = f'{KEYCLOAK_SERVER_URL}/realms/{KEYCLOAK_REALM}/protoc
 # Example: ['https://langed.example.com', 'https://www.langed.example.com']
 CSRF_TRUSTED_ORIGINS = ['{{ .Values.app.url }}']
 
+# Site URL for OIDC callback
+SITE_URL = '{{ .Values.app.url }}'
+
+# OIDC Redirect URL - must match what's configured in Keycloak
+OIDC_REDIRECT_URL = f'{SITE_URL}/oidc/callback/'
+
