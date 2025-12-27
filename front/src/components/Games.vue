@@ -348,6 +348,10 @@ export default {
       const user = this.getUser()
       return user && user.is_authenticated
     },
+    csrfToken() {
+      const match = document.cookie.match(/csrftoken=([^;]+)/)
+      return match ? match[1] : ''
+    },
     filteredGames() {
       if (!this.searchQuery) {
         return this.games
@@ -459,6 +463,9 @@ export default {
         
         const response = await fetch('/api/games/import_csv/', {
           method: 'POST',
+          headers: {
+            'X-CSRFToken': this.csrfToken
+          },
           body: formData
         })
         
@@ -510,6 +517,9 @@ export default {
         
         const response = await fetch('/api/games/', {
           method: 'POST',
+          headers: {
+            'X-CSRFToken': this.csrfToken
+          },
           body: formData
         })
         
