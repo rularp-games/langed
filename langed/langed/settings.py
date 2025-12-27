@@ -38,6 +38,7 @@ INSTALLED_APPS = [
     'django.contrib.messages',
     'django.contrib.staticfiles',
     'rest_framework',
+    'mozilla_django_oidc',
     'server',
 ]
 
@@ -49,6 +50,7 @@ MIDDLEWARE = [
     'django.contrib.auth.middleware.AuthenticationMiddleware',
     'django.contrib.messages.middleware.MessageMiddleware',
     'django.middleware.clickjacking.XFrameOptionsMiddleware',
+    'mozilla_django_oidc.middleware.SessionRefresh',
 ]
 
 ROOT_URLCONF = 'langed.urls'
@@ -115,12 +117,45 @@ STATIC_URL = 'static/'
 
 STATIC_ROOT = BASE_DIR / 'static'
 
-# Media files (uploads)
-MEDIA_URL = '/media/'
-MEDIA_ROOT = BASE_DIR / 'media'
-
 # Default primary key field type
 # https://docs.djangoproject.com/en/5.2/ref/settings/#default-auto-field
 
 DEFAULT_AUTO_FIELD = 'django.db.models.BigAutoField'
+
+# Authentication backends
+AUTHENTICATION_BACKENDS = [
+    'django.contrib.auth.backends.ModelBackend',
+    'mozilla_django_oidc.auth.OIDCAuthenticationBackend',
+]
+
+# OIDC / Keycloak settings (imported from private_settings)
+from langed.private_settings import (
+    OIDC_RP_CLIENT_ID,
+    OIDC_RP_CLIENT_SECRET,
+    OIDC_OP_AUTHORIZATION_ENDPOINT,
+    OIDC_OP_TOKEN_ENDPOINT,
+    OIDC_OP_USER_ENDPOINT,
+    OIDC_OP_JWKS_ENDPOINT,
+)
+
+# OIDC configuration
+OIDC_RP_SIGN_ALGO = 'RS256'
+OIDC_RP_SCOPES = 'openid email profile'
+
+# Where to redirect after login/logout
+LOGIN_REDIRECT_URL = '/'
+LOGOUT_REDIRECT_URL = '/'
+
+# Create user if doesn't exist
+OIDC_CREATE_USER = True
+
+# Use Keycloak's preferred_username as username
+OIDC_USERNAME_ALGO = 'server.oidc.generate_username'
+
+# Django REST Framework settings
+REST_FRAMEWORK = {
+    'DEFAULT_AUTHENTICATION_CLASSES': [
+        'rest_framework.authentication.SessionAuthentication',
+    ],
+}
 

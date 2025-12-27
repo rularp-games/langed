@@ -1,8 +1,10 @@
 from rest_framework import viewsets, status
-from rest_framework.decorators import action
+from rest_framework.decorators import action, api_view, permission_classes
+from rest_framework.permissions import AllowAny
 from rest_framework.response import Response
 from django.shortcuts import get_object_or_404
 from django.utils import timezone
+from django.conf import settings
 from datetime import date
 
 from .models import Game, Run, Convention, ConventionEvent, City
@@ -10,6 +12,35 @@ from .serializers import (
     GameSerializer, RunSerializer, 
     ConventionSerializer, ConventionEventSerializer
 )
+
+
+@api_view(['GET'])
+@permission_classes([AllowAny])
+def current_user(request):
+    """Возвращает информацию о текущем пользователе"""
+    if request.user.is_authenticated:
+        return Response({
+            'is_authenticated': True,
+            'id': request.user.id,
+            'username': request.user.username,
+            'email': request.user.email,
+            'first_name': request.user.first_name,
+            'last_name': request.user.last_name,
+            'is_staff': request.user.is_staff,
+        })
+    return Response({
+        'is_authenticated': False,
+    })
+
+
+@api_view(['GET'])
+@permission_classes([AllowAny])
+def auth_urls(request):
+    """Возвращает URLs для авторизации через Keycloak"""
+    return Response({
+        'login_url': '/oidc/authenticate/',
+        'logout_url': '/oidc/logout/',
+    })
 
 
 class GameViewSet(viewsets.ReadOnlyModelViewSet):
@@ -63,7 +94,7 @@ class ConventionEventViewSet(viewsets.ReadOnlyModelViewSet):
     def get_queryset(self):
         queryset = ConventionEvent.objects.select_related(
             'convention', 'city'
-        ).prefetch_related('scheduled_runs', 'scheduled_runs__game', 'runs', 'runs__game').all()
+        ).prefetch_related('scheduled_runs', 'scheduled_runs__game', 'runs', 'games').all()
         
         # Фильтр по конвенту
         convention_id = self.request.query_params.get('convention')
