@@ -5,7 +5,7 @@
       <p class="subtitle">Каталог ролевых игр</p>
     </div>
 
-    <!-- Поиск -->
+    <!-- Поиск и добавление -->
     <div class="search-container">
       <input 
         v-model="searchQuery" 
@@ -13,6 +13,10 @@
         placeholder="Поиск по названию..."
         class="search-input"
       />
+      <button v-if="isAuthenticated" @click="openAddModal" class="add-btn">
+        <span class="add-icon">+</span>
+        Добавить игру
+      </button>
     </div>
     
     <div v-if="loading" class="loading">
@@ -100,22 +104,155 @@
         </div>
       </div>
     </div>
+
+    <!-- Модальное окно добавления игры -->
+    <div v-if="showAddModal && isAuthenticated" class="modal-overlay" @click.self="closeAddModal">
+      <div class="modal-content add-game-modal">
+        <button class="modal-close" @click="closeAddModal">×</button>
+        
+        <div class="modal-body">
+          <h2>Добавить игру</h2>
+          
+          <form @submit.prevent="submitGame" class="add-game-form">
+            <div class="form-group">
+              <label for="game-name">Название *</label>
+              <input 
+                id="game-name"
+                v-model="newGame.name" 
+                type="text" 
+                required
+                class="form-input"
+                placeholder="Введите название игры"
+              />
+            </div>
+            
+            <div class="form-group">
+              <label for="game-announcement">Анонс</label>
+              <textarea 
+                id="game-announcement"
+                v-model="newGame.announcement"
+                class="form-input form-textarea"
+                placeholder="Описание игры"
+                rows="3"
+              ></textarea>
+            </div>
+            
+            <div class="form-group">
+              <label for="game-red-flags">Красные флаги</label>
+              <textarea 
+                id="game-red-flags"
+                v-model="newGame.red_flags"
+                class="form-input form-textarea"
+                placeholder="Предупреждения о контенте"
+                rows="2"
+              ></textarea>
+            </div>
+            
+            <div class="form-row">
+              <div class="form-group half">
+                <label>Игроки</label>
+                <div class="range-inputs">
+                  <input 
+                    v-model.number="newGame.players_min" 
+                    type="number" 
+                    min="1"
+                    class="form-input small"
+                    placeholder="Мин"
+                  />
+                  <span class="range-separator">–</span>
+                  <input 
+                    v-model.number="newGame.players_max" 
+                    type="number" 
+                    min="1"
+                    class="form-input small"
+                    placeholder="Макс"
+                  />
+                </div>
+              </div>
+            </div>
+            
+            <div class="form-row">
+              <div class="form-group half">
+                <label>Женские роли</label>
+                <div class="range-inputs">
+                  <input 
+                    v-model.number="newGame.female_roles_min" 
+                    type="number" 
+                    min="0"
+                    class="form-input small"
+                    placeholder="Мин"
+                  />
+                  <span class="range-separator">–</span>
+                  <input 
+                    v-model.number="newGame.female_roles_max" 
+                    type="number" 
+                    min="0"
+                    class="form-input small"
+                    placeholder="Макс"
+                  />
+                </div>
+              </div>
+              
+              <div class="form-group half">
+                <label>Мужские роли</label>
+                <div class="range-inputs">
+                  <input 
+                    v-model.number="newGame.male_roles_min" 
+                    type="number" 
+                    min="0"
+                    class="form-input small"
+                    placeholder="Мин"
+                  />
+                  <span class="range-separator">–</span>
+                  <input 
+                    v-model.number="newGame.male_roles_max" 
+                    type="number" 
+                    min="0"
+                    class="form-input small"
+                    placeholder="Макс"
+                  />
+                </div>
+              </div>
+            </div>
+            
+            <div v-if="addError" class="form-error">{{ addError }}</div>
+            
+            <div class="form-actions">
+              <button type="button" @click="closeAddModal" class="btn btn-secondary">Отмена</button>
+              <button type="submit" class="btn btn-primary" :disabled="addLoading">
+                <span v-if="addLoading">Сохранение...</span>
+                <span v-else>Добавить</span>
+              </button>
+            </div>
+          </form>
+        </div>
+      </div>
+    </div>
   </div>
 </template>
 
 <script>
 export default {
   name: 'GamesPage',
+  inject: ['getUser'],
   data() {
     return {
       games: [],
       loading: true,
       error: null,
       searchQuery: '',
-      selectedGame: null
+      selectedGame: null,
+      showAddModal: false,
+      addLoading: false,
+      addError: null,
+      newGame: this.getEmptyGame()
     }
   },
   computed: {
+    isAuthenticated() {
+      const user = this.getUser()
+      return user && user.is_authenticated
+    },
     filteredGames() {
       if (!this.searchQuery) {
         return this.games
@@ -131,6 +268,19 @@ export default {
     this.fetchGames()
   },
   methods: {
+    getEmptyGame() {
+      return {
+        name: '',
+        announcement: '',
+        red_flags: '',
+        players_min: 1,
+        players_max: 10,
+        female_roles_min: 0,
+        female_roles_max: 0,
+        male_roles_min: 0,
+        male_roles_max: 0
+      }
+    },
     async fetchGames() {
       this.loading = true
       this.error = null
@@ -144,6 +294,45 @@ export default {
         this.error = err.message
       } finally {
         this.loading = false
+      }
+    },
+    openAddModal() {
+      this.newGame = this.getEmptyGame()
+      this.addError = null
+      this.showAddModal = true
+    },
+    closeAddModal() {
+      this.showAddModal = false
+      this.addError = null
+    },
+    async submitGame() {
+      this.addLoading = true
+      this.addError = null
+      
+      try {
+        const response = await fetch('/api/games/', {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+          },
+          body: JSON.stringify(this.newGame)
+        })
+        
+        if (!response.ok) {
+          if (response.status === 401 || response.status === 403) {
+            throw new Error('Необходима авторизация для добавления игры')
+          }
+          const data = await response.json()
+          throw new Error(data.detail || data.name?.[0] || 'Ошибка при сохранении')
+        }
+        
+        const createdGame = await response.json()
+        this.games.unshift(createdGame)
+        this.closeAddModal()
+      } catch (err) {
+        this.addError = err.message
+      } finally {
+        this.addLoading = false
       }
     }
   }
@@ -180,14 +369,17 @@ export default {
   letter-spacing: 0.1em;
 }
 
-/* ========== Поиск ========== */
+/* ========== Поиск и добавление ========== */
 .search-container {
-  max-width: 600px;
+  max-width: 800px;
   margin: 0 auto 40px;
+  display: flex;
+  gap: 16px;
+  align-items: center;
 }
 
 .search-input {
-  width: 100%;
+  flex: 1;
   padding: 16px 24px;
   background: rgba(26, 26, 46, 0.8);
   border: 2px solid #ff6b3555;
@@ -205,6 +397,36 @@ export default {
   outline: none;
   border-color: #ff6b35;
   box-shadow: 0 0 20px rgba(255, 107, 53, 0.2);
+}
+
+.add-btn {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 16px 24px;
+  background: linear-gradient(145deg, #ff6b35, #e55a2b);
+  border: none;
+  border-radius: 12px;
+  color: #fff;
+  font-size: 1rem;
+  font-weight: 600;
+  cursor: pointer;
+  transition: all 0.3s ease;
+  white-space: nowrap;
+}
+
+.add-btn:hover {
+  transform: translateY(-2px);
+  box-shadow: 0 8px 25px rgba(255, 107, 53, 0.4);
+}
+
+.add-btn:active {
+  transform: translateY(0);
+}
+
+.add-icon {
+  font-size: 1.4rem;
+  font-weight: bold;
 }
 
 /* ========== Загрузка / Ошибка / Пустой список ========== */
@@ -513,10 +735,157 @@ export default {
   border-radius: 4px;
 }
 
+/* ========== Форма добавления игры ========== */
+.add-game-modal {
+  padding: 32px;
+  max-width: 550px;
+}
+
+.add-game-modal h2 {
+  margin-bottom: 28px;
+}
+
+.add-game-form {
+  display: flex;
+  flex-direction: column;
+  gap: 20px;
+}
+
+.form-group {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.form-group label {
+  color: #ff6b35;
+  font-size: 0.9rem;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+}
+
+.form-input {
+  padding: 12px 16px;
+  background: rgba(10, 10, 10, 0.6);
+  border: 2px solid #ff6b3544;
+  border-radius: 8px;
+  color: #e0e0e0;
+  font-size: 1rem;
+  transition: border-color 0.3s, box-shadow 0.3s;
+}
+
+.form-input::placeholder {
+  color: #555;
+}
+
+.form-input:focus {
+  outline: none;
+  border-color: #ff6b35;
+  box-shadow: 0 0 15px rgba(255, 107, 53, 0.15);
+}
+
+.form-textarea {
+  resize: vertical;
+  min-height: 60px;
+  font-family: inherit;
+}
+
+.form-row {
+  display: flex;
+  gap: 20px;
+}
+
+.form-group.half {
+  flex: 1;
+}
+
+.range-inputs {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+}
+
+.range-separator {
+  color: #888;
+  font-size: 1.2rem;
+}
+
+.form-input.small {
+  width: 80px;
+  text-align: center;
+}
+
+.form-error {
+  background: rgba(255, 68, 68, 0.15);
+  border: 1px solid #ff4444;
+  border-radius: 8px;
+  padding: 12px 16px;
+  color: #ff6b6b;
+  font-size: 0.95rem;
+}
+
+.form-actions {
+  display: flex;
+  gap: 16px;
+  justify-content: flex-end;
+  margin-top: 12px;
+  padding-top: 20px;
+  border-top: 1px solid #ff6b3533;
+}
+
+.btn {
+  padding: 12px 28px;
+  border-radius: 8px;
+  font-size: 1rem;
+  font-weight: 600;
+  cursor: pointer;
+  transition: all 0.3s ease;
+}
+
+.btn-secondary {
+  background: transparent;
+  border: 2px solid #666;
+  color: #aaa;
+}
+
+.btn-secondary:hover {
+  border-color: #888;
+  color: #ccc;
+}
+
+.btn-primary {
+  background: linear-gradient(145deg, #ff6b35, #e55a2b);
+  border: none;
+  color: #fff;
+}
+
+.btn-primary:hover:not(:disabled) {
+  transform: translateY(-2px);
+  box-shadow: 0 6px 20px rgba(255, 107, 53, 0.35);
+}
+
+.btn-primary:disabled {
+  opacity: 0.6;
+  cursor: not-allowed;
+}
+
 /* ========== Адаптив ========== */
 @media (max-width: 768px) {
   .page-header h1 {
     font-size: 2rem;
+  }
+  
+  .search-container {
+    flex-direction: column;
+  }
+  
+  .search-input {
+    width: 100%;
+  }
+  
+  .add-btn {
+    width: 100%;
+    justify-content: center;
   }
   
   .games-grid {
@@ -526,6 +895,20 @@ export default {
   .modal-stats {
     grid-template-columns: 1fr;
     gap: 12px;
+  }
+  
+  .form-row {
+    flex-direction: column;
+    gap: 20px;
+  }
+  
+  .form-actions {
+    flex-direction: column-reverse;
+  }
+  
+  .btn {
+    width: 100%;
+    text-align: center;
   }
 }
 </style>

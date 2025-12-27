@@ -190,6 +190,12 @@ OIDC_CALLBACK_CLASS = 'mozilla_django_oidc.views.OIDCAuthenticationCallbackView'
 OIDC_STORE_ACCESS_TOKEN = True
 OIDC_STORE_ID_TOKEN = True
 
+# Exempt API endpoints from OIDC SessionRefresh middleware
+# This prevents redirect loops and CORS issues when frontend calls API
+OIDC_EXEMPT_URLS = [
+    r'^api/',
+]
+
 # Logging for OIDC debugging
 LOGGING = {
     'version': 1,

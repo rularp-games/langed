@@ -43,10 +43,17 @@ def auth_urls(request):
     })
 
 
-class GameViewSet(viewsets.ReadOnlyModelViewSet):
-    """API для просмотра игр"""
+class GameViewSet(viewsets.ModelViewSet):
+    """API для игр (просмотр и создание)"""
     queryset = Game.objects.all()
     serializer_class = GameSerializer
+    
+    def get_permissions(self):
+        if self.action in ['create', 'update', 'partial_update', 'destroy']:
+            # Для создания/изменения требуется авторизация
+            from rest_framework.permissions import IsAuthenticated
+            return [IsAuthenticated()]
+        return [AllowAny()]
 
 
 class RunViewSet(viewsets.ReadOnlyModelViewSet):

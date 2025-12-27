@@ -31,6 +31,11 @@ export default {
       user: null
     }
   },
+  provide() {
+    return {
+      getUser: () => this.user
+    }
+  },
   computed: {
     csrfToken() {
       const match = document.cookie.match(/csrftoken=([^;]+)/)
