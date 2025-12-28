@@ -23,28 +23,16 @@
 
     <!-- ========== ПРОГОНЫ ========== -->
     <template v-if="activeTab === 'runs'">
-      <!-- Кнопка добавления -->
-      <div v-if="isAuthenticated" class="add-section">
-        <button @click="openAddRunModal" class="add-btn">
-          <span class="add-icon">+</span>
-          Добавить прогон
-        </button>
-      </div>
-
-      <!-- Фильтры -->
-      <div class="filters">
-        <div class="filter-group">
-          <label>Город</label>
-          <select v-model="selectedCity" @change="fetchRuns">
+      <!-- Панель управления -->
+      <div class="controls-bar">
+        <div class="controls-filters">
+          <select v-model="selectedCity" @change="fetchRuns" class="control-select">
             <option value="">Все города</option>
             <option v-for="city in cities" :key="city" :value="city">
               {{ city }}
             </option>
           </select>
-        </div>
-        
-        <div class="filter-group">
-          <label>Период</label>
+          
           <div class="toggle-buttons">
             <button 
               :class="{ active: timeFilter === 'upcoming' }" 
@@ -66,6 +54,11 @@
             </button>
           </div>
         </div>
+        
+        <button v-if="isAuthenticated" @click="openAddRunModal" class="add-btn">
+          <span class="add-icon">+</span>
+          Добавить прогон
+        </button>
       </div>
 
       <!-- Загрузка -->
@@ -132,20 +125,16 @@
 
     <!-- ========== КОНВЕНТЫ ========== -->
     <template v-if="activeTab === 'conventions'">
-      <!-- Фильтры -->
-      <div class="filters">
-        <div class="filter-group">
-          <label>Город</label>
-          <select v-model="selectedConventionCity" @change="fetchConventions">
+      <!-- Панель управления -->
+      <div class="controls-bar">
+        <div class="controls-filters">
+          <select v-model="selectedConventionCity" @change="fetchConventions" class="control-select">
             <option value="">Все города</option>
             <option v-for="city in conventionCities" :key="city" :value="city">
               {{ city }}
             </option>
           </select>
-        </div>
-        
-        <div class="filter-group">
-          <label>Период</label>
+          
           <div class="toggle-buttons">
             <button 
               :class="{ active: conventionTimeFilter === 'upcoming' }" 
@@ -952,37 +941,32 @@ export default {
   color: #0a0a0a;
 }
 
-/* ========== Фильтры ========== */
-.filters {
+/* ========== Панель управления ========== */
+.controls-bar {
   display: flex;
-  gap: 32px;
+  gap: 16px;
   justify-content: center;
-  align-items: flex-end;
+  align-items: center;
   flex-wrap: wrap;
   margin-bottom: 40px;
-  padding: 24px;
+  padding: 16px 24px;
   background: rgba(26, 26, 46, 0.6);
   border-radius: 12px;
   border: 1px solid #ff6b3533;
-  max-width: 900px;
+  max-width: 1000px;
   margin-left: auto;
   margin-right: auto;
 }
 
-.filter-group {
+.controls-filters {
   display: flex;
-  flex-direction: column;
-  gap: 8px;
+  gap: 16px;
+  align-items: center;
+  flex-wrap: wrap;
+  flex: 1;
 }
 
-.filter-group label {
-  color: #ff6b35;
-  font-size: 0.85rem;
-  text-transform: uppercase;
-  letter-spacing: 0.1em;
-}
-
-.filter-group select {
+.control-select {
   padding: 12px 20px;
   background: #0a0a0a;
   border: 2px solid #ff6b3555;
@@ -990,12 +974,12 @@ export default {
   color: #e0e0e0;
   font-size: 1rem;
   cursor: pointer;
-  min-width: 200px;
+  min-width: 180px;
   transition: border-color 0.3s;
 }
 
-.filter-group select:hover,
-.filter-group select:focus {
+.control-select:hover,
+.control-select:focus {
   border-color: #ff6b35;
   outline: none;
 }
@@ -1548,13 +1532,6 @@ export default {
   border-radius: 4px;
 }
 
-/* ========== Секция добавления ========== */
-.add-section {
-  display: flex;
-  justify-content: center;
-  margin-bottom: 24px;
-}
-
 .add-btn {
   display: flex;
   align-items: center;
@@ -1795,8 +1772,20 @@ export default {
     font-size: 0.9rem;
   }
   
-  .add-section {
-    padding: 0 20px;
+  .controls-bar {
+    flex-direction: column;
+    gap: 16px;
+  }
+  
+  .controls-filters {
+    width: 100%;
+    flex-direction: column;
+    gap: 12px;
+  }
+  
+  .control-select {
+    width: 100%;
+    min-width: 100%;
   }
   
   .add-btn {
@@ -1804,36 +1793,14 @@ export default {
     justify-content: center;
   }
   
-  .filters {
-    flex-direction: column;
-    gap: 20px;
-    align-items: stretch;
-  }
-  
-  .filter-group select {
-    min-width: 100%;
-  }
-  
   .toggle-buttons {
-    flex-wrap: wrap;
+    width: 100%;
   }
   
   .toggle-buttons button {
     flex: 1;
-    min-width: 100px;
-  }
-  
-  .toggle-buttons button:first-child {
-    border-radius: 8px 8px 0 0;
-  }
-  
-  .toggle-buttons button:last-child {
-    border-radius: 0 0 8px 8px;
-  }
-  
-  .toggle-buttons button:not(:last-child) {
-    border-right: 2px solid #ff6b3555;
-    border-bottom: none;
+    padding: 10px 12px;
+    font-size: 0.85rem;
   }
   
   .data-table th,

@@ -2,18 +2,20 @@
   <div class="page">
     <div class="page-header">
       <h1>Конвенты</h1>
-      <p class="subtitle">Каталог ролевых конвентов</p>
+      <p class="subtitle">Каталог конвентов кабинетных ролевых игр</p>
     </div>
 
-    <!-- Поиск и добавление -->
-    <div class="search-container">
-      <input 
-        v-model="searchQuery" 
-        type="text" 
-        placeholder="Поиск..."
-        class="search-input"
-      />
-      <div class="action-buttons" v-if="isAuthenticated">
+    <!-- Панель управления -->
+    <div class="controls-bar">
+      <div class="controls-filters">
+        <input 
+          v-model="searchQuery" 
+          type="text" 
+          placeholder="Поиск..."
+          class="control-search"
+        />
+      </div>
+      <div class="controls-actions" v-if="isAuthenticated">
         <button @click="openAddModal" class="add-btn">
           <span class="add-icon">+</span>
           Конвент
@@ -734,44 +736,66 @@ export default {
   letter-spacing: 0.1em;
 }
 
-/* ========== Поиск и добавление ========== */
-.search-container {
-  max-width: 800px;
-  margin: 0 auto 40px;
+/* ========== Панель управления ========== */
+.controls-bar {
+  display: flex;
+  gap: 16px;
+  justify-content: center;
+  align-items: center;
+  flex-wrap: wrap;
+  margin-bottom: 40px;
+  padding: 16px 24px;
+  background: rgba(26, 26, 46, 0.6);
+  border-radius: 12px;
+  border: 1px solid #ff6b3533;
+  max-width: 1000px;
+  margin-left: auto;
+  margin-right: auto;
+}
+
+.controls-filters {
   display: flex;
   gap: 16px;
   align-items: center;
+  flex-wrap: wrap;
+  flex: 1;
 }
 
-.search-input {
+.control-search {
   flex: 1;
-  padding: 16px 24px;
-  background: rgba(26, 26, 46, 0.8);
+  min-width: 200px;
+  padding: 12px 20px;
+  background: #0a0a0a;
   border: 2px solid #ff6b3555;
-  border-radius: 12px;
+  border-radius: 8px;
   color: #e0e0e0;
-  font-size: 1.1rem;
+  font-size: 1rem;
   transition: border-color 0.3s, box-shadow 0.3s;
 }
 
-.search-input::placeholder {
+.control-search::placeholder {
   color: #666;
 }
 
-.search-input:focus {
+.control-search:focus {
   outline: none;
   border-color: #ff6b35;
-  box-shadow: 0 0 20px rgba(255, 107, 53, 0.2);
+  box-shadow: 0 0 15px rgba(255, 107, 53, 0.2);
+}
+
+.controls-actions {
+  display: flex;
+  gap: 12px;
 }
 
 .add-btn {
   display: flex;
   align-items: center;
   gap: 8px;
-  padding: 16px 24px;
+  padding: 12px 20px;
   background: linear-gradient(145deg, #ff6b35, #e55a2b);
   border: none;
-  border-radius: 12px;
+  border-radius: 8px;
   color: #fff;
   font-size: 1rem;
   font-weight: 600;
@@ -790,7 +814,7 @@ export default {
 }
 
 .add-icon {
-  font-size: 1.4rem;
+  font-size: 1.2rem;
   font-weight: bold;
 }
 
@@ -1379,12 +1403,6 @@ export default {
   font-size: 0.9rem;
 }
 
-/* ========== Кнопки действий ========== */
-.action-buttons {
-  display: flex;
-  gap: 12px;
-}
-
 .add-btn-secondary {
   background: transparent;
   border: 2px solid #ff6b35;
@@ -1448,17 +1466,24 @@ export default {
     font-size: 2rem;
   }
   
-  .search-container {
+  .controls-bar {
     flex-direction: column;
+    gap: 16px;
   }
   
-  .search-input {
+  .controls-filters {
     width: 100%;
   }
   
-  .action-buttons {
+  .control-search {
+    width: 100%;
+    min-width: 100%;
+  }
+  
+  .controls-actions {
     width: 100%;
     flex-direction: column;
+    gap: 12px;
   }
   
   .add-btn {
@@ -1490,4 +1515,5 @@ export default {
   }
 }
 </style>
+
 
