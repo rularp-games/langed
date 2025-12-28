@@ -251,23 +251,33 @@
         <h2>Добавить прогон</h2>
         
         <form @submit.prevent="submitRun" class="add-form">
-          <div class="form-group">
+          <div class="form-group searchable-select">
             <label for="run-game">Игра *</label>
-            <select 
+            <input 
               id="run-game"
-              v-model="newRun.game_id" 
-              required
+              v-model="gameSearch"
+              type="text"
               class="form-input"
-            >
-              <option :value="null" disabled>Выберите игру</option>
-              <option 
-                v-for="game in games" 
+              placeholder="Введите название игры..."
+              autocomplete="off"
+              @focus="onGameInputFocus"
+              @blur="onGameInputBlur"
+            />
+            <div v-if="showGameDropdown" class="dropdown-list">
+              <div 
+                v-for="game in filteredGamesList" 
                 :key="game.id" 
-                :value="game.id"
+                class="dropdown-item"
+                :class="{ selected: newRun.game_id === game.id }"
+                @mousedown.prevent="selectGame(game)"
               >
                 {{ game.name }}
-              </option>
-            </select>
+              </div>
+              <div v-if="filteredGamesList.length === 0" class="dropdown-empty">
+                Игры не найдены
+              </div>
+            </div>
+            <input type="hidden" :value="newRun.game_id" required />
           </div>
           
           <div class="form-group">
@@ -289,28 +299,43 @@
             </select>
           </div>
           
-          <div class="form-group">
+          <div class="form-group searchable-select">
             <label for="run-city">Город *</label>
-            <select 
+            <input 
               id="run-city"
-              v-model="newRun.city_id" 
-              required
+              v-model="citySearch"
+              type="text"
               class="form-input"
+              placeholder="Введите название города..."
+              autocomplete="off"
               :disabled="newRun.convention_event_id !== null"
-            >
-              <option :value="null" disabled>Выберите город</option>
-              <option 
-                v-for="city in allCities" 
+              @focus="onCityInputFocus"
+              @blur="onCityInputBlur"
+            />
+            <div v-if="showCityDropdown && newRun.convention_event_id === null" class="dropdown-list">
+              <div 
+                v-for="city in filteredCitiesList" 
                 :key="city.id" 
-                :value="city.id"
+                class="dropdown-item"
+                :class="{ selected: newRun.city_id === city.id }"
+                @mousedown.prevent="selectCity(city)"
               >
                 {{ city.name }}{{ city.region ? ` (${city.region})` : '' }}
-              </option>
-              <option v-if="!newRun.convention_event_id" value="new">+ Создать новый город</option>
-            </select>
+              </div>
+              <div 
+                class="dropdown-item dropdown-item-new"
+                @mousedown.prevent="selectNewCity"
+              >
+                + Создать новый город
+              </div>
+              <div v-if="filteredCitiesList.length === 0 && citySearch" class="dropdown-empty">
+                Города не найдены
+              </div>
+            </div>
             <p v-if="newRun.convention_event_id" class="form-hint">
               Город определяется проведением конвента
             </p>
+            <input type="hidden" :value="newRun.city_id" required />
           </div>
           
           <div v-if="newRun.city_id === 'new' && !newRun.convention_event_id" class="form-group">
@@ -400,7 +425,12 @@ export default {
         convention_event_id: null,
         date: '',
         time: ''
-      }
+      },
+      // Для searchable select
+      gameSearch: '',
+      citySearch: '',
+      showGameDropdown: false,
+      showCityDropdown: false
     }
   },
   computed: {
@@ -411,6 +441,40 @@ export default {
     csrfToken() {
       const match = document.cookie.match(/csrftoken=([^;]+)/)
       return match ? match[1] : ''
+    },
+    sortedGames() {
+      return this.games.slice().sort((a, b) => a.name.localeCompare(b.name, 'ru'))
+    },
+    filteredGamesList() {
+      if (!this.gameSearch) {
+        return this.sortedGames
+      }
+      const query = this.gameSearch.toLowerCase()
+      return this.sortedGames.filter(g => g.name.toLowerCase().includes(query))
+    },
+    sortedCities() {
+      return this.allCities.slice().sort((a, b) => a.name.localeCompare(b.name, 'ru'))
+    },
+    filteredCitiesList() {
+      if (!this.citySearch) {
+        return this.sortedCities
+      }
+      const query = this.citySearch.toLowerCase()
+      return this.sortedCities.filter(c => 
+        c.name.toLowerCase().includes(query) || 
+        (c.region && c.region.toLowerCase().includes(query))
+      )
+    },
+    selectedGameName() {
+      if (!this.newRun.game_id) return ''
+      const game = this.games.find(g => g.id === this.newRun.game_id)
+      return game ? game.name : ''
+    },
+    selectedCityName() {
+      if (!this.newRun.city_id) return ''
+      if (this.newRun.city_id === 'new') return ''
+      const city = this.allCities.find(c => c.id === this.newRun.city_id)
+      return city ? (city.region ? `${city.name} (${city.region})` : city.name) : ''
     }
   },
   mounted() {
@@ -625,6 +689,10 @@ export default {
         date: '',
         time: ''
       }
+      this.gameSearch = ''
+      this.citySearch = ''
+      this.showGameDropdown = false
+      this.showCityDropdown = false
       this.addRunError = null
       this.showAddRunModal = true
     },
@@ -632,13 +700,60 @@ export default {
       this.showAddRunModal = false
       this.addRunError = null
     },
+    selectGame(game) {
+      this.newRun.game_id = game.id
+      this.gameSearch = game.name
+      this.showGameDropdown = false
+    },
+    selectCity(city) {
+      this.newRun.city_id = city.id
+      this.citySearch = city.region ? `${city.name} (${city.region})` : city.name
+      this.showCityDropdown = false
+    },
+    selectNewCity() {
+      this.newRun.city_id = 'new'
+      this.citySearch = ''
+      this.showCityDropdown = false
+    },
+    onGameInputFocus() {
+      this.showGameDropdown = true
+    },
+    onCityInputFocus() {
+      if (this.newRun.convention_event_id === null) {
+        this.showCityDropdown = true
+      }
+    },
+    onGameInputBlur() {
+      // Задержка для обработки клика по элементу списка
+      setTimeout(() => {
+        this.showGameDropdown = false
+        // Если поиск не соответствует выбранной игре, очищаем
+        if (this.newRun.game_id && this.gameSearch !== this.selectedGameName) {
+          this.gameSearch = this.selectedGameName
+        }
+      }, 200)
+    },
+    onCityInputBlur() {
+      setTimeout(() => {
+        this.showCityDropdown = false
+        if (this.newRun.city_id && this.newRun.city_id !== 'new' && this.citySearch !== this.selectedCityName) {
+          this.citySearch = this.selectedCityName
+        }
+      }, 200)
+    },
     onConventionEventChange() {
       // Если выбрано проведение конвента, автоматически устанавливаем город
       if (this.newRun.convention_event_id) {
         const event = this.conventionEvents.find(e => e.id === this.newRun.convention_event_id)
         if (event && event.city) {
           this.newRun.city_id = event.city.id
+          this.citySearch = event.city.region 
+            ? `${event.city.name} (${event.city.region})` 
+            : event.city.name
         }
+      } else {
+        this.newRun.city_id = null
+        this.citySearch = ''
       }
     },
     async submitRun() {
@@ -1395,6 +1510,76 @@ export default {
   color: #888;
   font-size: 0.8rem;
   margin-top: 4px;
+}
+
+/* Searchable Select */
+.searchable-select {
+  position: relative;
+}
+
+.dropdown-list {
+  position: absolute;
+  top: 100%;
+  left: 0;
+  right: 0;
+  max-height: 250px;
+  overflow-y: auto;
+  background: #1a1a2e;
+  border: 2px solid #ff6b35;
+  border-top: none;
+  border-radius: 0 0 8px 8px;
+  z-index: 100;
+  box-shadow: 0 8px 20px rgba(0, 0, 0, 0.4);
+}
+
+.dropdown-item {
+  padding: 12px 16px;
+  color: #e0e0e0;
+  cursor: pointer;
+  transition: background 0.2s;
+  border-bottom: 1px solid #ff6b3522;
+}
+
+.dropdown-item:last-child {
+  border-bottom: none;
+}
+
+.dropdown-item:hover {
+  background: rgba(255, 107, 53, 0.2);
+}
+
+.dropdown-item.selected {
+  background: rgba(255, 107, 53, 0.3);
+  color: #ff6b35;
+}
+
+.dropdown-item-new {
+  color: #00ccff;
+  font-style: italic;
+}
+
+.dropdown-item-new:hover {
+  background: rgba(0, 204, 255, 0.2);
+}
+
+.dropdown-empty {
+  padding: 12px 16px;
+  color: #888;
+  font-style: italic;
+  text-align: center;
+}
+
+.dropdown-list::-webkit-scrollbar {
+  width: 6px;
+}
+
+.dropdown-list::-webkit-scrollbar-track {
+  background: #0a0a0a;
+}
+
+.dropdown-list::-webkit-scrollbar-thumb {
+  background: #ff6b35;
+  border-radius: 3px;
 }
 
 .form-row {
