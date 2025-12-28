@@ -8,7 +8,7 @@
       </div>
       <div class="user-info">
         <template v-if="user && user.is_authenticated">
-          <span class="username">{{ user.first_name }} {{ user.last_name }}</span>
+          <a href="https://auth.rularp.games/keycloak/auth/realms/LARP/account/" target="_blank" class="username">{{ user.first_name }} {{ user.last_name }}</a>
           <form action="/oidc/logout/" method="POST" class="logout-form">
             <input type="hidden" name="csrfmiddlewaretoken" :value="csrfToken" />
             <button type="submit" class="auth-btn logout-btn">Выйти</button>
@@ -136,6 +136,13 @@ nav {
   font-weight: 600;
   font-size: 0.9rem;
   letter-spacing: 0.05em;
+  text-decoration: none;
+  transition: color 0.2s ease;
+}
+
+.username:hover {
+  color: #ff8c5a;
+  text-decoration: underline;
 }
 
 .auth-btn {

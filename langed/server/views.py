@@ -12,7 +12,8 @@ from datetime import date
 from .models import Game, Run, Convention, ConventionEvent, City
 from .serializers import (
     GameSerializer, RunSerializer, 
-    ConventionSerializer, ConventionEventSerializer
+    ConventionSerializer, ConventionEventSerializer,
+    CitySerializer
 )
 
 
@@ -43,6 +44,17 @@ def auth_urls(request):
         'login_url': '/oidc/authenticate/',
         'logout_url': '/oidc/logout/',
     })
+
+
+class CityViewSet(viewsets.ModelViewSet):
+    """API для городов"""
+    queryset = City.objects.all()
+    serializer_class = CitySerializer
+    
+    def get_permissions(self):
+        if self.action in ['create', 'update', 'partial_update', 'destroy']:
+            return [IsAuthenticated()]
+        return [AllowAny()]
 
 
 class GameViewSet(viewsets.ModelViewSet):
@@ -263,9 +275,14 @@ class ConventionViewSet(viewsets.ModelViewSet):
             )
 
 
-class ConventionEventViewSet(viewsets.ReadOnlyModelViewSet):
-    """API для просмотра проведений конвентов с фильтрацией"""
+class ConventionEventViewSet(viewsets.ModelViewSet):
+    """API для проведений конвентов (просмотр и создание)"""
     serializer_class = ConventionEventSerializer
+    
+    def get_permissions(self):
+        if self.action in ['create', 'update', 'partial_update', 'destroy']:
+            return [IsAuthenticated()]
+        return [AllowAny()]
     
     def get_queryset(self):
         queryset = ConventionEvent.objects.select_related(

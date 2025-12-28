@@ -10,7 +10,7 @@
       <input 
         v-model="searchQuery" 
         type="text" 
-        placeholder="Поиск по названию..."
+        placeholder="Поиск..."
         class="search-input"
       />
       <button v-if="isAuthenticated" @click="openAddModal" class="add-btn">
@@ -353,14 +353,15 @@ export default {
       return match ? match[1] : ''
     },
     filteredGames() {
-      if (!this.searchQuery) {
-        return this.games
+      let result = this.games
+      if (this.searchQuery) {
+        const query = this.searchQuery.toLowerCase()
+        result = result.filter(g => 
+          g.name.toLowerCase().includes(query) ||
+          (g.announcement && g.announcement.toLowerCase().includes(query))
+        )
       }
-      const query = this.searchQuery.toLowerCase()
-      return this.games.filter(g => 
-        g.name.toLowerCase().includes(query) ||
-        (g.announcement && g.announcement.toLowerCase().includes(query))
-      )
+      return result.slice().sort((a, b) => a.name.localeCompare(b.name, 'ru'))
     }
   },
   mounted() {

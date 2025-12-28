@@ -10,13 +10,19 @@
       <input 
         v-model="searchQuery" 
         type="text" 
-        placeholder="Поиск по названию..."
+        placeholder="Поиск..."
         class="search-input"
       />
-      <button v-if="isAuthenticated" @click="openAddModal" class="add-btn">
-        <span class="add-icon">+</span>
-        Добавить
-      </button>
+      <div class="action-buttons" v-if="isAuthenticated">
+        <button @click="openAddModal" class="add-btn">
+          <span class="add-icon">+</span>
+          Конвент
+        </button>
+        <button @click="openAddEventModal()" class="add-btn add-btn-secondary">
+          <span class="add-icon">+</span>
+          Проведение
+        </button>
+      </div>
     </div>
 
     <!-- Загрузка -->
@@ -70,7 +76,16 @@
         </div>
         
         <div class="modal-section">
-          <h3>Проведения конвента</h3>
+          <div class="section-header">
+            <h3>Проведения конвента</h3>
+            <button 
+              v-if="isAuthenticated" 
+              @click="openAddEventModal(selectedConvention)" 
+              class="btn-add-inline"
+            >
+              + Добавить
+            </button>
+          </div>
           <div v-if="conventionEvents.length > 0" class="events-list">
             <div 
               v-for="event in conventionEvents" 
@@ -81,7 +96,7 @@
               <div class="event-dates">
                 {{ formatConventionDates(event.date_start, event.date_end) }}
               </div>
-              <div class="event-city">📍 {{ event.city }}</div>
+              <div class="event-city">📍 {{ event.city_name || event.city }}</div>
               <div class="event-stats">
                 <span class="games-count" v-if="event.games && event.games.length > 0">
                   🎮 {{ event.games.length }} {{ pluralizeGames(event.games.length) }}
@@ -213,6 +228,102 @@
         </div>
       </div>
     </div>
+
+    <!-- Модальное окно добавления проведения конвента -->
+    <div v-if="showAddEventModal && isAuthenticated" class="modal-overlay" @click.self="closeAddEventModal">
+      <div class="modal-content add-event-modal">
+        <button class="modal-close" @click="closeAddEventModal">×</button>
+        
+        <h2>Добавить проведение конвента</h2>
+        
+        <form @submit.prevent="submitEvent" class="add-form">
+          <div class="form-group">
+            <label for="event-convention">Конвент *</label>
+            <select 
+              id="event-convention"
+              v-model="newEvent.convention_id" 
+              required
+              class="form-input"
+            >
+              <option :value="null" disabled>Выберите конвент</option>
+              <option 
+                v-for="conv in conventions" 
+                :key="conv.id" 
+                :value="conv.id"
+              >
+                {{ conv.name }}
+              </option>
+            </select>
+          </div>
+          
+          <div class="form-group">
+            <label for="event-city">Город *</label>
+            <select 
+              id="event-city"
+              v-model="newEvent.city_id" 
+              required
+              class="form-input"
+            >
+              <option :value="null" disabled>Выберите город</option>
+              <option 
+                v-for="city in cities" 
+                :key="city.id" 
+                :value="city.id"
+              >
+                {{ city.name }}{{ city.region ? ` (${city.region})` : '' }}
+              </option>
+              <option value="new">+ Создать новый город</option>
+            </select>
+          </div>
+          
+          <div v-if="newEvent.city_id === 'new'" class="form-group">
+            <label for="new-city-name">Название нового города *</label>
+            <input 
+              id="new-city-name"
+              v-model="newEvent.newCityName" 
+              type="text" 
+              required
+              class="form-input"
+              placeholder="Введите название города"
+            />
+          </div>
+          
+          <div class="form-row">
+            <div class="form-group half">
+              <label for="event-date-start">Дата начала *</label>
+              <input 
+                id="event-date-start"
+                v-model="newEvent.date_start" 
+                type="date" 
+                required
+                class="form-input"
+              />
+            </div>
+            
+            <div class="form-group half">
+              <label for="event-date-end">Дата окончания *</label>
+              <input 
+                id="event-date-end"
+                v-model="newEvent.date_end" 
+                type="date" 
+                required
+                class="form-input"
+              />
+            </div>
+          </div>
+          
+          <div v-if="addEventError" class="form-error">{{ addEventError }}</div>
+          
+          <div class="form-actions">
+            <button type="button" @click="closeAddEventModal" class="btn btn-secondary">Отмена</button>
+            <button type="submit" class="btn btn-primary" :disabled="addEventLoading">
+              <span v-if="addEventLoading">Сохранение...</span>
+              <span v-else>Добавить</span>
+            </button>
+          </div>
+        </form>
+      </div>
+    </div>
   </div>
 </template>
 
@@ -234,7 +345,19 @@ export default {
       addError: null,
       newConvention: { name: '', description: '' },
       csvFile: null,
-      csvResult: null
+      csvResult: null,
+      // Для добавления проведения конвента
+      showAddEventModal: false,
+      addEventLoading: false,
+      addEventError: null,
+      cities: [],
+      newEvent: {
+        convention_id: null,
+        city_id: null,
+        newCityName: '',
+        date_start: '',
+        date_end: ''
+      }
     }
   },
   computed: {
@@ -247,18 +370,20 @@ export default {
       return match ? match[1] : ''
     },
     filteredConventions() {
-      if (!this.searchQuery) {
-        return this.conventions
+      let result = this.conventions
+      if (this.searchQuery) {
+        const query = this.searchQuery.toLowerCase()
+        result = result.filter(c => 
+          c.name.toLowerCase().includes(query) ||
+          (c.description && c.description.toLowerCase().includes(query))
+        )
       }
-      const query = this.searchQuery.toLowerCase()
-      return this.conventions.filter(c => 
-        c.name.toLowerCase().includes(query) ||
-        (c.description && c.description.toLowerCase().includes(query))
-      )
+      return result.slice().sort((a, b) => a.name.localeCompare(b.name, 'ru'))
     }
   },
   mounted() {
     this.fetchConventions()
+    this.fetchCities()
   },
   methods: {
     async fetchConventions() {
@@ -436,6 +561,100 @@ export default {
         this.addError = err.message
       } finally {
         this.addLoading = false
+      }
+    },
+    
+    // === Проведения конвентов ===
+    async fetchCities() {
+      try {
+        const response = await fetch('/api/cities/')
+        if (response.ok) {
+          this.cities = await response.json()
+        }
+      } catch (err) {
+        console.error('Ошибка загрузки городов:', err)
+      }
+    },
+    openAddEventModal(convention = null) {
+      this.newEvent = {
+        convention_id: convention ? convention.id : null,
+        city_id: null,
+        newCityName: '',
+        date_start: '',
+        date_end: ''
+      }
+      this.addEventError = null
+      this.showAddEventModal = true
+    },
+    closeAddEventModal() {
+      this.showAddEventModal = false
+      this.addEventError = null
+    },
+    async submitEvent() {
+      this.addEventLoading = true
+      this.addEventError = null
+      
+      try {
+        let cityId = this.newEvent.city_id
+        
+        // Если выбрано создание нового города
+        if (cityId === 'new' && this.newEvent.newCityName.trim()) {
+          const cityResponse = await fetch('/api/cities/', {
+            method: 'POST',
+            headers: {
+              'Content-Type': 'application/json',
+              'X-CSRFToken': this.csrfToken
+            },
+            body: JSON.stringify({ name: this.newEvent.newCityName.trim() })
+          })
+          
+          if (!cityResponse.ok) {
+            throw new Error('Ошибка при создании города')
+          }
+          
+          const newCity = await cityResponse.json()
+          cityId = newCity.id
+          this.cities.push(newCity)
+        }
+        
+        if (!cityId || cityId === 'new') {
+          throw new Error('Выберите или создайте город')
+        }
+        
+        const eventData = {
+          convention_id: this.newEvent.convention_id,
+          city_id: cityId,
+          date_start: this.newEvent.date_start,
+          date_end: this.newEvent.date_end
+        }
+        
+        const response = await fetch('/api/convention-events/', {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+            'X-CSRFToken': this.csrfToken
+          },
+          body: JSON.stringify(eventData)
+        })
+        
+        if (!response.ok) {
+          if (response.status === 401 || response.status === 403) {
+            throw new Error('Необходима авторизация для добавления проведения')
+          }
+          const data = await response.json()
+          throw new Error(data.detail || data.non_field_errors?.[0] || 'Ошибка при сохранении')
+        }
+        
+        // Обновляем список
+        await this.fetchConventions()
+        if (this.selectedConvention) {
+          await this.openConvention(this.selectedConvention)
+        }
+        this.closeAddEventModal()
+      } catch (err) {
+        this.addEventError = err.message
+      } finally {
+        this.addEventLoading = false
       }
     }
   }
@@ -1026,6 +1245,69 @@ export default {
   font-size: 0.9rem;
 }
 
+/* ========== Кнопки действий ========== */
+.action-buttons {
+  display: flex;
+  gap: 12px;
+}
+
+.add-btn-secondary {
+  background: transparent;
+  border: 2px solid #ff6b35;
+  color: #ff6b35;
+}
+
+.add-btn-secondary:hover {
+  background: #ff6b35;
+  color: #fff;
+}
+
+/* ========== Заголовок секции ========== */
+.section-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 12px;
+}
+
+.section-header h3 {
+  margin-bottom: 0;
+}
+
+.btn-add-inline {
+  padding: 6px 14px;
+  background: transparent;
+  border: 1px solid #00ccff;
+  border-radius: 6px;
+  color: #00ccff;
+  font-size: 0.85rem;
+  cursor: pointer;
+  transition: all 0.2s ease;
+}
+
+.btn-add-inline:hover {
+  background: #00ccff;
+  color: #0a0a0a;
+}
+
+/* ========== Форма добавления проведения ========== */
+.add-event-modal {
+  max-width: 550px;
+}
+
+.add-event-modal h2 {
+  margin-bottom: 20px;
+}
+
+.form-row {
+  display: flex;
+  gap: 20px;
+}
+
+.form-group.half {
+  flex: 1;
+}
+
 /* ========== Адаптив ========== */
 @media (max-width: 768px) {
   .page-header h1 {
@@ -1038,6 +1320,11 @@ export default {
   
   .search-input {
     width: 100%;
+  }
+  
+  .action-buttons {
+    width: 100%;
+    flex-direction: column;
   }
   
   .add-btn {
@@ -1057,6 +1344,10 @@ export default {
   
   .form-actions {
     flex-direction: column-reverse;
+  }
+  
+  .form-row {
+    flex-direction: column;
   }
   
   .btn {
