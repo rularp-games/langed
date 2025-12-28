@@ -161,7 +161,7 @@ class RunViewSet(viewsets.ModelViewSet):
         elif time_filter == 'past':
             queryset = queryset.filter(date__lt=timezone.now())
         
-        return queryset.order_by('date')
+        return queryset.order_by('-date')
     
     @action(detail=False, methods=['get'])
     def cities(self, request):
@@ -307,7 +307,7 @@ class ConventionEventViewSet(viewsets.ModelViewSet):
         elif time_filter == 'past':
             queryset = queryset.filter(date_end__lt=today)
         
-        return queryset.order_by('date_start')
+        return queryset.order_by('-date_start')
     
     @action(detail=False, methods=['get'])
     def cities(self, request):
