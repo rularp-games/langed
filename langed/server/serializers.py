@@ -1,5 +1,22 @@
 from rest_framework import serializers
+from django.contrib.auth import get_user_model
 from .models import Game, Run, Convention, ConventionEvent, City
+
+User = get_user_model()
+
+
+class UserBriefSerializer(serializers.ModelSerializer):
+    """Краткий сериализатор пользователя"""
+    display_name = serializers.SerializerMethodField()
+    
+    class Meta:
+        model = User
+        fields = ['id', 'username', 'display_name']
+    
+    def get_display_name(self, obj):
+        if obj.first_name or obj.last_name:
+            return f'{obj.first_name} {obj.last_name}'.strip()
+        return obj.username
 
 
 class CitySerializer(serializers.ModelSerializer):
@@ -10,17 +27,18 @@ class CitySerializer(serializers.ModelSerializer):
 
 class GameSerializer(serializers.ModelSerializer):
     poster_url = serializers.SerializerMethodField()
+    master = UserBriefSerializer(read_only=True)
     
     class Meta:
         model = Game
         fields = [
-            'id', 'name', 'poster', 'poster_url', 'announcement', 'red_flags',
+            'id', 'name', 'master', 'poster', 'poster_url', 'announcement', 'red_flags',
             'players_min', 'players_max',
             'female_roles_min', 'female_roles_max',
             'male_roles_min', 'male_roles_max',
             'created_at', 'updated_at'
         ]
-        read_only_fields = ['id', 'created_at', 'updated_at', 'poster_url']
+        read_only_fields = ['id', 'master', 'created_at', 'updated_at', 'poster_url']
     
     def get_poster_url(self, obj):
         if obj.poster:
@@ -40,15 +58,16 @@ class GameBriefSerializer(serializers.ModelSerializer):
 
 class ConventionSerializer(serializers.ModelSerializer):
     """Сериализатор конвента (без дат - просто справочник)"""
+    organizer = UserBriefSerializer(read_only=True)
     events_count = serializers.IntegerField(source='events.count', read_only=True)
     
     class Meta:
         model = Convention
         fields = [
-            'id', 'name', 'description', 'events_count',
+            'id', 'name', 'organizer', 'description', 'events_count',
             'created_at', 'updated_at'
         ]
-        read_only_fields = ['id', 'created_at', 'updated_at']
+        read_only_fields = ['id', 'organizer', 'created_at', 'updated_at']
 
 
 class RunBriefSerializer(serializers.ModelSerializer):
@@ -104,6 +123,7 @@ class RunSerializer(serializers.ModelSerializer):
         source='game',
         write_only=True
     )
+    master = UserBriefSerializer(read_only=True)
     city = serializers.CharField(source='city.name', read_only=True)
     city_id = serializers.PrimaryKeyRelatedField(
         queryset=City.objects.all(),
@@ -122,11 +142,11 @@ class RunSerializer(serializers.ModelSerializer):
     class Meta:
         model = Run
         fields = [
-            'id', 'game', 'game_id', 'date', 'city', 'city_id',
+            'id', 'game', 'game_id', 'master', 'date', 'city', 'city_id',
             'convention_event', 'convention_event_id', 'convention_name',
             'created_at', 'updated_at'
         ]
-        read_only_fields = ['id', 'created_at', 'updated_at']
+        read_only_fields = ['id', 'master', 'created_at', 'updated_at']
     
     def get_convention_name(self, obj):
         if obj.convention_event:

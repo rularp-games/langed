@@ -123,13 +123,18 @@ class GameViewSet(viewsets.ModelViewSet):
             )
 
 
-class RunViewSet(viewsets.ReadOnlyModelViewSet):
-    """API для просмотра прогонов с фильтрацией"""
+class RunViewSet(viewsets.ModelViewSet):
+    """API для прогонов (просмотр и создание)"""
     serializer_class = RunSerializer
+    
+    def get_permissions(self):
+        if self.action in ['create', 'update', 'partial_update', 'destroy']:
+            return [IsAuthenticated()]
+        return [AllowAny()]
     
     def get_queryset(self):
         queryset = Run.objects.select_related(
-            'game', 'city', 'convention_event', 'convention_event__convention'
+            'game', 'city', 'convention_event', 'convention_event__convention', 'master'
         ).all()
         
         # Фильтр по городу
@@ -153,6 +158,10 @@ class RunViewSet(viewsets.ReadOnlyModelViewSet):
             runs__isnull=False
         ).distinct().values_list('name', flat=True).order_by('name')
         return Response(list(cities))
+    
+    def perform_create(self, serializer):
+        """При создании прогона автоматически устанавливаем текущего пользователя как мастера"""
+        serializer.save(master=self.request.user)
 
 
 class ConventionViewSet(viewsets.ModelViewSet):
@@ -164,6 +173,10 @@ class ConventionViewSet(viewsets.ModelViewSet):
         if self.action in ['create', 'update', 'partial_update', 'destroy', 'import_csv']:
             return [IsAuthenticated()]
         return [AllowAny()]
+    
+    def perform_create(self, serializer):
+        """При создании конвента автоматически устанавливаем текущего пользователя как организатора"""
+        serializer.save(organizer=self.request.user)
     
     @action(detail=False, methods=['post'])
     def import_csv(self, request):

@@ -1,4 +1,5 @@
 from django.db import models
+from django.conf import settings
 from django.core.exceptions import ValidationError
 
 
@@ -23,6 +24,14 @@ class Game(models.Model):
     """Модель игры"""
     
     name = models.CharField(max_length=255, verbose_name='Название')
+    master = models.ForeignKey(
+        settings.AUTH_USER_MODEL,
+        on_delete=models.SET_NULL,
+        related_name='games',
+        verbose_name='Мастер',
+        null=True,
+        blank=True
+    )
     poster = models.ImageField(
         upload_to='games/posters/',
         blank=True,
@@ -65,6 +74,14 @@ class Convention(models.Model):
     """Модель конвента"""
     
     name = models.CharField(max_length=255, verbose_name='Название')
+    organizer = models.ForeignKey(
+        settings.AUTH_USER_MODEL,
+        on_delete=models.SET_NULL,
+        related_name='organized_conventions',
+        verbose_name='Организатор',
+        null=True,
+        blank=True
+    )
     description = models.TextField(blank=True, verbose_name='Описание')
     
     created_at = models.DateTimeField(auto_now_add=True, verbose_name='Дата создания')
@@ -127,6 +144,14 @@ class Run(models.Model):
         on_delete=models.CASCADE,
         related_name='runs',
         verbose_name='Игра'
+    )
+    master = models.ForeignKey(
+        settings.AUTH_USER_MODEL,
+        on_delete=models.SET_NULL,
+        related_name='runs',
+        verbose_name='Мастер',
+        null=True,
+        blank=True
     )
     date = models.DateTimeField(verbose_name='Дата и время прогона')
     city = models.ForeignKey(
