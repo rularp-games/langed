@@ -15,16 +15,10 @@
           class="control-search"
         />
       </div>
-      <div class="controls-actions" v-if="isAuthenticated">
-        <button @click="openAddModal" class="add-btn">
-          <span class="add-icon">+</span>
-          Конвент
-        </button>
-        <button @click="openAddEventModal()" class="add-btn add-btn-secondary">
-          <span class="add-icon">+</span>
-          Проведение
-        </button>
-      </div>
+      <button v-if="isAuthenticated" @click="openAddModal" class="add-btn">
+        <span class="add-icon">+</span>
+        Добавить конвент
+      </button>
     </div>
 
     <!-- Загрузка -->
@@ -783,11 +777,6 @@ export default {
   box-shadow: 0 0 15px rgba(255, 107, 53, 0.2);
 }
 
-.controls-actions {
-  display: flex;
-  gap: 12px;
-}
-
 .add-btn {
   display: flex;
   align-items: center;
@@ -1403,17 +1392,6 @@ export default {
   font-size: 0.9rem;
 }
 
-.add-btn-secondary {
-  background: transparent;
-  border: 2px solid #ff6b35;
-  color: #ff6b35;
-}
-
-.add-btn-secondary:hover {
-  background: #ff6b35;
-  color: #fff;
-}
-
 /* ========== Заголовок секции ========== */
 .section-header {
   display: flex;
@@ -1478,12 +1456,6 @@ export default {
   .control-search {
     width: 100%;
     min-width: 100%;
-  }
-  
-  .controls-actions {
-    width: 100%;
-    flex-direction: column;
-    gap: 12px;
   }
   
   .add-btn {
