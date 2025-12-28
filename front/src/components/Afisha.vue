@@ -199,7 +199,7 @@
             {{ formatConventionDates(event.date_start, event.date_end) }}
           </div>
           <h2 class="convention-title">{{ event.convention_name }}</h2>
-          <div class="convention-city">📍 {{ event.city }}</div>
+          <div class="convention-city">📍 {{ event.city_name || (event.city && event.city.name) }}</div>
           <div class="convention-stats">
             <span class="games-count">
               {{ event.games ? event.games.length : 0 }} {{ pluralizeGames(event.games ? event.games.length : 0) }}
@@ -207,6 +207,19 @@
             <span :class="['status-badge', isConventionPast(event.date_end) ? 'past' : 'upcoming']">
               {{ isConventionPast(event.date_end) ? 'Завершён' : getConventionStatus(event) }}
             </span>
+          </div>
+          <div v-if="event.links && event.links.length > 0" class="convention-links-preview">
+            <a 
+              v-for="link in event.links.slice(0, 4)" 
+              :key="link.id"
+              :href="link.url"
+              target="_blank"
+              rel="noopener noreferrer"
+              class="link-preview-item"
+              :title="link.display_title"
+              @click.stop
+            >{{ getLinkIcon(link.link_type) }}</a>
+            <span v-if="event.links.length > 4" class="links-more">+{{ event.links.length - 4 }}</span>
           </div>
         </div>
       </div>
@@ -220,11 +233,30 @@
           {{ formatConventionDates(selectedConvention.date_start, selectedConvention.date_end) }}
         </div>
         <h2>{{ selectedConvention.convention_name }}</h2>
-        <div class="modal-city">📍 {{ selectedConvention.city }}</div>
+        <div class="modal-city">📍 {{ selectedConvention.city_name || (selectedConvention.city && selectedConvention.city.name) }}</div>
         
         <div class="modal-section" v-if="selectedConvention.description">
           <h3>Описание</h3>
           <p>{{ selectedConvention.description }}</p>
+        </div>
+        
+        <div class="modal-section" v-if="selectedConvention.links && selectedConvention.links.length > 0">
+          <h3>Ссылки</h3>
+          <div class="links-list">
+            <a 
+              v-for="link in selectedConvention.links" 
+              :key="link.id"
+              :href="link.url"
+              target="_blank"
+              rel="noopener noreferrer"
+              class="link-item"
+              :class="'link-type-' + link.link_type"
+              @click.stop
+            >
+              <span class="link-icon">{{ getLinkIcon(link.link_type) }}</span>
+              <span class="link-title">{{ link.display_title }}</span>
+            </a>
+          </div>
         </div>
         
         <div class="modal-section" v-if="selectedConvention.games && selectedConvention.games.length > 0">
@@ -647,6 +679,17 @@ export default {
         return 'игры'
       }
       return 'игр'
+    },
+    getLinkIcon(linkType) {
+      const icons = {
+        'vk': '📱',
+        'telegram': '💬',
+        'website': '🌐',
+        'discord': '🎮',
+        'youtube': '▶️',
+        'other': '🔗'
+      }
+      return icons[linkType] || '🔗'
     },
     
     // === Добавление прогона ===
@@ -1253,6 +1296,98 @@ export default {
   color: #00ccff;
   font-family: 'Courier New', monospace;
   font-size: 0.9rem;
+}
+
+/* ========== Ссылки на карточках конвентов ========== */
+.convention-links-preview {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin-top: 12px;
+  padding-top: 12px;
+  border-top: 1px solid #ff6b3522;
+}
+
+.link-preview-item {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 32px;
+  height: 32px;
+  background: rgba(0, 0, 0, 0.3);
+  border: 1px solid #ff6b3533;
+  border-radius: 6px;
+  font-size: 1rem;
+  text-decoration: none;
+  transition: all 0.2s ease;
+}
+
+.link-preview-item:hover {
+  background: rgba(255, 107, 53, 0.2);
+  border-color: #ff6b35;
+  transform: scale(1.1);
+}
+
+.links-more {
+  color: #888;
+  font-size: 0.85rem;
+}
+
+/* ========== Ссылки в модальном окне ========== */
+.links-list {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 10px;
+}
+
+.link-item {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 8px 14px;
+  background: rgba(0, 0, 0, 0.3);
+  border: 1px solid #ff6b3533;
+  border-radius: 8px;
+  color: #ccc;
+  text-decoration: none;
+  font-size: 0.9rem;
+  transition: all 0.2s ease;
+}
+
+.link-item:hover {
+  background: rgba(255, 107, 53, 0.15);
+  border-color: #ff6b35;
+  color: #fff;
+  transform: translateY(-2px);
+}
+
+.link-icon {
+  font-size: 1rem;
+}
+
+.link-title {
+  color: inherit;
+}
+
+/* Типы ссылок */
+.link-type-vk:hover {
+  background: rgba(0, 119, 255, 0.2);
+  border-color: #0077ff;
+}
+
+.link-type-telegram:hover {
+  background: rgba(0, 136, 204, 0.2);
+  border-color: #0088cc;
+}
+
+.link-type-discord:hover {
+  background: rgba(114, 137, 218, 0.2);
+  border-color: #7289da;
+}
+
+.link-type-youtube:hover {
+  background: rgba(255, 0, 0, 0.2);
+  border-color: #ff0000;
 }
 
 /* ========== Модальное окно ========== */

@@ -96,6 +96,54 @@ class Convention(models.Model):
         return self.name
 
 
+class ConventionLink(models.Model):
+    """Модель внешней ссылки конвента"""
+    
+    LINK_TYPE_CHOICES = [
+        ('vk', 'ВКонтакте'),
+        ('telegram', 'Telegram'),
+        ('website', 'Сайт'),
+        ('discord', 'Discord'),
+        ('youtube', 'YouTube'),
+        ('other', 'Другое'),
+    ]
+    
+    convention = models.ForeignKey(
+        Convention,
+        on_delete=models.CASCADE,
+        related_name='links',
+        verbose_name='Конвент'
+    )
+    url = models.URLField(max_length=500, verbose_name='URL')
+    link_type = models.CharField(
+        max_length=20,
+        choices=LINK_TYPE_CHOICES,
+        default='other',
+        verbose_name='Тип ссылки'
+    )
+    title = models.CharField(
+        max_length=100,
+        blank=True,
+        verbose_name='Название',
+        help_text='Опциональное название ссылки (если не указано, используется тип)'
+    )
+    
+    created_at = models.DateTimeField(auto_now_add=True, verbose_name='Дата создания')
+    updated_at = models.DateTimeField(auto_now=True, verbose_name='Дата обновления')
+
+    class Meta:
+        verbose_name = 'Ссылка конвента'
+        verbose_name_plural = 'Ссылки конвентов'
+        ordering = ['link_type', 'title']
+
+    def __str__(self):
+        return f'{self.convention.name} — {self.get_link_type_display()}'
+    
+    def get_display_title(self):
+        """Возвращает название для отображения"""
+        return self.title if self.title else self.get_link_type_display()
+
+
 class ConventionEvent(models.Model):
     """Модель проведения конвента"""
     

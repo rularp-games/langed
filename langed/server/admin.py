@@ -3,7 +3,7 @@ from django import forms
 from django.contrib import messages
 from django.utils import timezone
 from datetime import time
-from .models import Game, City, Convention, ConventionEvent, Run
+from .models import Game, City, Convention, ConventionEvent, Run, ConventionLink
 
 
 class ConventionEventForm(forms.ModelForm):
@@ -50,16 +50,35 @@ class GameAdmin(admin.ModelAdmin):
     )
 
 
+class ConventionLinkInline(admin.TabularInline):
+    model = ConventionLink
+    extra = 1
+    fields = ('link_type', 'url', 'title')
+
+
 @admin.register(Convention)
 class ConventionAdmin(admin.ModelAdmin):
-    list_display = ('name', 'description', 'created_at')
+    list_display = ('name', 'description', 'links_count', 'created_at')
     search_fields = ('name', 'description')
     ordering = ('name',)
+    inlines = [ConventionLinkInline]
     fieldsets = (
         ('Основная информация', {
             'fields': ('name', 'description')
         }),
     )
+    
+    def links_count(self, obj):
+        return obj.links.count()
+    links_count.short_description = 'Ссылок'
+
+
+@admin.register(ConventionLink)
+class ConventionLinkAdmin(admin.ModelAdmin):
+    list_display = ('convention', 'link_type', 'url', 'title', 'created_at')
+    list_filter = ('link_type', 'convention')
+    search_fields = ('convention__name', 'url', 'title')
+    ordering = ('convention__name', 'link_type')
 
 
 @admin.register(ConventionEvent)

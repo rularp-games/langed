@@ -1,6 +1,6 @@
 from rest_framework import serializers
 from django.contrib.auth import get_user_model
-from .models import Game, Run, Convention, ConventionEvent, City
+from .models import Game, Run, Convention, ConventionEvent, City, ConventionLink
 
 User = get_user_model()
 
@@ -56,15 +56,30 @@ class GameBriefSerializer(serializers.ModelSerializer):
         fields = ['id', 'name', 'players_min', 'players_max']
 
 
+class ConventionLinkSerializer(serializers.ModelSerializer):
+    """Сериализатор ссылки конвента"""
+    display_title = serializers.SerializerMethodField()
+    link_type_display = serializers.CharField(source='get_link_type_display', read_only=True)
+    
+    class Meta:
+        model = ConventionLink
+        fields = ['id', 'url', 'link_type', 'link_type_display', 'title', 'display_title']
+        read_only_fields = ['id']
+    
+    def get_display_title(self, obj):
+        return obj.get_display_title()
+
+
 class ConventionSerializer(serializers.ModelSerializer):
     """Сериализатор конвента (без дат - просто справочник)"""
     organizer = UserBriefSerializer(read_only=True)
     events_count = serializers.IntegerField(source='events.count', read_only=True)
+    links = ConventionLinkSerializer(many=True, read_only=True)
     
     class Meta:
         model = Convention
         fields = [
-            'id', 'name', 'organizer', 'description', 'events_count',
+            'id', 'name', 'organizer', 'description', 'events_count', 'links',
             'created_at', 'updated_at'
         ]
         read_only_fields = ['id', 'organizer', 'created_at', 'updated_at']
@@ -102,6 +117,7 @@ class ConventionEventSerializer(serializers.ModelSerializer):
     runs_count = serializers.SerializerMethodField()
     description = serializers.CharField(source='convention.description', read_only=True)
     city = CitySerializer(read_only=True)
+    links = serializers.SerializerMethodField()
 
     def get_games(self, obj):
         """Получить уникальные игры из всех прогонов конвента"""
@@ -117,13 +133,17 @@ class ConventionEventSerializer(serializers.ModelSerializer):
     def get_runs_count(self, obj):
         """Получить общее количество прогонов"""
         return obj.runs.count() + obj.scheduled_runs.count()
+    
+    def get_links(self, obj):
+        """Получить ссылки конвента"""
+        return ConventionLinkSerializer(obj.convention.links.all(), many=True, context=self.context).data
 
     class Meta:
         model = ConventionEvent
         fields = [
             'id', 'convention', 'convention_id', 'convention_name', 
             'city', 'city_name', 'city_id',
-            'date_start', 'date_end', 'description',
+            'date_start', 'date_end', 'description', 'links',
             'games', 'runs', 'scheduled_runs', 'scheduled_runs_count', 'runs_count',
             'created_at', 'updated_at'
         ]
