@@ -95,12 +95,15 @@ class GameViewSet(viewsets.ModelViewSet):
             created_games = []
             
             for row in reader:
-                name = row.get('название', '').strip()
+                # Нормализуем ключи к нижнему регистру для совместимости с разными CSV
+                row_lower = {k.lower(): v for k, v in row.items()}
+                
+                name = row_lower.get('название', '').strip()
                 if not name:
                     continue
                 
-                announcement = row.get('анонс', '').strip()
-                red_flags = row.get('красные флаги', '').strip()
+                announcement = row_lower.get('анонс', '').strip()
+                red_flags = row_lower.get('красные флаги', '').strip()
                 
                 # Создаем только если игры с таким именем нет
                 game, created = Game.objects.get_or_create(
