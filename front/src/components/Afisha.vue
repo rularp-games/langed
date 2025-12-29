@@ -270,7 +270,7 @@
     </div>
 
     <!-- Модальное окно добавления проведения конвента -->
-    <div v-if="showAddEventModal && isAuthenticated" class="modal-overlay" @click.self="closeAddEventModal">
+    <div v-if="showAddEventModal" class="modal-overlay" @click.self="closeAddEventModal">
       <div class="modal-content add-event-modal">
         <button class="modal-close" @click="closeAddEventModal">×</button>
         
@@ -382,7 +382,7 @@
     </div>
 
     <!-- Модальное окно добавления прогона -->
-    <div v-if="showAddRunModal && isAuthenticated" class="modal-overlay" @click.self="closeAddRunModal">
+    <div v-if="showAddRunModal" class="modal-overlay" @click.self="closeAddRunModal">
       <div class="modal-content add-run-modal">
         <button class="modal-close" @click="closeAddRunModal">×</button>
         
