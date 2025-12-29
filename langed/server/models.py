@@ -3,11 +3,32 @@ from django.conf import settings
 from django.core.exceptions import ValidationError
 
 
+class Region(models.Model):
+    """Модель региона"""
+    
+    name = models.CharField(max_length=255, verbose_name='Название')
+    
+    class Meta:
+        verbose_name = 'Регион'
+        verbose_name_plural = 'Регионы'
+        ordering = ['name']
+
+    def __str__(self):
+        return self.name
+
+
 class City(models.Model):
     """Модель города"""
     
     name = models.CharField(max_length=255, verbose_name='Название')
-    region = models.CharField(max_length=255, blank=True, verbose_name='Регион')
+    region = models.ForeignKey(
+        Region,
+        on_delete=models.PROTECT,
+        related_name='cities',
+        verbose_name='Регион',
+        null=True,
+        blank=True
+    )
     
     class Meta:
         verbose_name = 'Город'
@@ -16,7 +37,7 @@ class City(models.Model):
 
     def __str__(self):
         if self.region:
-            return f'{self.name} ({self.region})'
+            return f'{self.name} ({self.region.name})'
         return self.name
 
 

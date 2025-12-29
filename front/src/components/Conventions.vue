@@ -53,6 +53,10 @@
             {{ convention.events_count }} {{ pluralizeEvents(convention.events_count) }}
           </span>
         </div>
+        <div v-if="convention.organizer" class="convention-organizer">
+          <span class="organizer-icon">👤</span>
+          <span class="organizer-name">{{ convention.organizer.display_name }}</span>
+        </div>
         <p v-if="convention.description" class="convention-description">
           {{ truncateText(convention.description, 150) }}
         </p>
@@ -78,6 +82,12 @@
       <div class="modal-content">
         <button class="modal-close" @click="selectedConvention = null">×</button>
         <h2>{{ selectedConvention.name }}</h2>
+        
+        <div v-if="selectedConvention.organizer" class="modal-organizer">
+          <span class="organizer-icon">👤</span>
+          <span class="organizer-label">Организатор:</span>
+          <span class="organizer-name">{{ selectedConvention.organizer.display_name }}</span>
+        </div>
         
         <div class="modal-section" v-if="selectedConvention.description">
           <h3>Описание</h3>
@@ -935,6 +945,50 @@ export default {
   color: #555;
   font-style: italic;
   margin: 0;
+}
+
+/* Организатор в карточке конвента */
+.convention-organizer {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin-bottom: 10px;
+}
+
+.organizer-icon {
+  font-size: 0.9rem;
+  opacity: 0.8;
+}
+
+.convention-organizer .organizer-name {
+  color: #00ccff;
+  font-size: 0.9rem;
+}
+
+/* Организатор в модальном окне */
+.modal-organizer {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  margin-bottom: 20px;
+  padding: 12px 16px;
+  background: rgba(0, 204, 255, 0.08);
+  border-radius: 8px;
+  border-left: 3px solid #00ccff;
+}
+
+.modal-organizer .organizer-icon {
+  font-size: 1.2rem;
+}
+
+.modal-organizer .organizer-label {
+  color: #888;
+  font-size: 0.9rem;
+}
+
+.modal-organizer .organizer-name {
+  color: #00ccff;
+  font-weight: 600;
 }
 
 .convention-links-preview {

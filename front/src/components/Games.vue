@@ -49,6 +49,10 @@
         </div>
         <div class="game-info">
           <h2 class="game-title">{{ game.name }}</h2>
+          <div v-if="game.master" class="game-master">
+            <span class="master-icon">👤</span>
+            <span class="master-name">{{ game.master.display_name }}</span>
+          </div>
           <div class="game-stats">
             <div class="stat">
               <span class="stat-label">Игроки</span>
@@ -78,6 +82,12 @@
         
         <div class="modal-body">
           <h2>{{ selectedGame.name }}</h2>
+          
+          <div v-if="selectedGame.master" class="modal-master">
+            <span class="master-icon">👤</span>
+            <span class="master-label">Мастер:</span>
+            <span class="master-name">{{ selectedGame.master.display_name }}</span>
+          </div>
           
           <div class="modal-section" v-if="selectedGame.announcement">
             <h3>Анонс</h3>
@@ -807,6 +817,52 @@ export default {
   color: #00ccff;
   font-family: 'Courier New', monospace;
   font-weight: bold;
+}
+
+/* Мастер в карточке игры */
+.game-master {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin-bottom: 16px;
+  padding-bottom: 12px;
+  border-bottom: 1px solid #ff6b3522;
+}
+
+.master-icon {
+  font-size: 1rem;
+  opacity: 0.8;
+}
+
+.game-master .master-name {
+  color: #aaa;
+  font-size: 0.9rem;
+}
+
+/* Мастер в модальном окне */
+.modal-master {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  margin-bottom: 20px;
+  padding: 12px 16px;
+  background: rgba(0, 204, 255, 0.08);
+  border-radius: 8px;
+  border-left: 3px solid #00ccff;
+}
+
+.modal-master .master-icon {
+  font-size: 1.2rem;
+}
+
+.modal-master .master-label {
+  color: #888;
+  font-size: 0.9rem;
+}
+
+.modal-master .master-name {
+  color: #00ccff;
+  font-weight: 600;
 }
 
 /* ========== Модальное окно ========== */
