@@ -36,6 +36,7 @@ class GameSerializer(serializers.ModelSerializer):
             'players_min', 'players_max',
             'female_roles_min', 'female_roles_max',
             'male_roles_min', 'male_roles_max',
+            'technicians',
             'created_at', 'updated_at'
         ]
         read_only_fields = ['id', 'master', 'created_at', 'updated_at', 'poster_url']

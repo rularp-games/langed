@@ -43,7 +43,7 @@ class CityAdmin(admin.ModelAdmin):
 @admin.register(Game)
 class GameAdmin(admin.ModelAdmin):
     list_display = ('name', 'master', 'players_min', 'players_max', 'female_roles_min', 'female_roles_max', 
-                    'male_roles_min', 'male_roles_max', 'created_at')
+                    'male_roles_min', 'male_roles_max', 'technicians', 'created_at')
     list_filter = ('master', 'created_at')
     search_fields = ('name', 'announcement', 'red_flags', 'master__username', 'master__first_name', 'master__last_name')
     autocomplete_fields = ('master',)
@@ -59,6 +59,9 @@ class GameAdmin(admin.ModelAdmin):
         }),
         ('Мужские роли', {
             'fields': (('male_roles_min', 'male_roles_max'),)
+        }),
+        ('Игротехники', {
+            'fields': ('technicians',)
         }),
     )
 

@@ -307,6 +307,7 @@
               autocomplete="off"
               @focus="showEventCityDropdown = true"
               @blur="onEventCityInputBlur"
+              @keydown.enter.prevent
             />
             <div v-if="showEventCityDropdown" class="dropdown-list">
               <div 
@@ -399,6 +400,7 @@
               autocomplete="off"
               @focus="onGameInputFocus"
               @blur="onGameInputBlur"
+              @keydown.enter.prevent
             />
             <div v-if="showGameDropdown" class="dropdown-list">
               <div 
@@ -448,6 +450,7 @@
               :disabled="newRun.convention_event_id !== null"
               @focus="onCityInputFocus"
               @blur="onCityInputBlur"
+              @keydown.enter.prevent
             />
             <div v-if="showCityDropdown && newRun.convention_event_id === null" class="dropdown-list">
               <div 

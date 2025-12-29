@@ -66,6 +66,10 @@
               <span class="stat-label">Муж. роли</span>
               <span class="stat-value">{{ game.male_roles_min }} – {{ game.male_roles_max }}</span>
             </div>
+            <div class="stat">
+              <span class="stat-label">Игротехники</span>
+              <span class="stat-value">{{ game.technicians }}</span>
+            </div>
           </div>
         </div>
       </div>
@@ -111,6 +115,10 @@
             <div class="modal-stat">
               <span class="modal-stat-label">Мужские роли</span>
               <span class="modal-stat-value">{{ selectedGame.male_roles_min }} – {{ selectedGame.male_roles_max }}</span>
+            </div>
+            <div class="modal-stat">
+              <span class="modal-stat-label">Игротехники</span>
+              <span class="modal-stat-value">{{ selectedGame.technicians }}</span>
             </div>
           </div>
         </div>
@@ -268,6 +276,19 @@
               </div>
             </div>
             
+            <div class="form-row">
+              <div class="form-group half">
+                <label>Игротехники</label>
+                <input 
+                  v-model.number="newGame.technicians" 
+                  type="number" 
+                  min="0"
+                  class="form-input small"
+                  placeholder="0"
+                />
+              </div>
+            </div>
+            
             <div v-if="addError" class="form-error">{{ addError }}</div>
             
             <div class="form-actions">
@@ -390,7 +411,8 @@ export default {
         female_roles_min: 0,
         female_roles_max: 0,
         male_roles_min: 0,
-        male_roles_max: 0
+        male_roles_max: 0,
+        technicians: 0
       }
     },
     async fetchGames() {
@@ -523,6 +545,7 @@ export default {
         formData.append('female_roles_max', this.newGame.female_roles_max)
         formData.append('male_roles_min', this.newGame.male_roles_min)
         formData.append('male_roles_max', this.newGame.male_roles_max)
+        formData.append('technicians', this.newGame.technicians)
         
         if (this.posterFile) {
           formData.append('poster', this.posterFile)
@@ -977,7 +1000,7 @@ export default {
 
 .modal-stats {
   display: grid;
-  grid-template-columns: repeat(3, 1fr);
+  grid-template-columns: repeat(4, 1fr);
   gap: 16px;
   margin-top: 24px;
   padding-top: 24px;
