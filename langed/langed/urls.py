@@ -20,6 +20,7 @@ from django.conf import settings
 from django.conf.urls.static import static
 from django.http import HttpResponse
 from django.views.decorators.cache import never_cache
+from server.oidc import SafeOIDCCallbackView
 import os
 
 
@@ -42,6 +43,8 @@ def vue_app(request):
 urlpatterns = [
     path('admin/', admin.site.urls),
     path('api/', include('server.urls')),
+    # Custom callback that handles expired state gracefully (must be before include)
+    path('oidc/callback/', SafeOIDCCallbackView.as_view(), name='oidc_authentication_callback'),
     path('oidc/', include('mozilla_django_oidc.urls')),
 ]
 

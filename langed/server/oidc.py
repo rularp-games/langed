@@ -2,9 +2,28 @@
 OIDC/Keycloak utilities for authentication.
 """
 import logging
+from django.core.exceptions import SuspiciousOperation
+from django.shortcuts import redirect
 from mozilla_django_oidc.auth import OIDCAuthenticationBackend
+from mozilla_django_oidc.views import OIDCAuthenticationCallbackView
 
 logger = logging.getLogger('mozilla_django_oidc')
+
+
+class SafeOIDCCallbackView(OIDCAuthenticationCallbackView):
+    """
+    Custom OIDC callback view that handles expired/invalid state gracefully.
+    Instead of showing an error page, redirects to the login page to restart auth flow.
+    """
+    
+    def get(self, request):
+        try:
+            return super().get(request)
+        except SuspiciousOperation as e:
+            # State not found in session - likely expired or tab was in background too long
+            logger.warning(f"OIDC callback state error (redirecting to login): {e}")
+            # Redirect to OIDC authenticate to restart the flow
+            return redirect('oidc_authentication_init')
 
 
 def generate_username(claims):
