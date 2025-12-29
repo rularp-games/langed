@@ -43,3 +43,8 @@ SITE_URL = 'localhost'
 # OIDC Redirect URL - must match what's configured in Keycloak
 OIDC_REDIRECT_URL = f'{SITE_URL}/oidc/callback/'
 
+# Session cookie security - set to False for local HTTP development
+# In production (HTTPS), this should be True
+SESSION_COOKIE_SECURE = False
+CSRF_COOKIE_SECURE = False
+

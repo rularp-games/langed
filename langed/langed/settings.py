@@ -174,6 +174,21 @@ REST_FRAMEWORK = {
 SESSION_COOKIE_SAMESITE = 'Lax'
 CSRF_COOKIE_SAMESITE = 'Lax'
 
+# Session cookie security settings (import from private_settings for environment-specific config)
+try:
+    from langed.private_settings import SESSION_COOKIE_SECURE
+except ImportError:
+    # Default to True for production, override in private_settings for development
+    SESSION_COOKIE_SECURE = True
+
+try:
+    from langed.private_settings import CSRF_COOKIE_SECURE
+except ImportError:
+    CSRF_COOKIE_SECURE = True
+
+# Use database-backed sessions to ensure consistency across workers
+SESSION_ENGINE = 'django.contrib.sessions.backends.db'
+
 # Trust X-Forwarded headers from proxy
 SECURE_PROXY_SSL_HEADER = ('HTTP_X_FORWARDED_PROTO', 'https')
 USE_X_FORWARDED_HOST = True
