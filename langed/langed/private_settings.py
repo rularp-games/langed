@@ -1,7 +1,7 @@
 from pathlib import Path
 
 # SECURITY WARNING: keep the secret key used in production secret!
-SECRET_KEY = '{{ .Values.rodiniya.project_secret_key }}'
+SECRET_KEY = 'example_secret_key'
 
 # SECURITY WARNING: don't run with debug turned on in production!
 DEBUG = True
@@ -20,11 +20,11 @@ ALLOWED_HOSTS = ['*']
 
 # Keycloak OIDC settings
 # Replace these values with your Keycloak configuration
-KEYCLOAK_SERVER_URL = '{{ .Values.keycloak.server_url }}'  # e.g., 'https://keycloak.example.com'
-KEYCLOAK_REALM = '{{ .Values.keycloak.realm }}'  # e.g., 'my-realm'
+KEYCLOAK_SERVER_URL = 'keycloak.example.com'  # e.g., 'https://keycloak.example.com'
+KEYCLOAK_REALM = 'my-realm'  # e.g., 'my-realm'
 
-OIDC_RP_CLIENT_ID = '{{ .Values.keycloak.client_id }}'  # Client ID from Keycloak
-OIDC_RP_CLIENT_SECRET = '{{ .Values.keycloak.client_secret }}'  # Client secret from Keycloak
+OIDC_RP_CLIENT_ID = 'keycloak-client-id'  # Client ID from Keycloak
+OIDC_RP_CLIENT_SECRET = 'keycloak-client-secret'  # Client secret from Keycloak
 
 # Keycloak endpoints (auto-generated from server URL and realm)
 OIDC_OP_AUTHORIZATION_ENDPOINT = f'{KEYCLOAK_SERVER_URL}/realms/{KEYCLOAK_REALM}/protocol/openid-connect/auth'
@@ -35,10 +35,10 @@ OIDC_OP_LOGOUT_ENDPOINT = f'{KEYCLOAK_SERVER_URL}/realms/{KEYCLOAK_REALM}/protoc
 
 # CSRF trusted origins - add your domain here
 # Example: ['https://langed.example.com', 'https://www.langed.example.com']
-CSRF_TRUSTED_ORIGINS = ['{{ .Values.app.url }}']
+CSRF_TRUSTED_ORIGINS = ['localhost']
 
 # Site URL for OIDC callback
-SITE_URL = '{{ .Values.app.url }}'
+SITE_URL = 'localhost'
 
 # OIDC Redirect URL - must match what's configured in Keycloak
 OIDC_REDIRECT_URL = f'{SITE_URL}/oidc/callback/'
