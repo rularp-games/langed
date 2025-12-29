@@ -317,7 +317,7 @@
                 :class="{ selected: newEvent.city_id === city.id }"
                 @mousedown.prevent="selectEventCity(city)"
               >
-                {{ city.name }}{{ city.region ? ` (${city.region})` : '' }}
+                {{ city.name }}{{ city.region && city.region.name ? ` (${city.region.name})` : '' }}
               </div>
               <div 
                 class="dropdown-item dropdown-item-new"
@@ -460,7 +460,7 @@
                 :class="{ selected: newRun.city_id === city.id }"
                 @mousedown.prevent="selectCity(city)"
               >
-                {{ city.name }}{{ city.region ? ` (${city.region})` : '' }}
+                {{ city.name }}{{ city.region && city.region.name ? ` (${city.region.name})` : '' }}
               </div>
               <div 
                 class="dropdown-item dropdown-item-new"
@@ -614,10 +614,11 @@ export default {
         return this.sortedCities
       }
       const query = this.citySearch.toLowerCase()
-      return this.sortedCities.filter(c => 
-        c.name.toLowerCase().includes(query) || 
-        (c.region && c.region.toLowerCase().includes(query))
-      )
+      return this.sortedCities.filter(c => {
+        const regionName = c.region && c.region.name ? c.region.name : ''
+        return c.name.toLowerCase().includes(query) || 
+          regionName.toLowerCase().includes(query)
+      })
     },
     selectedGameName() {
       if (!this.newRun.game_id) return ''
@@ -628,23 +629,28 @@ export default {
       if (!this.newRun.city_id) return ''
       if (this.newRun.city_id === 'new') return ''
       const city = this.allCities.find(c => c.id === this.newRun.city_id)
-      return city ? (city.region ? `${city.name} (${city.region})` : city.name) : ''
+      if (!city) return ''
+      const regionName = city.region && city.region.name ? city.region.name : ''
+      return regionName ? `${city.name} (${regionName})` : city.name
     },
     filteredEventCitiesList() {
       if (!this.eventCitySearch) {
         return this.sortedCities
       }
       const query = this.eventCitySearch.toLowerCase()
-      return this.sortedCities.filter(c => 
-        c.name.toLowerCase().includes(query) || 
-        (c.region && c.region.toLowerCase().includes(query))
-      )
+      return this.sortedCities.filter(c => {
+        const regionName = c.region && c.region.name ? c.region.name : ''
+        return c.name.toLowerCase().includes(query) || 
+          regionName.toLowerCase().includes(query)
+      })
     },
     selectedEventCityName() {
       if (!this.newEvent.city_id) return ''
       if (this.newEvent.city_id === 'new') return ''
       const city = this.allCities.find(c => c.id === this.newEvent.city_id)
-      return city ? (city.region ? `${city.name} (${city.region})` : city.name) : ''
+      if (!city) return ''
+      const regionName = city.region && city.region.name ? city.region.name : ''
+      return regionName ? `${city.name} (${regionName})` : city.name
     }
   },
   mounted() {
@@ -889,7 +895,8 @@ export default {
     },
     selectCity(city) {
       this.newRun.city_id = city.id
-      this.citySearch = city.region ? `${city.name} (${city.region})` : city.name
+      const regionName = city.region && city.region.name ? city.region.name : ''
+      this.citySearch = regionName ? `${city.name} (${regionName})` : city.name
       this.showCityDropdown = false
     },
     selectNewCity() {
@@ -929,8 +936,9 @@ export default {
         const event = this.conventionEvents.find(e => e.id === this.newRun.convention_event_id)
         if (event && event.city) {
           this.newRun.city_id = event.city.id
-          this.citySearch = event.city.region 
-            ? `${event.city.name} (${event.city.region})` 
+          const regionName = event.city.region && event.city.region.name ? event.city.region.name : ''
+          this.citySearch = regionName 
+            ? `${event.city.name} (${regionName})` 
             : event.city.name
         }
       } else {
@@ -967,6 +975,10 @@ export default {
         
         if (!cityId || cityId === 'new') {
           throw new Error('Выберите или создайте город')
+        }
+        
+        if (!this.newRun.game_id) {
+          throw new Error('Выберите игру из списка. Если игры нет в списке, сначала создайте её в разделе "Игры"')
         }
         
         if (!this.newRun.date || !this.newRun.time) {
@@ -1044,7 +1056,8 @@ export default {
     },
     selectEventCity(city) {
       this.newEvent.city_id = city.id
-      this.eventCitySearch = city.region ? `${city.name} (${city.region})` : city.name
+      const regionName = city.region && city.region.name ? city.region.name : ''
+      this.eventCitySearch = regionName ? `${city.name} (${regionName})` : city.name
       this.showEventCityDropdown = false
     },
     selectNewEventCity() {
