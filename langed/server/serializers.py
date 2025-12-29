@@ -1,6 +1,6 @@
 from rest_framework import serializers
 from django.contrib.auth import get_user_model
-from .models import Game, Run, Convention, ConventionEvent, City, ConventionLink
+from .models import Game, Run, Convention, ConventionEvent, City, ConventionLink, Region
 
 User = get_user_model()
 
@@ -19,7 +19,16 @@ class UserBriefSerializer(serializers.ModelSerializer):
         return obj.username
 
 
+class RegionSerializer(serializers.ModelSerializer):
+    """Сериализатор региона"""
+    class Meta:
+        model = Region
+        fields = ['id', 'name']
+
+
 class CitySerializer(serializers.ModelSerializer):
+    region = RegionSerializer(read_only=True)
+    
     class Meta:
         model = City
         fields = ['id', 'name', 'region']

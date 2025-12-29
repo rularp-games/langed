@@ -134,7 +134,7 @@
               <div class="event-dates">
                 {{ formatConventionDates(event.date_start, event.date_end) }}
               </div>
-              <div class="event-city">📍 {{ event.city_name || event.city }}</div>
+              <div class="event-city">📍 {{ event.city_name || (event.city && event.city.name) }}</div>
               <div class="event-stats">
                 <span class="games-count" v-if="event.games && event.games.length > 0">
                   🎮 {{ event.games.length }} {{ pluralizeGames(event.games.length) }}
@@ -308,7 +308,7 @@
                 :key="city.id" 
                 :value="city.id"
               >
-                {{ city.name }}{{ city.region ? ` (${city.region})` : '' }}
+                {{ city.name }}{{ city.region && city.region.name ? ` (${city.region.name})` : '' }}
               </option>
               <option value="new">+ Создать новый город</option>
             </select>
