@@ -218,18 +218,26 @@ class ConventionViewSet(viewsets.ModelViewSet):
             events_skipped = 0
             
             for row in reader:
-                name = row.get('название мероприятия', '').strip()
-                city_name = row.get('город', '').strip()
-                date_start_str = row.get('дата начала', '').strip()
-                date_end_str = row.get('дата конца', '').strip()
+                # Нормализуем ключи к нижнему регистру для совместимости с разными CSV
+                row_lower = {k.lower(): v for k, v in row.items()}
+                
+                name = row_lower.get('название мероприятия', '').strip()
+                city_name = row_lower.get('город', '').strip()
+                date_start_str = row_lower.get('дата начала', '').strip()
+                date_end_str = row_lower.get('дата конца', '').strip()
                 
                 if not name or not city_name or not date_start_str or not date_end_str:
                     continue
                 
                 try:
                     from datetime import datetime
-                    date_start = datetime.strptime(date_start_str, '%Y-%m-%d').date()
-                    date_end = datetime.strptime(date_end_str, '%Y-%m-%d').date()
+                    # Поддержка форматов ДД.ММ.ГГГГ и ГГГГ-ММ-ДД
+                    if '.' in date_start_str:
+                        date_start = datetime.strptime(date_start_str, '%d.%m.%Y').date()
+                        date_end = datetime.strptime(date_end_str, '%d.%m.%Y').date()
+                    else:
+                        date_start = datetime.strptime(date_start_str, '%Y-%m-%d').date()
+                        date_end = datetime.strptime(date_end_str, '%Y-%m-%d').date()
                 except ValueError:
                     continue
                 
