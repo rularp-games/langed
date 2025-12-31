@@ -697,7 +697,9 @@ export default {
         if (!response.ok) {
           throw new Error('Ошибка загрузки данных')
         }
-        this.runs = await response.json()
+        const runsData = await response.json()
+        // Прямая сортировка по дате (от ранних к поздним)
+        this.runs = runsData.sort((a, b) => new Date(a.date) - new Date(b.date))
       } catch (err) {
         this.error = err.message
       } finally {
@@ -738,7 +740,9 @@ export default {
         if (!response.ok) {
           throw new Error('Ошибка загрузки данных')
         }
-        this.conventions = await response.json()
+        const conventionsData = await response.json()
+        // Прямая сортировка по дате начала (от ранних к поздним)
+        this.conventions = conventionsData.sort((a, b) => new Date(a.date_start) - new Date(b.date_start))
       } catch (err) {
         this.conventionsError = err.message
       } finally {
