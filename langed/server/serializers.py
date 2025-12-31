@@ -31,7 +31,7 @@ class CitySerializer(serializers.ModelSerializer):
     
     class Meta:
         model = City
-        fields = ['id', 'name', 'region']
+        fields = ['id', 'name', 'region', 'timezone']
 
 
 class GameSerializer(serializers.ModelSerializer):

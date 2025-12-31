@@ -506,7 +506,7 @@
             </div>
             
             <div class="form-group half">
-              <label for="run-time">Время *</label>
+              <label for="run-time">Время * <span class="timezone-label">{{ getTimezoneAbbr(newRun.city_timezone) }}</span></label>
               <input 
                 id="run-time"
                 v-model="newRun.time" 
@@ -564,6 +564,7 @@ export default {
       newRun: {
         game_id: null,
         city_id: null,
+        city_timezone: 'Europe/Moscow',
         newCityName: '',
         convention_event_id: null,
         date: '',
@@ -790,6 +791,28 @@ export default {
       }
       return tzMap[timezone] || ''
     },
+    getTimezoneOffset(timezone) {
+      // Возвращает смещение таймзоны в формате +HH:MM
+      const offsetMap = {
+        'Europe/Kaliningrad': '+02:00',
+        'Europe/Moscow': '+03:00',
+        'Europe/Samara': '+04:00',
+        'Asia/Yekaterinburg': '+05:00',
+        'Asia/Omsk': '+06:00',
+        'Asia/Krasnoyarsk': '+07:00',
+        'Asia/Irkutsk': '+08:00',
+        'Asia/Yakutsk': '+09:00',
+        'Asia/Vladivostok': '+10:00',
+        'Asia/Magadan': '+11:00',
+        'Asia/Kamchatka': '+12:00'
+      }
+      return offsetMap[timezone] || '+03:00'
+    },
+    convertToTimezone(dateStr, timeStr, timezone) {
+      // Создаём ISO строку с правильным смещением таймзоны
+      const offset = this.getTimezoneOffset(timezone)
+      return `${dateStr}T${timeStr}:00${offset}`
+    },
     formatConventionDates(startStr, endStr) {
       const start = new Date(startStr)
       const end = new Date(endStr)
@@ -900,6 +923,7 @@ export default {
       this.newRun = {
         game_id: null,
         city_id: null,
+        city_timezone: 'Europe/Moscow',
         newCityName: '',
         convention_event_id: null,
         date: '',
@@ -923,6 +947,7 @@ export default {
     },
     selectCity(city) {
       this.newRun.city_id = city.id
+      this.newRun.city_timezone = city.timezone || 'Europe/Moscow'
       const regionName = city.region && city.region.name ? city.region.name : ''
       this.citySearch = regionName ? `${city.name} (${regionName})` : city.name
       this.showCityDropdown = false
@@ -964,6 +989,7 @@ export default {
         const event = this.conventionEvents.find(e => e.id === this.newRun.convention_event_id)
         if (event && event.city) {
           this.newRun.city_id = event.city.id
+          this.newRun.city_timezone = event.city.timezone || 'Europe/Moscow'
           const regionName = event.city.region && event.city.region.name ? event.city.region.name : ''
           this.citySearch = regionName 
             ? `${event.city.name} (${regionName})` 
@@ -971,6 +997,7 @@ export default {
         }
       } else {
         this.newRun.city_id = null
+        this.newRun.city_timezone = 'Europe/Moscow'
         this.citySearch = ''
       }
     },
@@ -1013,7 +1040,12 @@ export default {
           throw new Error('Укажите дату и время')
         }
         
-        const dateTime = `${this.newRun.date}T${this.newRun.time}:00`
+        // Конвертируем время с учётом таймзоны города
+        const dateTime = this.convertToTimezone(
+          this.newRun.date, 
+          this.newRun.time, 
+          this.newRun.city_timezone
+        )
         
         const runData = {
           game_id: this.newRun.game_id,
@@ -1903,6 +1935,13 @@ export default {
   font-size: 0.9rem;
   text-transform: uppercase;
   letter-spacing: 0.05em;
+}
+
+.timezone-label {
+  color: #00ccff;
+  font-size: 0.75rem;
+  margin-left: 4px;
+  text-transform: none;
 }
 
 .form-input {
