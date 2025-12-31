@@ -8,7 +8,7 @@ from .models import Game, City, Region, Convention, ConventionEvent, Run, Conven
 
 class ConventionEventForm(forms.ModelForm):
     selected_games = forms.ModelMultipleChoiceField(
-        queryset=Game.objects.all(),
+        queryset=Game.objects.all().order_by('name'),
         widget=forms.SelectMultiple(attrs={'size': 10}),
         required=False,
         label='Выбрать игры для создания прогонов',
@@ -109,6 +109,11 @@ class ConventionEventAdmin(admin.ModelAdmin):
     date_hierarchy = 'date_start'
     autocomplete_fields = ('convention', 'city')
     filter_horizontal = ('runs',)
+
+    def formfield_for_manytomany(self, db_field, request, **kwargs):
+        if db_field.name == 'runs':
+            kwargs['queryset'] = Run.objects.all().order_by('game__name')
+        return super().formfield_for_manytomany(db_field, request, **kwargs)
 
     def get_fieldsets(self, request, obj=None):
         fieldsets = (
