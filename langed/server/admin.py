@@ -33,8 +33,8 @@ class RegionAdmin(admin.ModelAdmin):
 
 @admin.register(City)
 class CityAdmin(admin.ModelAdmin):
-    list_display = ('name', 'region')
-    list_filter = ('region',)
+    list_display = ('name', 'region', 'timezone')
+    list_filter = ('region', 'timezone')
     search_fields = ('name', 'region__name')
     ordering = ('name',)
     autocomplete_fields = ('region',)

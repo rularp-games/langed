@@ -20,6 +20,20 @@ class Region(models.Model):
 class City(models.Model):
     """Модель города"""
     
+    TIMEZONE_CHOICES = [
+        ('Europe/Kaliningrad', 'Калининград (UTC+2)'),
+        ('Europe/Moscow', 'Москва (UTC+3)'),
+        ('Europe/Samara', 'Самара (UTC+4)'),
+        ('Asia/Yekaterinburg', 'Екатеринбург (UTC+5)'),
+        ('Asia/Omsk', 'Омск (UTC+6)'),
+        ('Asia/Krasnoyarsk', 'Красноярск (UTC+7)'),
+        ('Asia/Irkutsk', 'Иркутск (UTC+8)'),
+        ('Asia/Yakutsk', 'Якутск (UTC+9)'),
+        ('Asia/Vladivostok', 'Владивосток (UTC+10)'),
+        ('Asia/Magadan', 'Магадан (UTC+11)'),
+        ('Asia/Kamchatka', 'Камчатка (UTC+12)'),
+    ]
+    
     name = models.CharField(max_length=255, verbose_name='Название')
     region = models.ForeignKey(
         Region,
@@ -28,6 +42,12 @@ class City(models.Model):
         verbose_name='Регион',
         null=True,
         blank=True
+    )
+    timezone = models.CharField(
+        max_length=50,
+        choices=TIMEZONE_CHOICES,
+        default='Europe/Moscow',
+        verbose_name='Часовой пояс'
     )
     
     class Meta:

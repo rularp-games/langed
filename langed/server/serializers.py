@@ -169,6 +169,7 @@ class RunSerializer(serializers.ModelSerializer):
     )
     master = UserBriefSerializer(read_only=True)
     city = serializers.CharField(source='city.name', read_only=True)
+    city_timezone = serializers.CharField(source='city.timezone', read_only=True)
     city_id = serializers.PrimaryKeyRelatedField(
         queryset=City.objects.all(),
         source='city',
@@ -186,7 +187,7 @@ class RunSerializer(serializers.ModelSerializer):
     class Meta:
         model = Run
         fields = [
-            'id', 'game', 'game_id', 'master', 'date', 'city', 'city_id',
+            'id', 'game', 'game_id', 'master', 'date', 'city', 'city_id', 'city_timezone',
             'convention_event', 'convention_event_id', 'convention_name',
             'created_at', 'updated_at'
         ]

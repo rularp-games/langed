@@ -97,8 +97,11 @@
               :key="run.id"
               :class="{ 'past-row': isPast(run.date) }"
             >
-              <td class="date-cell">{{ formatDate(run.date) }}</td>
-              <td class="time-cell">{{ formatTime(run.date) }}</td>
+              <td class="date-cell">{{ formatDate(run.date, run.city_timezone) }}</td>
+              <td class="time-cell">
+                {{ formatTime(run.date, run.city_timezone) }}
+                <span class="timezone-hint">{{ getTimezoneAbbr(run.city_timezone) }}</span>
+              </td>
               <td class="name-cell">
                 <span class="primary-text">{{ run.game.name }}</span>
                 <span class="secondary-text">
@@ -747,20 +750,45 @@ export default {
     },
     
     // === Форматирование ===
-    formatDate(dateStr) {
+    formatDate(dateStr, timezone) {
       const date = new Date(dateStr)
-      return date.toLocaleDateString('ru-RU', {
+      const options = {
         day: '2-digit',
         month: 'long',
         year: 'numeric'
-      })
+      }
+      if (timezone) {
+        options.timeZone = timezone
+      }
+      return date.toLocaleDateString('ru-RU', options)
     },
-    formatTime(dateStr) {
+    formatTime(dateStr, timezone) {
       const date = new Date(dateStr)
-      return date.toLocaleTimeString('ru-RU', {
+      const options = {
         hour: '2-digit',
         minute: '2-digit'
-      })
+      }
+      if (timezone) {
+        options.timeZone = timezone
+      }
+      return date.toLocaleTimeString('ru-RU', options)
+    },
+    getTimezoneAbbr(timezone) {
+      // Возвращает сокращённое название таймзоны (UTC offset)
+      const tzMap = {
+        'Europe/Kaliningrad': 'UTC+2',
+        'Europe/Moscow': 'МСК',
+        'Europe/Samara': 'UTC+4',
+        'Asia/Yekaterinburg': 'UTC+5',
+        'Asia/Omsk': 'UTC+6',
+        'Asia/Krasnoyarsk': 'UTC+7',
+        'Asia/Irkutsk': 'UTC+8',
+        'Asia/Yakutsk': 'UTC+9',
+        'Asia/Vladivostok': 'UTC+10',
+        'Asia/Magadan': 'UTC+11',
+        'Asia/Kamchatka': 'UTC+12'
+      }
+      return tzMap[timezone] || ''
     },
     formatConventionDates(startStr, endStr) {
       const start = new Date(startStr)
@@ -1408,6 +1436,14 @@ export default {
   font-family: 'Courier New', monospace;
   color: #00ccff;
   font-size: 1.1rem;
+}
+
+.timezone-hint {
+  display: inline-block;
+  margin-left: 6px;
+  font-size: 0.7rem;
+  color: #666;
+  vertical-align: middle;
 }
 
 .name-cell {
