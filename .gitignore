@@ -1,0 +1,4 @@
+langed/langed/private_settings.py
+__pycache__/
+db.sqlite3
+*.csv

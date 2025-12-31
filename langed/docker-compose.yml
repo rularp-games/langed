@@ -1,0 +1,29 @@
+version: "3"
+
+services:
+  langed:
+    build: .
+    command: /langed/init.sh
+    working_dir: /langed
+    expose:
+      - 9100
+    networks:
+      - langed
+
+  nginx:
+    build: .
+    ports:
+      - 8081:8081
+    command: /usr/sbin/nginx -g 'daemon off;'
+    networks:
+      - langed
+    depends_on:
+      - langed
+
+networks:
+  langed:
+    driver: bridge
+
+volumes:
+    postgres: { }
+    pgadmin: { }
