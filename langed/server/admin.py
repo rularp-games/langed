@@ -17,7 +17,7 @@ class ConventionEventForm(forms.ModelForm):
 
     class Meta:
         model = ConventionEvent
-        fields = ['convention', 'city', 'date_start', 'date_end', 'runs']
+        fields = ['convention', 'city', 'date_start', 'date_end']
 
 
 @admin.register(Region)
@@ -108,12 +108,6 @@ class ConventionEventAdmin(admin.ModelAdmin):
     ordering = ('date_start',)
     date_hierarchy = 'date_start'
     autocomplete_fields = ('convention', 'city')
-    filter_horizontal = ('runs',)
-
-    def formfield_for_manytomany(self, db_field, request, **kwargs):
-        if db_field.name == 'runs':
-            kwargs['queryset'] = Run.objects.all().order_by('game__name')
-        return super().formfield_for_manytomany(db_field, request, **kwargs)
 
     def get_fieldsets(self, request, obj=None):
         fieldsets = (
@@ -126,9 +120,6 @@ class ConventionEventAdmin(admin.ModelAdmin):
             ('Создание прогонов', {
                 'fields': ('selected_games',),
                 'description': 'Выберите игры для автоматического создания прогонов на дату начала конвента'
-            }),
-            ('Прогоны', {
-                'fields': ('runs',)
             }),
         )
 
@@ -173,7 +164,7 @@ class ConventionEventAdmin(admin.ModelAdmin):
                     )
 
     def runs_count(self, obj):
-        return obj.runs.count()
+        return obj.scheduled_runs.count()
     runs_count.short_description = 'Количество прогонов'
 
 

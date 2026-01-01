@@ -1,0 +1,90 @@
+erDiagram
+    Region {
+        int id PK
+        string name
+    }
+    
+    City {
+        int id PK
+        string name
+        int region_id FK
+        string timezone
+    }
+    
+    User {
+        int id PK
+        string username
+    }
+    
+    Game {
+        int id PK
+        string name
+        int master_id FK
+        image poster
+        text announcement
+        text red_flags
+        int players_min
+        int players_max
+        int female_roles_min
+        int female_roles_max
+        int male_roles_min
+        int male_roles_max
+        int technicians
+        datetime created_at
+        datetime updated_at
+    }
+    
+    Convention {
+        int id PK
+        string name
+        int organizer_id FK
+        text description
+        datetime created_at
+        datetime updated_at
+    }
+    
+    ConventionLink {
+        int id PK
+        int convention_id FK
+        string url
+        string link_type
+        string title
+        datetime created_at
+        datetime updated_at
+    }
+    
+    ConventionEvent {
+        int id PK
+        int convention_id FK
+        int city_id FK
+        date date_start
+        date date_end
+        datetime created_at
+        datetime updated_at
+    }
+    
+    Run {
+        int id PK
+        int game_id FK
+        int master_id FK
+        datetime date
+        int city_id FK
+        int convention_event_id FK
+        datetime created_at
+        datetime updated_at
+    }
+    
+    Region ||--o{ City : "cities"
+    City ||--o{ ConventionEvent : "convention_events"
+    City ||--o{ Run : "runs"
+    
+    User ||--o{ Game : "games (master)"
+    User ||--o{ Convention : "organized_conventions"
+    User ||--o{ Run : "runs (master)"
+    
+    Game ||--o{ Run : "runs"
+    
+    Convention ||--o{ ConventionLink : "links"
+    Convention ||--o{ ConventionEvent : "events"
+    
+    ConventionEvent ||--o{ Run : "scheduled_runs"

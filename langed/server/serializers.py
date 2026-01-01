@@ -121,28 +121,16 @@ class ConventionEventSerializer(serializers.ModelSerializer):
         required=False
     )
     games = serializers.SerializerMethodField()
-    runs = RunBriefSerializer(many=True, read_only=True)
-    scheduled_runs = RunBriefSerializer(many=True, read_only=True)
-    scheduled_runs_count = serializers.IntegerField(source='scheduled_runs.count', read_only=True)
-    runs_count = serializers.SerializerMethodField()
+    runs = RunBriefSerializer(source='scheduled_runs', many=True, read_only=True)
+    runs_count = serializers.IntegerField(source='scheduled_runs.count', read_only=True)
     description = serializers.CharField(source='convention.description', read_only=True)
     city = CitySerializer(read_only=True)
     links = serializers.SerializerMethodField()
 
     def get_games(self, obj):
         """Получить уникальные игры из всех прогонов конвента"""
-        games = set()
-        # Игры из runs (ManyToMany)
-        for run in obj.runs.all():
-            games.add(run.game)
-        # Игры из scheduled_runs (reverse FK)
-        for run in obj.scheduled_runs.all():
-            games.add(run.game)
+        games = {run.game for run in obj.scheduled_runs.all()}
         return GameBriefSerializer(list(games), many=True, context=self.context).data
-    
-    def get_runs_count(self, obj):
-        """Получить общее количество прогонов"""
-        return obj.runs.count() + obj.scheduled_runs.count()
     
     def get_links(self, obj):
         """Получить ссылки конвента"""
@@ -154,7 +142,7 @@ class ConventionEventSerializer(serializers.ModelSerializer):
             'id', 'convention', 'convention_id', 'convention_name', 
             'city', 'city_name', 'city_id',
             'date_start', 'date_end', 'description', 'links',
-            'games', 'runs', 'scheduled_runs', 'scheduled_runs_count', 'runs_count',
+            'games', 'runs', 'runs_count',
             'created_at', 'updated_at'
         ]
         read_only_fields = ['id', 'created_at', 'updated_at']

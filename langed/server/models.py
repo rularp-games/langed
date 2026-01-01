@@ -202,12 +202,6 @@ class ConventionEvent(models.Model):
         related_name='convention_events',
         verbose_name='Город'
     )
-    runs = models.ManyToManyField(
-        'Run',
-        related_name='convention_events',
-        verbose_name='Прогоны',
-        blank=True
-    )
     date_start = models.DateField(verbose_name='Дата начала')
     date_end = models.DateField(verbose_name='Дата окончания')
     
