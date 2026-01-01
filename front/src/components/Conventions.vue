@@ -53,9 +53,9 @@
             {{ convention.events_count }} {{ pluralizeEvents(convention.events_count) }}
           </span>
         </div>
-        <div v-if="convention.organizer" class="convention-organizer">
-          <span class="organizer-icon">👤</span>
-          <span class="organizer-name">{{ convention.organizer.display_name }}</span>
+        <div v-if="convention.organizers && convention.organizers.length > 0" class="convention-organizers">
+          <span class="organizers-icon">👤</span>
+          <span class="organizers-names">{{ convention.organizers.map(o => o.display_name).join(', ') }}</span>
         </div>
         <p v-if="convention.description" class="convention-description">
           {{ truncateText(convention.description, 150) }}
@@ -89,10 +89,10 @@
           </button>
         </div>
         
-        <div v-if="selectedConvention.organizer" class="modal-organizer">
-          <span class="organizer-icon">👤</span>
-          <span class="organizer-label">Организатор:</span>
-          <span class="organizer-name">{{ selectedConvention.organizer.display_name }}</span>
+        <div v-if="selectedConvention.organizers && selectedConvention.organizers.length > 0" class="modal-organizers">
+          <span class="organizers-icon">👤</span>
+          <span class="organizers-label">{{ selectedConvention.organizers.length > 1 ? 'Организаторы:' : 'Организатор:' }}</span>
+          <span class="organizers-names">{{ selectedConvention.organizers.map(o => o.display_name).join(', ') }}</span>
         </div>
         
         <div class="modal-section" v-if="selectedConvention.description">
@@ -1085,26 +1085,26 @@ export default {
   margin: 0;
 }
 
-/* Организатор в карточке конвента */
-.convention-organizer {
+/* Организаторы в карточке конвента */
+.convention-organizers {
   display: flex;
   align-items: center;
   gap: 8px;
   margin-bottom: 10px;
 }
 
-.organizer-icon {
+.organizers-icon {
   font-size: 0.9rem;
   opacity: 0.8;
 }
 
-.convention-organizer .organizer-name {
+.convention-organizers .organizers-names {
   color: #00ccff;
   font-size: 0.9rem;
 }
 
-/* Организатор в модальном окне */
-.modal-organizer {
+/* Организаторы в модальном окне */
+.modal-organizers {
   display: flex;
   align-items: center;
   gap: 10px;
@@ -1115,16 +1115,16 @@ export default {
   border-left: 3px solid #00ccff;
 }
 
-.modal-organizer .organizer-icon {
+.modal-organizers .organizers-icon {
   font-size: 1.2rem;
 }
 
-.modal-organizer .organizer-label {
+.modal-organizers .organizers-label {
   color: #888;
   font-size: 0.9rem;
 }
 
-.modal-organizer .organizer-name {
+.modal-organizers .organizers-names {
   color: #00ccff;
   font-weight: 600;
 }

@@ -36,19 +36,19 @@ class CitySerializer(serializers.ModelSerializer):
 
 class GameSerializer(serializers.ModelSerializer):
     poster_url = serializers.SerializerMethodField()
-    master = UserBriefSerializer(read_only=True)
+    creators = UserBriefSerializer(many=True, read_only=True)
     
     class Meta:
         model = Game
         fields = [
-            'id', 'name', 'master', 'poster', 'poster_url', 'announcement', 'red_flags',
+            'id', 'name', 'creators', 'poster', 'poster_url', 'announcement', 'red_flags',
             'players_min', 'players_max',
             'female_roles_min', 'female_roles_max',
             'male_roles_min', 'male_roles_max',
             'technicians',
             'created_at', 'updated_at'
         ]
-        read_only_fields = ['id', 'master', 'created_at', 'updated_at', 'poster_url']
+        read_only_fields = ['id', 'creators', 'created_at', 'updated_at', 'poster_url']
     
     def get_poster_url(self, obj):
         if obj.poster:
@@ -82,17 +82,17 @@ class ConventionLinkSerializer(serializers.ModelSerializer):
 
 class ConventionSerializer(serializers.ModelSerializer):
     """Сериализатор конвента (без дат - просто справочник)"""
-    organizer = UserBriefSerializer(read_only=True)
+    organizers = UserBriefSerializer(many=True, read_only=True)
     events_count = serializers.IntegerField(source='events.count', read_only=True)
     links = ConventionLinkSerializer(many=True, read_only=True)
     
     class Meta:
         model = Convention
         fields = [
-            'id', 'name', 'organizer', 'description', 'events_count', 'links',
+            'id', 'name', 'organizers', 'description', 'events_count', 'links',
             'created_at', 'updated_at'
         ]
-        read_only_fields = ['id', 'organizer', 'created_at', 'updated_at']
+        read_only_fields = ['id', 'organizers', 'created_at', 'updated_at']
 
 
 class RunBriefSerializer(serializers.ModelSerializer):
@@ -120,6 +120,7 @@ class ConventionEventSerializer(serializers.ModelSerializer):
         write_only=True,
         required=False
     )
+    organizers = UserBriefSerializer(many=True, read_only=True)
     games = serializers.SerializerMethodField()
     runs = RunBriefSerializer(source='scheduled_runs', many=True, read_only=True)
     runs_count = serializers.IntegerField(source='scheduled_runs.count', read_only=True)
@@ -142,10 +143,10 @@ class ConventionEventSerializer(serializers.ModelSerializer):
             'id', 'convention', 'convention_id', 'convention_name', 
             'city', 'city_name', 'city_id',
             'date_start', 'date_end', 'description', 'links',
-            'games', 'runs', 'runs_count',
+            'organizers', 'games', 'runs', 'runs_count',
             'created_at', 'updated_at'
         ]
-        read_only_fields = ['id', 'created_at', 'updated_at']
+        read_only_fields = ['id', 'organizers', 'created_at', 'updated_at']
 
 
 class RunSerializer(serializers.ModelSerializer):
@@ -155,7 +156,7 @@ class RunSerializer(serializers.ModelSerializer):
         source='game',
         write_only=True
     )
-    master = UserBriefSerializer(read_only=True)
+    masters = UserBriefSerializer(many=True, read_only=True)
     city = serializers.CharField(source='city.name', read_only=True)
     city_timezone = serializers.CharField(source='city.timezone', read_only=True)
     city_id = serializers.PrimaryKeyRelatedField(
@@ -175,11 +176,11 @@ class RunSerializer(serializers.ModelSerializer):
     class Meta:
         model = Run
         fields = [
-            'id', 'game', 'game_id', 'master', 'date', 'city', 'city_id', 'city_timezone',
+            'id', 'game', 'game_id', 'masters', 'date', 'city', 'city_id', 'city_timezone',
             'convention_event', 'convention_event_id', 'convention_name',
             'created_at', 'updated_at'
         ]
-        read_only_fields = ['id', 'master', 'created_at', 'updated_at']
+        read_only_fields = ['id', 'masters', 'created_at', 'updated_at']
     
     def get_convention_name(self, obj):
         if obj.convention_event:

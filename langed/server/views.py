@@ -149,8 +149,8 @@ class RunViewSet(viewsets.ModelViewSet):
     
     def get_queryset(self):
         queryset = Run.objects.select_related(
-            'game', 'city', 'convention_event', 'convention_event__convention', 'master'
-        ).all()
+            'game', 'city', 'convention_event', 'convention_event__convention'
+        ).prefetch_related('masters').all()
         
         # Фильтр по городу
         city = self.request.query_params.get('city')
@@ -176,7 +176,8 @@ class RunViewSet(viewsets.ModelViewSet):
     
     def perform_create(self, serializer):
         """При создании прогона автоматически устанавливаем текущего пользователя как мастера"""
-        serializer.save(master=self.request.user)
+        run = serializer.save()
+        run.masters.add(self.request.user)
 
 
 class ConventionViewSet(viewsets.ModelViewSet):

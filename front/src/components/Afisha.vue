@@ -247,9 +247,12 @@
           <p class="convention-badge-lg">{{ selectedRun.convention_name }}</p>
         </div>
         
-        <div class="modal-section" v-if="selectedRun.master">
-          <h3>Мастер</h3>
-          <p>{{ selectedRun.master.display_name }}</p>
+        <div class="modal-section" v-if="selectedRun.masters && selectedRun.masters.length > 0">
+          <h3>{{ selectedRun.masters.length > 1 ? 'Мастера' : 'Мастер' }}</h3>
+          <div class="modal-masters">
+            <span class="masters-icon">👤</span>
+            <span class="masters-names">{{ selectedRun.masters.map(m => m.display_name).join(', ') }}</span>
+          </div>
         </div>
         
         <div class="modal-stats">
@@ -288,6 +291,14 @@
           </button>
         </div>
         <div class="modal-city">📍 {{ selectedConvention.city_name || (selectedConvention.city && selectedConvention.city.name) }}</div>
+        
+        <div class="modal-section" v-if="selectedConvention.organizers && selectedConvention.organizers.length > 0">
+          <h3>{{ selectedConvention.organizers.length > 1 ? 'Организаторы' : 'Организатор' }}</h3>
+          <div class="modal-organizers">
+            <span class="organizers-icon">👤</span>
+            <span class="organizers-names">{{ selectedConvention.organizers.map(o => o.display_name).join(', ') }}</span>
+          </div>
+        </div>
         
         <div class="modal-section" v-if="selectedConvention.description">
           <h3>Описание</h3>
@@ -2188,6 +2199,46 @@ export default {
 .no-runs {
   color: #666;
   font-style: italic;
+}
+
+/* Мастера в модальном окне прогона */
+.modal-masters {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 12px 16px;
+  background: rgba(0, 204, 255, 0.08);
+  border-radius: 8px;
+  border-left: 3px solid #00ccff;
+}
+
+.masters-icon {
+  font-size: 1.2rem;
+}
+
+.masters-names {
+  color: #00ccff;
+  font-weight: 600;
+}
+
+/* Организаторы в модальном окне проведения конвента */
+.modal-organizers {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 12px 16px;
+  background: rgba(0, 204, 255, 0.08);
+  border-radius: 8px;
+  border-left: 3px solid #00ccff;
+}
+
+.organizers-icon {
+  font-size: 1.2rem;
+}
+
+.organizers-names {
+  color: #00ccff;
+  font-weight: 600;
 }
 
 /* Скроллбар */

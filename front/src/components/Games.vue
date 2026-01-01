@@ -49,9 +49,9 @@
         </div>
         <div class="game-info">
           <h2 class="game-title">{{ game.name }}</h2>
-          <div v-if="game.master" class="game-master">
-            <span class="master-icon">👤</span>
-            <span class="master-name">{{ game.master.display_name }}</span>
+          <div v-if="game.creators && game.creators.length > 0" class="game-creators">
+            <span class="creators-icon">👤</span>
+            <span class="creators-names">{{ game.creators.map(c => c.display_name).join(', ') }}</span>
           </div>
           <div class="game-stats">
             <div class="stat">
@@ -93,10 +93,10 @@
             </button>
           </div>
           
-          <div v-if="selectedGame.master" class="modal-master">
-            <span class="master-icon">👤</span>
-            <span class="master-label">Мастер:</span>
-            <span class="master-name">{{ selectedGame.master.display_name }}</span>
+          <div v-if="selectedGame.creators && selectedGame.creators.length > 0" class="modal-creators">
+            <span class="creators-icon">👤</span>
+            <span class="creators-label">{{ selectedGame.creators.length > 1 ? 'Создатели:' : 'Создатель:' }}</span>
+            <span class="creators-names">{{ selectedGame.creators.map(c => c.display_name).join(', ') }}</span>
           </div>
           
           <div class="modal-section" v-if="selectedGame.announcement">
@@ -912,8 +912,8 @@ export default {
   font-weight: bold;
 }
 
-/* Мастер в карточке игры */
-.game-master {
+/* Создатели в карточке игры */
+.game-creators {
   display: flex;
   align-items: center;
   gap: 8px;
@@ -922,18 +922,18 @@ export default {
   border-bottom: 1px solid #ff6b3522;
 }
 
-.master-icon {
+.creators-icon {
   font-size: 1rem;
   opacity: 0.8;
 }
 
-.game-master .master-name {
+.game-creators .creators-names {
   color: #aaa;
   font-size: 0.9rem;
 }
 
-/* Мастер в модальном окне */
-.modal-master {
+/* Создатели в модальном окне */
+.modal-creators {
   display: flex;
   align-items: center;
   gap: 10px;
@@ -944,16 +944,16 @@ export default {
   border-left: 3px solid #00ccff;
 }
 
-.modal-master .master-icon {
+.modal-creators .creators-icon {
   font-size: 1.2rem;
 }
 
-.modal-master .master-label {
+.modal-creators .creators-label {
   color: #888;
   font-size: 0.9rem;
 }
 
-.modal-master .master-name {
+.modal-creators .creators-names {
   color: #00ccff;
   font-weight: 600;
 }
