@@ -32,13 +32,16 @@
         </div>
         
         <div class="header-actions">
-          <button 
+          <router-link 
             v-if="schedule.can_edit"
-            @click="$emit('edit')"
+            :to="`/schedule/${eventId}/edit`"
             class="edit-schedule-btn"
           >
             ✏️ Редактировать расписание
-          </button>
+          </router-link>
+          <router-link to="/conventions" class="back-link">
+            ← К конвентам
+          </router-link>
           <button @click="copyLink" class="copy-link-btn" :title="linkCopied ? 'Скопировано!' : 'Скопировать ссылку'">
             {{ linkCopied ? '✓' : '🔗' }}
           </button>
@@ -697,11 +700,29 @@ export default {
   font-weight: 600;
   cursor: pointer;
   transition: all 0.3s ease;
+  text-decoration: none;
 }
 
 .edit-schedule-btn:hover {
   transform: translateY(-2px);
   box-shadow: 0 8px 25px rgba(255, 107, 53, 0.4);
+}
+
+.back-link {
+  padding: 12px 24px;
+  background: transparent;
+  border: 2px solid #ff6b3566;
+  border-radius: 8px;
+  color: #ff6b35;
+  font-size: 1rem;
+  font-weight: 600;
+  text-decoration: none;
+  transition: all 0.3s ease;
+}
+
+.back-link:hover {
+  border-color: #ff6b35;
+  background: rgba(255, 107, 53, 0.1);
 }
 
 .copy-link-btn {

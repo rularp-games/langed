@@ -508,6 +508,26 @@
           </div>
         </div>
         
+        <!-- Ссылки на расписание -->
+        <div class="modal-section schedule-links-section">
+          <h3>Расписание</h3>
+          <div class="schedule-links">
+            <router-link 
+              :to="`/schedule/${selectedConvention.id}`" 
+              class="schedule-link"
+            >
+              📅 Посмотреть расписание
+            </router-link>
+            <router-link 
+              v-if="selectedConvention.can_edit"
+              :to="`/schedule/${selectedConvention.id}/edit`" 
+              class="schedule-edit-link"
+            >
+              ✏️ Редактировать расписание
+            </router-link>
+          </div>
+        </div>
+        
         <div v-if="!selectedConvention.games || selectedConvention.games.length === 0" class="modal-section">
           <p class="no-runs">Игры пока не добавлены</p>
         </div>
@@ -3338,6 +3358,56 @@ export default {
 .modal-game-players {
   color: #888;
   font-size: 0.85rem;
+}
+
+/* Ссылки на расписание */
+.schedule-links-section {
+  margin-top: 24px;
+  padding-top: 20px;
+  border-top: 1px solid #ff6b3533;
+}
+
+.schedule-links {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 12px;
+}
+
+.schedule-link,
+.schedule-edit-link {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  padding: 12px 20px;
+  border-radius: 8px;
+  text-decoration: none;
+  font-size: 0.95rem;
+  font-weight: 600;
+  transition: all 0.2s ease;
+}
+
+.schedule-link {
+  background: rgba(0, 204, 255, 0.1);
+  border: 1px solid #00ccff55;
+  color: #00ccff;
+}
+
+.schedule-link:hover {
+  background: rgba(0, 204, 255, 0.2);
+  border-color: #00ccff;
+  transform: translateY(-2px);
+}
+
+.schedule-edit-link {
+  background: rgba(255, 107, 53, 0.1);
+  border: 1px solid #ff6b3555;
+  color: #ff6b35;
+}
+
+.schedule-edit-link:hover {
+  background: rgba(255, 107, 53, 0.2);
+  border-color: #ff6b35;
+  transform: translateY(-2px);
 }
 
 .modal-runs-list {

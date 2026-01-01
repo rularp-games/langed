@@ -30,12 +30,12 @@
         </div>
         
         <div class="header-actions">
-          <button @click="$emit('view')" class="btn btn-secondary">
+          <router-link :to="`/schedule/${eventId}`" class="btn btn-secondary">
             👁️ Просмотр
-          </button>
-          <button @click="$emit('close')" class="btn btn-outline">
-            ← Назад
-          </button>
+          </router-link>
+          <router-link to="/conventions" class="btn btn-outline">
+            ← К конвентам
+          </router-link>
         </div>
       </div>
 
@@ -1332,6 +1332,8 @@ export default {
   cursor: pointer;
   transition: all 0.3s ease;
   border: none;
+  text-decoration: none;
+  display: inline-block;
 }
 
 .btn-primary {
