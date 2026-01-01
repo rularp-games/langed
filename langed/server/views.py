@@ -192,7 +192,8 @@ class ConventionViewSet(viewsets.ModelViewSet):
     
     def perform_create(self, serializer):
         """При создании конвента автоматически устанавливаем текущего пользователя как организатора"""
-        serializer.save(organizer=self.request.user)
+        convention = serializer.save()
+        convention.organizers.add(self.request.user)
     
     @action(detail=False, methods=['post'])
     def import_csv(self, request):

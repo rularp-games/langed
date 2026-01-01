@@ -106,19 +106,18 @@ class RunBriefSerializer(serializers.ModelSerializer):
 
 class ConventionEventSerializer(serializers.ModelSerializer):
     """Сериализатор проведения конвента"""
+    convention = serializers.PrimaryKeyRelatedField(read_only=True)
     convention_name = serializers.CharField(source='convention.name', read_only=True)
     city_name = serializers.CharField(source='city.name', read_only=True)
     city_id = serializers.PrimaryKeyRelatedField(
         queryset=City.objects.all(),
         source='city',
-        write_only=True,
-        required=False
+        write_only=True
     )
     convention_id = serializers.PrimaryKeyRelatedField(
         queryset=Convention.objects.all(),
         source='convention',
-        write_only=True,
-        required=False
+        write_only=True
     )
     organizers = UserBriefSerializer(many=True, read_only=True)
     games = serializers.SerializerMethodField()
@@ -164,6 +163,7 @@ class RunSerializer(serializers.ModelSerializer):
         source='city',
         write_only=True
     )
+    convention_event = serializers.PrimaryKeyRelatedField(read_only=True)
     convention_event_id = serializers.PrimaryKeyRelatedField(
         queryset=ConventionEvent.objects.all(),
         source='convention_event',
