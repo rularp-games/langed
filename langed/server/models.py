@@ -223,6 +223,36 @@ class ConventionEvent(models.Model):
             raise ValidationError('Дата начала не может быть позже даты окончания')
 
 
+class Venue(models.Model):
+    """Модель площадки (место проведения)"""
+    
+    name = models.CharField(max_length=255, verbose_name='Название')
+    address = models.TextField(blank=True, verbose_name='Адрес')
+    city = models.ForeignKey(
+        City,
+        on_delete=models.PROTECT,
+        related_name='venues',
+        verbose_name='Город'
+    )
+    description = models.TextField(blank=True, verbose_name='Описание')
+    capacity = models.PositiveIntegerField(
+        null=True,
+        blank=True,
+        verbose_name='Вместимость'
+    )
+    
+    created_at = models.DateTimeField(auto_now_add=True, verbose_name='Дата создания')
+    updated_at = models.DateTimeField(auto_now=True, verbose_name='Дата обновления')
+
+    class Meta:
+        verbose_name = 'Площадка'
+        verbose_name_plural = 'Площадки'
+        ordering = ['name']
+
+    def __str__(self):
+        return f'{self.name} ({self.city.name})'
+
+
 class Run(models.Model):
     """Модель прогона (сеанс игры)"""
     
@@ -239,11 +269,24 @@ class Run(models.Model):
         blank=True
     )
     date = models.DateTimeField(verbose_name='Дата и время прогона')
+    duration = models.PositiveIntegerField(
+        default=180,
+        verbose_name='Продолжительность (минут)',
+        help_text='Продолжительность прогона в минутах'
+    )
     city = models.ForeignKey(
         City,
         on_delete=models.PROTECT,
         related_name='runs',
         verbose_name='Город'
+    )
+    venue = models.ForeignKey(
+        Venue,
+        on_delete=models.SET_NULL,
+        related_name='runs',
+        verbose_name='Площадка',
+        null=True,
+        blank=True
     )
     convention_event = models.ForeignKey(
         ConventionEvent,
@@ -252,6 +295,16 @@ class Run(models.Model):
         verbose_name='Проведение конвента',
         null=True,
         blank=True
+    )
+    max_players = models.PositiveIntegerField(
+        null=True,
+        blank=True,
+        verbose_name='Максимум игроков',
+        help_text='Если не указано, берётся из игры'
+    )
+    registration_open = models.BooleanField(
+        default=True,
+        verbose_name='Регистрация открыта'
     )
     
     created_at = models.DateTimeField(auto_now_add=True, verbose_name='Дата создания')
@@ -264,3 +317,96 @@ class Run(models.Model):
 
     def __str__(self):
         return f'{self.game.name} — {self.city.name} ({self.date.strftime("%d.%m.%Y %H:%M")})'
+    
+    def get_max_players(self):
+        """Возвращает максимальное количество игроков для этого прогона"""
+        if self.max_players is not None:
+            return self.max_players
+        return self.game.players_max
+    
+    def get_registered_count(self):
+        """Возвращает количество зарегистрированных игроков"""
+        return self.registrations.filter(
+            status__in=['confirmed', 'pending'],
+            is_technician=False
+        ).count()
+    
+    def get_available_slots(self):
+        """Возвращает количество свободных мест"""
+        max_players = self.get_max_players()
+        registered = self.get_registered_count()
+        return max(0, max_players - registered)
+    
+    def is_full(self):
+        """Проверяет, заполнен ли прогон"""
+        return self.get_available_slots() == 0
+
+
+class Registration(models.Model):
+    """Модель регистрации игрока на прогон"""
+    
+    ROLE_CHOICES = [
+        ('any', 'Любая'),
+        ('female', 'Женская'),
+        ('male', 'Мужская'),
+    ]
+    
+    STATUS_CHOICES = [
+        ('pending', 'Ожидает подтверждения'),
+        ('confirmed', 'Подтверждена'),
+        ('cancelled', 'Отменена'),
+        ('waitlist', 'В листе ожидания'),
+    ]
+    
+    run = models.ForeignKey(
+        Run,
+        on_delete=models.CASCADE,
+        related_name='registrations',
+        verbose_name='Прогон'
+    )
+    user = models.ForeignKey(
+        settings.AUTH_USER_MODEL,
+        on_delete=models.CASCADE,
+        related_name='registrations',
+        verbose_name='Пользователь'
+    )
+    role_preference = models.CharField(
+        max_length=10,
+        choices=ROLE_CHOICES,
+        default='any',
+        verbose_name='Предпочтение по роли'
+    )
+    is_technician = models.BooleanField(
+        default=False,
+        verbose_name='Игротехник'
+    )
+    status = models.CharField(
+        max_length=20,
+        choices=STATUS_CHOICES,
+        default='confirmed',
+        verbose_name='Статус'
+    )
+    comment = models.TextField(
+        blank=True,
+        verbose_name='Комментарий',
+        help_text='Дополнительная информация от игрока'
+    )
+    
+    created_at = models.DateTimeField(auto_now_add=True, verbose_name='Дата регистрации')
+    updated_at = models.DateTimeField(auto_now=True, verbose_name='Дата обновления')
+
+    class Meta:
+        verbose_name = 'Регистрация'
+        verbose_name_plural = 'Регистрации'
+        ordering = ['created_at']
+        unique_together = ['run', 'user']
+
+    def __str__(self):
+        role_info = ' (игротехник)' if self.is_technician else ''
+        return f'{self.user.username} → {self.run.game.name}{role_info}'
+    
+    def clean(self):
+        # Проверяем, что пользователь не является мастером этого прогона
+        if hasattr(self, 'run') and hasattr(self, 'user'):
+            if self.run.masters.filter(id=self.user.id).exists():
+                raise ValidationError('Мастер не может зарегистрироваться как игрок на свой прогон')

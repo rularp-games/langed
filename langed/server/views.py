@@ -9,11 +9,12 @@ from django.utils import timezone
 from django.conf import settings
 from datetime import date
 
-from .models import Game, Run, Convention, ConventionEvent, City, ConventionLink
+from .models import Game, Run, Convention, ConventionEvent, City, ConventionLink, Venue, Registration
 from .serializers import (
     GameSerializer, RunSerializer, 
     ConventionSerializer, ConventionEventSerializer,
-    CitySerializer, ConventionLinkSerializer
+    CitySerializer, ConventionLinkSerializer,
+    VenueSerializer, RegistrationSerializer
 )
 
 
@@ -170,8 +171,8 @@ class RunViewSet(viewsets.ModelViewSet):
     
     def get_queryset(self):
         queryset = Run.objects.select_related(
-            'game', 'city', 'convention_event', 'convention_event__convention'
-        ).prefetch_related('masters').all()
+            'game', 'city', 'venue', 'convention_event', 'convention_event__convention'
+        ).prefetch_related('masters', 'registrations', 'registrations__user').all()
         
         # Фильтр по городу
         city = self.request.query_params.get('city')
@@ -244,6 +245,171 @@ class RunViewSet(viewsets.ModelViewSet):
         
         run.masters.remove(user)
         return Response(RunSerializer(run, context={'request': request}).data)
+    
+    @action(detail=True, methods=['post'], permission_classes=[IsAuthenticated])
+    def register(self, request, pk=None):
+        """Зарегистрироваться на прогон как игрок"""
+        run = self.get_object()
+        
+        # Проверяем, открыта ли регистрация
+        if not run.registration_open:
+            return Response(
+                {'error': 'Регистрация на этот прогон закрыта'},
+                status=status.HTTP_400_BAD_REQUEST
+            )
+        
+        # Проверяем, не является ли пользователь мастером
+        if request.user in run.masters.all():
+            return Response(
+                {'error': 'Мастер не может зарегистрироваться как игрок на свой прогон'},
+                status=status.HTTP_400_BAD_REQUEST
+            )
+        
+        # Проверяем, не зарегистрирован ли уже
+        if Registration.objects.filter(run=run, user=request.user).exists():
+            return Response(
+                {'error': 'Вы уже зарегистрированы на этот прогон'},
+                status=status.HTTP_400_BAD_REQUEST
+            )
+        
+        # Получаем данные регистрации
+        role_preference = request.data.get('role_preference', 'any')
+        is_technician = request.data.get('is_technician', False)
+        comment = request.data.get('comment', '')
+        
+        # Определяем статус регистрации
+        if is_technician:
+            # Игротехники регистрируются отдельно
+            registration_status = 'confirmed'
+        elif run.is_full():
+            # Если прогон заполнен, добавляем в лист ожидания
+            registration_status = 'waitlist'
+        else:
+            registration_status = 'confirmed'
+        
+        # Создаём регистрацию
+        registration = Registration.objects.create(
+            run=run,
+            user=request.user,
+            role_preference=role_preference,
+            is_technician=is_technician,
+            status=registration_status,
+            comment=comment
+        )
+        
+        return Response({
+            'registration': RegistrationSerializer(registration, context={'request': request}).data,
+            'run': RunSerializer(run, context={'request': request}).data
+        }, status=status.HTTP_201_CREATED)
+    
+    @action(detail=True, methods=['post'], permission_classes=[IsAuthenticated])
+    def unregister(self, request, pk=None):
+        """Отменить регистрацию на прогон"""
+        run = self.get_object()
+        
+        try:
+            registration = Registration.objects.get(run=run, user=request.user)
+        except Registration.DoesNotExist:
+            return Response(
+                {'error': 'Вы не зарегистрированы на этот прогон'},
+                status=status.HTTP_400_BAD_REQUEST
+            )
+        
+        # Запоминаем, был ли это подтверждённый игрок (не игротехник)
+        was_confirmed_player = (
+            registration.status == 'confirmed' and 
+            not registration.is_technician
+        )
+        
+        registration.delete()
+        
+        # Если освободилось место, переводим первого из waitlist в confirmed
+        if was_confirmed_player:
+            waitlist_registration = Registration.objects.filter(
+                run=run,
+                status='waitlist',
+                is_technician=False
+            ).order_by('created_at').first()
+            
+            if waitlist_registration:
+                waitlist_registration.status = 'confirmed'
+                waitlist_registration.save()
+        
+        return Response({
+            'message': 'Регистрация отменена',
+            'run': RunSerializer(run, context={'request': request}).data
+        })
+    
+    @action(detail=True, methods=['get'])
+    def registrations(self, request, pk=None):
+        """Получить список регистраций на прогон"""
+        run = self.get_object()
+        registrations = run.registrations.select_related('user').all()
+        return Response(RegistrationSerializer(registrations, many=True, context={'request': request}).data)
+    
+    @action(detail=True, methods=['post'], permission_classes=[IsAuthenticated])
+    def update_registration(self, request, pk=None):
+        """Обновить статус регистрации (только для мастера/staff)"""
+        run = self.get_object()
+        
+        # Проверяем права
+        if not request.user.is_staff and request.user not in run.masters.all():
+            return Response(
+                {'error': 'Только мастер прогона может изменять регистрации'},
+                status=status.HTTP_403_FORBIDDEN
+            )
+        
+        registration_id = request.data.get('registration_id')
+        new_status = request.data.get('status')
+        
+        if not registration_id or not new_status:
+            return Response(
+                {'error': 'Укажите registration_id и status'},
+                status=status.HTTP_400_BAD_REQUEST
+            )
+        
+        if new_status not in ['pending', 'confirmed', 'cancelled', 'waitlist']:
+            return Response(
+                {'error': 'Недопустимый статус'},
+                status=status.HTTP_400_BAD_REQUEST
+            )
+        
+        try:
+            registration = Registration.objects.get(id=registration_id, run=run)
+        except Registration.DoesNotExist:
+            return Response(
+                {'error': 'Регистрация не найдена'},
+                status=status.HTTP_404_NOT_FOUND
+            )
+        
+        registration.status = new_status
+        registration.save()
+        
+        return Response({
+            'registration': RegistrationSerializer(registration, context={'request': request}).data,
+            'run': RunSerializer(run, context={'request': request}).data
+        })
+
+
+class VenueViewSet(viewsets.ModelViewSet):
+    """API для площадок"""
+    queryset = Venue.objects.select_related('city').all()
+    serializer_class = VenueSerializer
+    
+    def get_permissions(self):
+        if self.action in ['create', 'update', 'partial_update', 'destroy']:
+            return [IsAuthenticated()]
+        return [AllowAny()]
+    
+    def get_queryset(self):
+        queryset = super().get_queryset()
+        
+        # Фильтр по городу
+        city_id = self.request.query_params.get('city')
+        if city_id:
+            queryset = queryset.filter(city_id=city_id)
+        
+        return queryset.order_by('name')
 
 
 class ConventionViewSet(viewsets.ModelViewSet):

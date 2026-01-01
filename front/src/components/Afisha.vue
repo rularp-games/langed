@@ -311,6 +311,120 @@
           </div>
         </div>
         
+        <!-- Секция регистрации -->
+        <div class="modal-section registration-section" v-if="!isPast(selectedRun.date)">
+          <div class="section-header">
+            <h3>Запись на игру</h3>
+            <div class="registration-stats">
+              <span class="registration-count" :class="{ 'full': selectedRun.is_full }">
+                {{ selectedRun.registered_count || 0 }} / {{ selectedRun.effective_max_players || selectedRun.game.players_max }}
+              </span>
+              <span v-if="selectedRun.is_full" class="full-badge">Мест нет</span>
+            </div>
+          </div>
+          
+          <!-- Форма регистрации / статус регистрации -->
+          <div v-if="isAuthenticated">
+            <!-- Уже зарегистрирован -->
+            <div v-if="selectedRun.current_user_registration" class="user-registration">
+              <div class="registration-status-card">
+                <span class="registration-status-icon">✓</span>
+                <div class="registration-status-info">
+                  <span class="registration-status-text">
+                    {{ selectedRun.current_user_registration.is_technician ? 'Вы записаны как игротехник' : 'Вы записаны на игру' }}
+                  </span>
+                  <span class="registration-role">
+                    {{ getRolePreferenceText(selectedRun.current_user_registration.role_preference) }}
+                  </span>
+                  <span v-if="selectedRun.current_user_registration.status === 'waitlist'" class="waitlist-badge">
+                    В листе ожидания
+                  </span>
+                </div>
+                <button 
+                  @click="unregisterFromRun"
+                  class="btn btn-danger btn-sm"
+                  :disabled="registrationLoading"
+                >
+                  {{ registrationLoading ? '...' : 'Отменить' }}
+                </button>
+              </div>
+            </div>
+            
+            <!-- Форма записи -->
+            <div v-else-if="selectedRun.registration_open" class="registration-form">
+              <div class="form-row">
+                <div class="form-group half">
+                  <label>Предпочтение по роли</label>
+                  <select v-model="registrationData.role_preference" class="form-input">
+                    <option value="any">Любая</option>
+                    <option value="female">Женская</option>
+                    <option value="male">Мужская</option>
+                  </select>
+                </div>
+                <div class="form-group half">
+                  <label class="checkbox-label">
+                    <input type="checkbox" v-model="registrationData.is_technician" />
+                    <span>Записаться как игротехник</span>
+                  </label>
+                </div>
+              </div>
+              <div class="form-group">
+                <label>Комментарий (опционально)</label>
+                <textarea 
+                  v-model="registrationData.comment"
+                  class="form-input form-textarea"
+                  placeholder="Дополнительная информация для мастера"
+                  rows="2"
+                ></textarea>
+              </div>
+              <div v-if="registrationError" class="form-error">{{ registrationError }}</div>
+              <button 
+                @click="registerForRun"
+                class="btn btn-primary btn-register"
+                :disabled="registrationLoading"
+              >
+                {{ registrationLoading ? 'Запись...' : (selectedRun.is_full && !registrationData.is_technician ? 'Записаться в лист ожидания' : 'Записаться') }}
+              </button>
+            </div>
+            
+            <!-- Регистрация закрыта -->
+            <div v-else class="registration-closed">
+              <p>Регистрация на этот прогон закрыта</p>
+            </div>
+          </div>
+          
+          <!-- Не авторизован -->
+          <div v-else class="registration-login">
+            <p>Чтобы записаться на игру, <a href="/oidc/authenticate/">войдите</a> в систему</p>
+          </div>
+          
+          <!-- Список участников -->
+          <div v-if="selectedRun.registrations && selectedRun.registrations.length > 0" class="participants-list">
+            <div class="participants-header">
+              <h4>Участники ({{ selectedRun.registrations.filter(r => r.status === 'confirmed' && !r.is_technician).length }})</h4>
+            </div>
+            <div class="participants-grid">
+              <div 
+                v-for="reg in sortedRegistrations" 
+                :key="reg.id"
+                class="participant-item"
+                :class="{ 
+                  'technician': reg.is_technician,
+                  'waitlist': reg.status === 'waitlist',
+                  'cancelled': reg.status === 'cancelled'
+                }"
+              >
+                <span class="participant-icon">{{ reg.is_technician ? '🎭' : '👤' }}</span>
+                <span class="participant-name">{{ reg.user.display_name }}</span>
+                <span class="participant-role" v-if="!reg.is_technician && reg.role_preference !== 'any'">
+                  {{ reg.role_preference === 'female' ? '♀' : '♂' }}
+                </span>
+                <span v-if="reg.status === 'waitlist'" class="participant-waitlist">ожидание</span>
+              </div>
+            </div>
+          </div>
+        </div>
+        
         <div class="modal-stats">
           <div class="modal-stat">
             <span class="modal-stat-label">Игроки</span>
@@ -323,6 +437,10 @@
           <div class="modal-stat">
             <span class="modal-stat-label">Муж. роли</span>
             <span class="modal-stat-value">{{ selectedRun.game.male_roles_min }} – {{ selectedRun.game.male_roles_max }}</span>
+          </div>
+          <div class="modal-stat" v-if="selectedRun.duration">
+            <span class="modal-stat-label">Длительность</span>
+            <span class="modal-stat-value">{{ formatDuration(selectedRun.duration) }}</span>
           </div>
         </div>
         
@@ -909,7 +1027,15 @@ export default {
       isManagingMasters: false,
       newMasterUsername: '',
       addMasterLoading: false,
-      addMasterError: null
+      addMasterError: null,
+      // Регистрация на прогон
+      registrationLoading: false,
+      registrationError: null,
+      registrationData: {
+        role_preference: 'any',
+        is_technician: false,
+        comment: ''
+      }
     }
   },
   computed: {
@@ -929,6 +1055,21 @@ export default {
         return []
       }
       return this.selectedConvention.games.slice().sort((a, b) => a.name.localeCompare(b.name, 'ru'))
+    },
+    sortedRegistrations() {
+      if (!this.selectedRun || !this.selectedRun.registrations) {
+        return []
+      }
+      // Сортируем: сначала confirmed игроки, потом technicians, потом waitlist
+      return this.selectedRun.registrations.slice().sort((a, b) => {
+        const statusOrder = { confirmed: 0, pending: 1, waitlist: 2, cancelled: 3 }
+        if (a.is_technician !== b.is_technician) {
+          return a.is_technician ? 1 : -1
+        }
+        const statusDiff = (statusOrder[a.status] || 0) - (statusOrder[b.status] || 0)
+        if (statusDiff !== 0) return statusDiff
+        return 0
+      })
     },
     filteredGamesList() {
       if (!this.gameSearch) {
@@ -1960,6 +2101,101 @@ export default {
       } catch (err) {
         alert(err.message)
       }
+    },
+    
+    // Регистрация на прогон
+    async registerForRun() {
+      if (!this.selectedRun) return
+      
+      this.registrationLoading = true
+      this.registrationError = null
+      
+      try {
+        const response = await fetch(`/api/runs/${this.selectedRun.id}/register/`, {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+            'X-CSRFToken': this.csrfToken
+          },
+          body: JSON.stringify({
+            role_preference: this.registrationData.role_preference,
+            is_technician: this.registrationData.is_technician,
+            comment: this.registrationData.comment
+          })
+        })
+        
+        if (!response.ok) {
+          const data = await response.json()
+          throw new Error(data.error || 'Ошибка при регистрации')
+        }
+        
+        const result = await response.json()
+        this.selectedRun = result.run
+        
+        // Сбрасываем форму
+        this.registrationData = {
+          role_preference: 'any',
+          is_technician: false,
+          comment: ''
+        }
+        
+        // Обновляем список прогонов
+        await this.fetchRuns()
+      } catch (err) {
+        this.registrationError = err.message
+      } finally {
+        this.registrationLoading = false
+      }
+    },
+    
+    async unregisterFromRun() {
+      if (!this.selectedRun) return
+      
+      this.registrationLoading = true
+      this.registrationError = null
+      
+      try {
+        const response = await fetch(`/api/runs/${this.selectedRun.id}/unregister/`, {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+            'X-CSRFToken': this.csrfToken
+          }
+        })
+        
+        if (!response.ok) {
+          const data = await response.json()
+          throw new Error(data.error || 'Ошибка при отмене регистрации')
+        }
+        
+        const result = await response.json()
+        this.selectedRun = result.run
+        
+        // Обновляем список прогонов
+        await this.fetchRuns()
+      } catch (err) {
+        this.registrationError = err.message
+      } finally {
+        this.registrationLoading = false
+      }
+    },
+    
+    getRolePreferenceText(role) {
+      const roles = {
+        'any': 'Любая роль',
+        'female': 'Женская роль',
+        'male': 'Мужская роль'
+      }
+      return roles[role] || role
+    },
+    
+    formatDuration(minutes) {
+      if (!minutes) return ''
+      const hours = Math.floor(minutes / 60)
+      const mins = minutes % 60
+      if (hours === 0) return `${mins} мин`
+      if (mins === 0) return `${hours} ч`
+      return `${hours} ч ${mins} мин`
     }
   }
 }
@@ -2794,9 +3030,228 @@ export default {
   border: 1px solid #88888844;
 }
 
+/* ========== Секция регистрации ========== */
+.registration-section {
+  margin-top: 20px;
+  padding: 20px;
+  background: rgba(0, 0, 0, 0.3);
+  border-radius: 12px;
+  border: 1px solid #ff6b3533;
+}
+
+.registration-section .section-header {
+  margin-bottom: 16px;
+}
+
+.registration-stats {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+}
+
+.registration-count {
+  font-family: 'Courier New', monospace;
+  color: #00ff88;
+  font-size: 1.1rem;
+  font-weight: bold;
+}
+
+.registration-count.full {
+  color: #ff6b6b;
+}
+
+.full-badge {
+  background: rgba(255, 107, 107, 0.2);
+  color: #ff6b6b;
+  padding: 4px 10px;
+  border-radius: 12px;
+  font-size: 0.75rem;
+  font-weight: bold;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+}
+
+/* Статус регистрации пользователя */
+.user-registration {
+  margin-bottom: 16px;
+}
+
+.registration-status-card {
+  display: flex;
+  align-items: center;
+  gap: 16px;
+  padding: 16px;
+  background: rgba(0, 255, 136, 0.1);
+  border: 1px solid #00ff8844;
+  border-radius: 10px;
+}
+
+.registration-status-icon {
+  font-size: 1.5rem;
+  color: #00ff88;
+}
+
+.registration-status-info {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.registration-status-text {
+  color: #00ff88;
+  font-weight: bold;
+}
+
+.registration-role {
+  color: #aaa;
+  font-size: 0.9rem;
+}
+
+.waitlist-badge {
+  display: inline-block;
+  background: rgba(255, 193, 7, 0.2);
+  color: #ffc107;
+  padding: 3px 8px;
+  border-radius: 8px;
+  font-size: 0.75rem;
+  font-weight: bold;
+  text-transform: uppercase;
+}
+
+/* Форма регистрации */
+.registration-form {
+  margin-bottom: 16px;
+}
+
+.registration-form .form-row {
+  display: flex;
+  gap: 16px;
+  margin-bottom: 12px;
+}
+
+.registration-form .form-group.half {
+  flex: 1;
+}
+
+.checkbox-label {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  cursor: pointer;
+  padding-top: 24px;
+  color: #e0e0e0;
+}
+
+.checkbox-label input[type="checkbox"] {
+  width: 18px;
+  height: 18px;
+  accent-color: #ff6b35;
+}
+
+.btn-register {
+  width: 100%;
+  padding: 14px;
+  font-size: 1rem;
+  font-weight: bold;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+}
+
+/* Закрытая регистрация */
+.registration-closed {
+  text-align: center;
+  padding: 20px;
+  color: #888;
+}
+
+.registration-login {
+  text-align: center;
+  padding: 20px;
+  color: #aaa;
+}
+
+.registration-login a {
+  color: #00ccff;
+  text-decoration: none;
+}
+
+.registration-login a:hover {
+  text-decoration: underline;
+}
+
+/* Список участников */
+.participants-list {
+  margin-top: 20px;
+  padding-top: 16px;
+  border-top: 1px solid #ffffff15;
+}
+
+.participants-header {
+  margin-bottom: 12px;
+}
+
+.participants-header h4 {
+  color: #aaa;
+  font-size: 0.9rem;
+  font-weight: normal;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+  margin: 0;
+}
+
+.participants-grid {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+
+.participant-item {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding: 6px 12px;
+  background: rgba(255, 255, 255, 0.05);
+  border-radius: 20px;
+  font-size: 0.85rem;
+}
+
+.participant-item.technician {
+  background: rgba(156, 39, 176, 0.15);
+  border: 1px solid #9c27b044;
+}
+
+.participant-item.waitlist {
+  opacity: 0.6;
+}
+
+.participant-item.cancelled {
+  opacity: 0.4;
+  text-decoration: line-through;
+}
+
+.participant-icon {
+  font-size: 0.9rem;
+}
+
+.participant-name {
+  color: #e0e0e0;
+}
+
+.participant-role {
+  color: #00ccff;
+  font-size: 0.8rem;
+}
+
+.participant-waitlist {
+  color: #ffc107;
+  font-size: 0.7rem;
+  text-transform: uppercase;
+}
+
 .modal-stats {
   display: grid;
-  grid-template-columns: repeat(3, 1fr);
+  grid-template-columns: repeat(auto-fit, minmax(80px, 1fr));
   gap: 16px;
   margin-top: 20px;
   padding-top: 20px;

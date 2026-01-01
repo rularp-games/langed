@@ -1,6 +1,6 @@
 from rest_framework import serializers
 from django.contrib.auth import get_user_model
-from .models import Game, Run, Convention, ConventionEvent, City, ConventionLink, Region
+from .models import Game, Run, Convention, ConventionEvent, City, ConventionLink, Region, Venue, Registration
 
 User = get_user_model()
 
@@ -32,6 +32,28 @@ class CitySerializer(serializers.ModelSerializer):
     class Meta:
         model = City
         fields = ['id', 'name', 'region', 'timezone']
+
+
+class VenueSerializer(serializers.ModelSerializer):
+    """Сериализатор площадки"""
+    city = CitySerializer(read_only=True)
+    city_id = serializers.PrimaryKeyRelatedField(
+        queryset=City.objects.all(),
+        source='city',
+        write_only=True
+    )
+    
+    class Meta:
+        model = Venue
+        fields = ['id', 'name', 'address', 'city', 'city_id', 'description', 'capacity', 'created_at', 'updated_at']
+        read_only_fields = ['id', 'created_at', 'updated_at']
+
+
+class VenueBriefSerializer(serializers.ModelSerializer):
+    """Краткий сериализатор площадки"""
+    class Meta:
+        model = Venue
+        fields = ['id', 'name', 'address']
 
 
 class GameSerializer(serializers.ModelSerializer):
@@ -187,6 +209,36 @@ class ConventionEventSerializer(serializers.ModelSerializer):
         read_only_fields = ['id', 'organizers', 'created_at', 'updated_at', 'can_edit']
 
 
+class RegistrationSerializer(serializers.ModelSerializer):
+    """Сериализатор регистрации на прогон"""
+    user = UserBriefSerializer(read_only=True)
+    run_id = serializers.PrimaryKeyRelatedField(
+        queryset=Run.objects.all(),
+        source='run',
+        write_only=True
+    )
+    role_preference_display = serializers.CharField(source='get_role_preference_display', read_only=True)
+    status_display = serializers.CharField(source='get_status_display', read_only=True)
+    
+    class Meta:
+        model = Registration
+        fields = [
+            'id', 'run_id', 'user', 'role_preference', 'role_preference_display',
+            'is_technician', 'status', 'status_display', 'comment',
+            'created_at', 'updated_at'
+        ]
+        read_only_fields = ['id', 'user', 'created_at', 'updated_at']
+
+
+class RegistrationBriefSerializer(serializers.ModelSerializer):
+    """Краткий сериализатор регистрации для списка участников"""
+    user = UserBriefSerializer(read_only=True)
+    
+    class Meta:
+        model = Registration
+        fields = ['id', 'user', 'role_preference', 'is_technician', 'status']
+
+
 class RunSerializer(serializers.ModelSerializer):
     game = GameSerializer(read_only=True)
     game_id = serializers.PrimaryKeyRelatedField(
@@ -202,6 +254,14 @@ class RunSerializer(serializers.ModelSerializer):
         source='city',
         write_only=True
     )
+    venue = VenueBriefSerializer(read_only=True)
+    venue_id = serializers.PrimaryKeyRelatedField(
+        queryset=Venue.objects.all(),
+        source='venue',
+        write_only=True,
+        required=False,
+        allow_null=True
+    )
     convention_event = serializers.PrimaryKeyRelatedField(read_only=True)
     convention_event_id = serializers.PrimaryKeyRelatedField(
         queryset=ConventionEvent.objects.all(),
@@ -213,11 +273,24 @@ class RunSerializer(serializers.ModelSerializer):
     convention_name = serializers.SerializerMethodField()
     can_edit = serializers.SerializerMethodField()
     
+    # Поля регистрации
+    registrations = RegistrationBriefSerializer(many=True, read_only=True)
+    registered_count = serializers.SerializerMethodField()
+    available_slots = serializers.SerializerMethodField()
+    is_full = serializers.SerializerMethodField()
+    current_user_registration = serializers.SerializerMethodField()
+    effective_max_players = serializers.SerializerMethodField()
+    
     class Meta:
         model = Run
         fields = [
-            'id', 'game', 'game_id', 'masters', 'date', 'city', 'city_id', 'city_timezone',
+            'id', 'game', 'game_id', 'masters', 'date', 'duration',
+            'city', 'city_id', 'city_timezone',
+            'venue', 'venue_id',
             'convention_event', 'convention_event_id', 'convention_name',
+            'max_players', 'registration_open',
+            'registrations', 'registered_count', 'available_slots', 'is_full',
+            'current_user_registration', 'effective_max_players',
             'can_edit', 'created_at', 'updated_at'
         ]
         read_only_fields = ['id', 'masters', 'created_at', 'updated_at', 'can_edit']
@@ -235,3 +308,30 @@ class RunSerializer(serializers.ModelSerializer):
         if request.user.is_staff:
             return True
         return request.user in obj.masters.all()
+    
+    def get_registered_count(self, obj):
+        """Количество зарегистрированных игроков"""
+        return obj.get_registered_count()
+    
+    def get_available_slots(self, obj):
+        """Количество свободных мест"""
+        return obj.get_available_slots()
+    
+    def get_is_full(self, obj):
+        """Заполнен ли прогон"""
+        return obj.is_full()
+    
+    def get_effective_max_players(self, obj):
+        """Эффективный максимум игроков"""
+        return obj.get_max_players()
+    
+    def get_current_user_registration(self, obj):
+        """Регистрация текущего пользователя на этот прогон"""
+        request = self.context.get('request')
+        if not request or not request.user.is_authenticated:
+            return None
+        try:
+            registration = obj.registrations.get(user=request.user)
+            return RegistrationBriefSerializer(registration, context=self.context).data
+        except Registration.DoesNotExist:
+            return None
