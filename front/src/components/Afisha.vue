@@ -235,10 +235,28 @@
         </div>
         <div class="modal-header-row">
           <h2>{{ selectedRun.game.name }}</h2>
-          <button class="copy-link-btn" @click="copyRunLink" :title="runLinkCopied ? 'Скопировано!' : 'Скопировать ссылку'">
-            <span v-if="runLinkCopied">✓</span>
-            <span v-else>🔗</span>
-          </button>
+          <div class="header-actions">
+            <button 
+              v-if="selectedRun.can_edit" 
+              class="edit-btn" 
+              @click="startEditingRun"
+              title="Редактировать"
+            >
+              ✏️
+            </button>
+            <button 
+              v-if="selectedRun.can_edit" 
+              class="delete-btn" 
+              @click="confirmDeleteRun"
+              title="Удалить"
+            >
+              🗑️
+            </button>
+            <button class="copy-link-btn" @click="copyRunLink" :title="runLinkCopied ? 'Скопировано!' : 'Скопировать ссылку'">
+              <span v-if="runLinkCopied">✓</span>
+              <span v-else>🔗</span>
+            </button>
+          </div>
         </div>
         <div class="modal-city">📍 {{ selectedRun.city }}</div>
         
@@ -247,11 +265,49 @@
           <p class="convention-badge-lg">{{ selectedRun.convention_name }}</p>
         </div>
         
-        <div class="modal-section" v-if="selectedRun.masters && selectedRun.masters.length > 0">
-          <h3>{{ selectedRun.masters.length > 1 ? 'Мастера' : 'Мастер' }}</h3>
-          <div class="modal-masters">
-            <span class="masters-icon">👤</span>
-            <span class="masters-names">{{ selectedRun.masters.map(m => m.display_name).join(', ') }}</span>
+        <div class="modal-section">
+          <div class="section-header">
+            <h3>{{ selectedRun.masters && selectedRun.masters.length > 1 ? 'Мастера' : 'Мастер' }}</h3>
+            <button 
+              v-if="selectedRun.can_edit && !isManagingMasters" 
+              @click="isManagingMasters = true"
+              class="btn-add-inline"
+            >
+              + Добавить
+            </button>
+          </div>
+          <div class="masters-list">
+            <div 
+              v-for="master in selectedRun.masters" 
+              :key="master.id"
+              class="master-item"
+            >
+              <span class="master-name">👤 {{ master.display_name }}</span>
+              <button 
+                v-if="selectedRun.can_edit && selectedRun.masters.length > 1"
+                class="master-remove"
+                @click="removeMaster(master.id)"
+                title="Удалить мастера"
+              >
+                ×
+              </button>
+            </div>
+          </div>
+          <div v-if="isManagingMasters" class="add-master-form">
+            <input 
+              v-model="newMasterUsername"
+              type="text"
+              class="form-input"
+              placeholder="Имя пользователя"
+              @keydown.enter.prevent="addMaster"
+            />
+            <div class="add-master-actions">
+              <button @click="isManagingMasters = false" class="btn btn-secondary btn-sm">Отмена</button>
+              <button @click="addMaster" class="btn btn-primary btn-sm" :disabled="!newMasterUsername || addMasterLoading">
+                {{ addMasterLoading ? '...' : 'Добавить' }}
+              </button>
+            </div>
+            <p v-if="addMasterError" class="form-error-inline">{{ addMasterError }}</p>
           </div>
         </div>
         
@@ -597,6 +653,161 @@
         </form>
       </div>
     </div>
+
+    <!-- Модальное окно редактирования прогона -->
+    <div v-if="isEditingRun" class="modal-overlay" @click.self="cancelEditingRun">
+      <div class="modal-content add-run-modal">
+        <button class="modal-close" @click="cancelEditingRun">×</button>
+        
+        <h2>Редактировать прогон</h2>
+        
+        <form @submit.prevent="submitEditRun" class="add-form">
+          <div class="form-group searchable-select">
+            <label for="edit-run-game">Игра *</label>
+            <input 
+              id="edit-run-game"
+              v-model="editGameSearch"
+              type="text"
+              class="form-input"
+              placeholder="Введите название игры..."
+              autocomplete="off"
+              @focus="showEditGameDropdown = true"
+              @blur="onEditGameInputBlur"
+              @keydown.enter.prevent
+            />
+            <div v-if="showEditGameDropdown" class="dropdown-list">
+              <div 
+                v-for="game in filteredEditGamesList" 
+                :key="game.id" 
+                class="dropdown-item"
+                :class="{ selected: editRun.game_id === game.id }"
+                @mousedown.prevent="selectEditGame(game)"
+              >
+                {{ game.name }}
+              </div>
+              <div v-if="filteredEditGamesList.length === 0" class="dropdown-empty">
+                Игры не найдены
+              </div>
+            </div>
+            <input type="hidden" :value="editRun.game_id" required />
+          </div>
+          
+          <div class="form-group">
+            <label for="edit-run-convention">Проведение конвента (опционально)</label>
+            <select 
+              id="edit-run-convention"
+              v-model="editRun.convention_event_id"
+              @change="onEditConventionEventChange"
+              class="form-input"
+            >
+              <option :value="null">Без конвента (отдельный прогон)</option>
+              <option 
+                v-for="event in allConventionEvents" 
+                :key="event.id" 
+                :value="event.id"
+              >
+                {{ event.convention_name }} — {{ event.city_name || (event.city && event.city.name) }} ({{ formatConventionDates(event.date_start, event.date_end) }})
+              </option>
+            </select>
+          </div>
+          
+          <div class="form-group searchable-select">
+            <label for="edit-run-city">Город *</label>
+            <input 
+              id="edit-run-city"
+              v-model="editCitySearch"
+              type="text"
+              class="form-input"
+              placeholder="Введите название города..."
+              autocomplete="off"
+              :disabled="editRun.convention_event_id !== null"
+              @focus="showEditCityDropdown = true"
+              @blur="onEditCityInputBlur"
+              @keydown.enter.prevent
+            />
+            <div v-if="showEditCityDropdown && editRun.convention_event_id === null" class="dropdown-list">
+              <div 
+                v-for="city in filteredEditCitiesList" 
+                :key="city.id" 
+                class="dropdown-item"
+                :class="{ selected: editRun.city_id === city.id }"
+                @mousedown.prevent="selectEditCity(city)"
+              >
+                {{ city.name }}{{ city.region && city.region.name ? ` (${city.region.name})` : '' }}
+              </div>
+              <div v-if="filteredEditCitiesList.length === 0 && editCitySearch" class="dropdown-empty">
+                Города не найдены
+              </div>
+            </div>
+            <p v-if="editRun.convention_event_id" class="form-hint">
+              Город определяется проведением конвента
+            </p>
+            <input type="hidden" :value="editRun.city_id" required />
+          </div>
+          
+          <div class="form-row">
+            <div class="form-group half">
+              <label for="edit-run-date">Дата *</label>
+              <input 
+                id="edit-run-date"
+                v-model="editRun.date" 
+                type="date" 
+                required
+                class="form-input"
+              />
+            </div>
+            
+            <div class="form-group half">
+              <label for="edit-run-time">Время * <span class="timezone-label">{{ getTimezoneAbbr(editRun.city_timezone) }}</span></label>
+              <input 
+                id="edit-run-time"
+                v-model="editRun.time" 
+                type="time" 
+                required
+                class="form-input"
+              />
+            </div>
+          </div>
+          
+          <div v-if="editRunError" class="form-error">{{ editRunError }}</div>
+          
+          <div class="form-actions">
+            <button type="button" @click="cancelEditingRun" class="btn btn-secondary">Отмена</button>
+            <button type="submit" class="btn btn-primary" :disabled="editRunLoading">
+              <span v-if="editRunLoading">Сохранение...</span>
+              <span v-else>Сохранить</span>
+            </button>
+          </div>
+        </form>
+      </div>
+    </div>
+
+    <!-- Модальное окно подтверждения удаления -->
+    <div v-if="showDeleteConfirm" class="modal-overlay" @click.self="cancelDelete">
+      <div class="modal-content delete-confirm-modal">
+        <button class="modal-close" @click="cancelDelete">×</button>
+        
+        <h2>Удалить {{ deleteType === 'run' ? 'прогон' : 'проведение конвента' }}?</h2>
+        
+        <p class="delete-warning">
+          Это действие нельзя отменить. 
+          <template v-if="deleteType === 'run'">
+            Прогон будет удалён из расписания.
+          </template>
+          <template v-else>
+            Проведение конвента и все связанные прогоны будут удалены.
+          </template>
+        </p>
+        
+        <div class="form-actions">
+          <button type="button" @click="cancelDelete" class="btn btn-secondary">Отмена</button>
+          <button type="button" @click="executeDelete" class="btn btn-danger" :disabled="deleteLoading">
+            <span v-if="deleteLoading">Удаление...</span>
+            <span v-else>Удалить</span>
+          </button>
+        </div>
+      </div>
+    </div>
   </div>
 </template>
 
@@ -651,6 +862,19 @@ export default {
         date: '',
         time: ''
       },
+      // Для редактирования прогона
+      isEditingRun: false,
+      editRunLoading: false,
+      editRunError: null,
+      editRun: {
+        id: null,
+        game_id: null,
+        city_id: null,
+        city_timezone: 'Europe/Moscow',
+        convention_event_id: null,
+        date: '',
+        time: ''
+      },
       // Для searchable select
       gameSearch: '',
       citySearch: '',
@@ -669,7 +893,23 @@ export default {
         date_end: ''
       },
       eventCitySearch: '',
-      showEventCityDropdown: false
+      showEventCityDropdown: false,
+      // Для редактирования прогона - выпадающие списки
+      editGameSearch: '',
+      editCitySearch: '',
+      showEditGameDropdown: false,
+      showEditCityDropdown: false,
+      allConventionEvents: [],
+      // Удаление
+      showDeleteConfirm: false,
+      deleteTarget: null,
+      deleteType: null,
+      deleteLoading: false,
+      // Управление мастерами
+      isManagingMasters: false,
+      newMasterUsername: '',
+      addMasterLoading: false,
+      addMasterError: null
     }
   },
   computed: {
@@ -742,6 +982,37 @@ export default {
       if (!city) return ''
       const regionName = city.region && city.region.name ? city.region.name : ''
       return regionName ? `${city.name} (${regionName})` : city.name
+    },
+    // Для редактирования прогона
+    filteredEditGamesList() {
+      if (!this.editGameSearch) {
+        return this.sortedGames
+      }
+      const query = this.editGameSearch.toLowerCase()
+      return this.sortedGames.filter(g => g.name.toLowerCase().includes(query))
+    },
+    filteredEditCitiesList() {
+      if (!this.editCitySearch) {
+        return this.sortedCities
+      }
+      const query = this.editCitySearch.toLowerCase()
+      return this.sortedCities.filter(c => {
+        const regionName = c.region && c.region.name ? c.region.name : ''
+        return c.name.toLowerCase().includes(query) || 
+          regionName.toLowerCase().includes(query)
+      })
+    },
+    selectedEditGameName() {
+      if (!this.editRun.game_id) return ''
+      const game = this.games.find(g => g.id === this.editRun.game_id)
+      return game ? game.name : ''
+    },
+    selectedEditCityName() {
+      if (!this.editRun.city_id) return ''
+      const city = this.allCities.find(c => c.id === this.editRun.city_id)
+      if (!city) return ''
+      const regionName = city.region && city.region.name ? city.region.name : ''
+      return regionName ? `${city.name} (${regionName})` : city.name
     }
   },
   watch: {
@@ -791,6 +1062,7 @@ export default {
     this.fetchAllCities()
     this.fetchConventionEvents()
     this.fetchAllConventions()
+    this.fetchAllConventionEvents()
   },
   methods: {
     // === Работа с URL ===
@@ -829,6 +1101,9 @@ export default {
     closeRunModal() {
       this.selectedRun = null
       this.runLinkCopied = false
+      this.isManagingMasters = false
+      this.newMasterUsername = ''
+      this.addMasterError = null
       this.updateUrlWithRun(null)
     },
     openConventionModal(event) {
@@ -1417,6 +1692,273 @@ export default {
         this.addEventError = err.message
       } finally {
         this.addEventLoading = false
+      }
+    },
+    
+    // === Редактирование прогона ===
+    async fetchAllConventionEvents() {
+      try {
+        const response = await fetch('/api/convention-events/')
+        if (response.ok) {
+          this.allConventionEvents = await response.json()
+        }
+      } catch (err) {
+        console.error('Ошибка загрузки всех проведений конвентов:', err)
+      }
+    },
+    startEditingRun() {
+      if (!this.selectedRun) return
+      
+      // Парсим дату и время из прогона
+      const runDate = new Date(this.selectedRun.date)
+      const timezone = this.selectedRun.city_timezone || 'Europe/Moscow'
+      
+      // Получаем дату и время в таймзоне города
+      const dateStr = runDate.toLocaleDateString('sv-SE', { timeZone: timezone })
+      const timeStr = runDate.toLocaleTimeString('en-GB', { 
+        timeZone: timezone, 
+        hour: '2-digit', 
+        minute: '2-digit' 
+      })
+      
+      // Находим city_id по названию
+      const city = this.allCities.find(c => c.name === this.selectedRun.city)
+      
+      this.editRun = {
+        id: this.selectedRun.id,
+        game_id: this.selectedRun.game.id,
+        city_id: city ? city.id : null,
+        city_timezone: timezone,
+        convention_event_id: this.selectedRun.convention_event || null,
+        date: dateStr,
+        time: timeStr
+      }
+      
+      this.editGameSearch = this.selectedRun.game.name
+      this.editCitySearch = city ? (city.region?.name ? `${city.name} (${city.region.name})` : city.name) : this.selectedRun.city
+      this.editRunError = null
+      this.isEditingRun = true
+    },
+    cancelEditingRun() {
+      this.isEditingRun = false
+      this.editRunError = null
+    },
+    selectEditGame(game) {
+      this.editRun.game_id = game.id
+      this.editGameSearch = game.name
+      this.showEditGameDropdown = false
+    },
+    selectEditCity(city) {
+      this.editRun.city_id = city.id
+      this.editRun.city_timezone = city.timezone || 'Europe/Moscow'
+      const regionName = city.region && city.region.name ? city.region.name : ''
+      this.editCitySearch = regionName ? `${city.name} (${regionName})` : city.name
+      this.showEditCityDropdown = false
+    },
+    onEditGameInputBlur() {
+      setTimeout(() => {
+        this.showEditGameDropdown = false
+        if (this.editRun.game_id && this.editGameSearch !== this.selectedEditGameName) {
+          this.editGameSearch = this.selectedEditGameName
+        }
+      }, 200)
+    },
+    onEditCityInputBlur() {
+      setTimeout(() => {
+        this.showEditCityDropdown = false
+        if (this.editRun.city_id && this.editCitySearch !== this.selectedEditCityName) {
+          this.editCitySearch = this.selectedEditCityName
+        }
+      }, 200)
+    },
+    onEditConventionEventChange() {
+      if (this.editRun.convention_event_id) {
+        const event = this.allConventionEvents.find(e => e.id === this.editRun.convention_event_id)
+        if (event && event.city) {
+          this.editRun.city_id = event.city.id
+          this.editRun.city_timezone = event.city.timezone || 'Europe/Moscow'
+          const regionName = event.city.region && event.city.region.name ? event.city.region.name : ''
+          this.editCitySearch = regionName 
+            ? `${event.city.name} (${regionName})` 
+            : event.city.name
+        }
+      }
+    },
+    async submitEditRun() {
+      this.editRunLoading = true
+      this.editRunError = null
+      
+      try {
+        if (!this.editRun.game_id) {
+          throw new Error('Выберите игру')
+        }
+        
+        if (!this.editRun.city_id) {
+          throw new Error('Выберите город')
+        }
+        
+        if (!this.editRun.date || !this.editRun.time) {
+          throw new Error('Укажите дату и время')
+        }
+        
+        // Конвертируем время с учётом таймзоны города
+        const dateTime = this.convertToTimezone(
+          this.editRun.date, 
+          this.editRun.time, 
+          this.editRun.city_timezone
+        )
+        
+        const runData = {
+          game_id: this.editRun.game_id,
+          city_id: this.editRun.city_id,
+          date: dateTime,
+          convention_event_id: this.editRun.convention_event_id || null
+        }
+        
+        const response = await fetch(`/api/runs/${this.editRun.id}/`, {
+          method: 'PATCH',
+          headers: {
+            'Content-Type': 'application/json',
+            'X-CSRFToken': this.csrfToken
+          },
+          body: JSON.stringify(runData)
+        })
+        
+        if (!response.ok) {
+          if (response.status === 401 || response.status === 403) {
+            throw new Error('Нет прав для редактирования этого прогона')
+          }
+          const data = await response.json()
+          throw new Error(data.detail || data.non_field_errors?.[0] || 'Ошибка при сохранении')
+        }
+        
+        const updatedRun = await response.json()
+        
+        // Обновляем список и выбранный прогон
+        await this.fetchRuns()
+        this.selectedRun = updatedRun
+        this.isEditingRun = false
+      } catch (err) {
+        this.editRunError = err.message
+      } finally {
+        this.editRunLoading = false
+      }
+    },
+    
+    // === Удаление ===
+    confirmDeleteRun() {
+      this.deleteTarget = this.selectedRun
+      this.deleteType = 'run'
+      this.showDeleteConfirm = true
+    },
+    cancelDelete() {
+      this.showDeleteConfirm = false
+      this.deleteTarget = null
+      this.deleteType = null
+    },
+    async executeDelete() {
+      if (!this.deleteTarget || !this.deleteType) return
+      
+      this.deleteLoading = true
+      
+      try {
+        const url = this.deleteType === 'run' 
+          ? `/api/runs/${this.deleteTarget.id}/`
+          : `/api/convention-events/${this.deleteTarget.id}/`
+        
+        const response = await fetch(url, {
+          method: 'DELETE',
+          headers: {
+            'X-CSRFToken': this.csrfToken
+          }
+        })
+        
+        if (!response.ok) {
+          if (response.status === 401 || response.status === 403) {
+            throw new Error('Нет прав для удаления')
+          }
+          throw new Error('Ошибка при удалении')
+        }
+        
+        // Обновляем списки
+        if (this.deleteType === 'run') {
+          this.closeRunModal()
+          await this.fetchRuns()
+          await this.fetchCities()
+        } else {
+          this.closeConventionModal()
+          await this.fetchConventions()
+          await this.fetchConventionCities()
+        }
+        
+        this.cancelDelete()
+      } catch (err) {
+        alert(err.message)
+      } finally {
+        this.deleteLoading = false
+      }
+    },
+    
+    // === Управление мастерами ===
+    async addMaster() {
+      if (!this.newMasterUsername || !this.selectedRun) return
+      
+      this.addMasterLoading = true
+      this.addMasterError = null
+      
+      try {
+        const response = await fetch(`/api/runs/${this.selectedRun.id}/add_master/`, {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+            'X-CSRFToken': this.csrfToken
+          },
+          body: JSON.stringify({ username: this.newMasterUsername })
+        })
+        
+        if (!response.ok) {
+          const data = await response.json()
+          throw new Error(data.error || 'Ошибка при добавлении мастера')
+        }
+        
+        const updatedRun = await response.json()
+        this.selectedRun = updatedRun
+        this.newMasterUsername = ''
+        this.isManagingMasters = false
+        
+        // Обновляем список прогонов
+        await this.fetchRuns()
+      } catch (err) {
+        this.addMasterError = err.message
+      } finally {
+        this.addMasterLoading = false
+      }
+    },
+    async removeMaster(userId) {
+      if (!this.selectedRun) return
+      
+      try {
+        const response = await fetch(`/api/runs/${this.selectedRun.id}/remove_master/`, {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+            'X-CSRFToken': this.csrfToken
+          },
+          body: JSON.stringify({ user_id: userId })
+        })
+        
+        if (!response.ok) {
+          const data = await response.json()
+          throw new Error(data.error || 'Ошибка при удалении мастера')
+        }
+        
+        const updatedRun = await response.json()
+        this.selectedRun = updatedRun
+        
+        // Обновляем список прогонов
+        await this.fetchRuns()
+      } catch (err) {
+        alert(err.message)
       }
     }
   }
@@ -2014,7 +2556,14 @@ export default {
   padding-right: 40px;
 }
 
-.copy-link-btn {
+.header-actions {
+  display: flex;
+  gap: 8px;
+  align-items: center;
+}
+
+.copy-link-btn,
+.edit-btn {
   background: rgba(0, 204, 255, 0.1);
   border: 1px solid #00ccff55;
   color: #00ccff;
@@ -2030,10 +2579,176 @@ export default {
   flex-shrink: 0;
 }
 
-.copy-link-btn:hover {
+.copy-link-btn:hover,
+.edit-btn:hover {
   background: rgba(0, 204, 255, 0.2);
   border-color: #00ccff;
   transform: scale(1.1);
+}
+
+.edit-btn {
+  background: rgba(255, 107, 53, 0.1);
+  border-color: #ff6b3555;
+  color: #ff6b35;
+}
+
+.edit-btn:hover {
+  background: rgba(255, 107, 53, 0.2);
+  border-color: #ff6b35;
+}
+
+.delete-btn {
+  background: rgba(255, 68, 68, 0.1);
+  border: 1px solid #ff444455;
+  color: #ff4444;
+  width: 36px;
+  height: 36px;
+  border-radius: 8px;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 1rem;
+  transition: all 0.2s ease;
+  flex-shrink: 0;
+}
+
+.delete-btn:hover {
+  background: rgba(255, 68, 68, 0.2);
+  border-color: #ff4444;
+  transform: scale(1.1);
+}
+
+/* Модальное окно удаления */
+.delete-confirm-modal {
+  max-width: 450px;
+  text-align: center;
+}
+
+.delete-confirm-modal h2 {
+  color: #ff4444;
+  padding-right: 0;
+}
+
+.delete-warning {
+  color: #aaa;
+  line-height: 1.6;
+  margin-bottom: 24px;
+}
+
+.btn-danger {
+  background: linear-gradient(145deg, #ff4444, #cc3333);
+  border: none;
+  color: #fff;
+}
+
+.btn-danger:hover:not(:disabled) {
+  transform: translateY(-2px);
+  box-shadow: 0 6px 20px rgba(255, 68, 68, 0.35);
+}
+
+.btn-danger:disabled {
+  opacity: 0.6;
+  cursor: not-allowed;
+}
+
+/* Управление мастерами */
+.section-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 12px;
+}
+
+.section-header h3 {
+  margin-bottom: 0;
+}
+
+.btn-add-inline {
+  padding: 6px 14px;
+  background: transparent;
+  border: 1px solid #00ccff;
+  border-radius: 6px;
+  color: #00ccff;
+  font-size: 0.85rem;
+  cursor: pointer;
+  transition: all 0.2s ease;
+}
+
+.btn-add-inline:hover {
+  background: #00ccff;
+  color: #0a0a0a;
+}
+
+.masters-list {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  margin-bottom: 12px;
+}
+
+.master-item {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 10px 14px;
+  background: rgba(0, 204, 255, 0.08);
+  border-radius: 8px;
+  border-left: 3px solid #00ccff;
+}
+
+.master-name {
+  color: #00ccff;
+  font-weight: 500;
+}
+
+.master-remove {
+  background: rgba(255, 68, 68, 0.2);
+  border: none;
+  color: #ff4444;
+  width: 24px;
+  height: 24px;
+  border-radius: 50%;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 1.2rem;
+  line-height: 1;
+  transition: all 0.2s ease;
+}
+
+.master-remove:hover {
+  background: #ff4444;
+  color: #fff;
+}
+
+.add-master-form {
+  padding: 16px;
+  background: rgba(0, 0, 0, 0.3);
+  border-radius: 8px;
+  border: 1px solid #ff6b3533;
+}
+
+.add-master-form .form-input {
+  margin-bottom: 12px;
+}
+
+.add-master-actions {
+  display: flex;
+  gap: 12px;
+  justify-content: flex-end;
+}
+
+.btn-sm {
+  padding: 8px 16px;
+  font-size: 0.9rem;
+}
+
+.form-error-inline {
+  color: #ff6b6b;
+  font-size: 0.85rem;
+  margin-top: 8px;
 }
 
 /* Модальное окно прогона */

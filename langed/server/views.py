@@ -9,11 +9,11 @@ from django.utils import timezone
 from django.conf import settings
 from datetime import date
 
-from .models import Game, Run, Convention, ConventionEvent, City
+from .models import Game, Run, Convention, ConventionEvent, City, ConventionLink
 from .serializers import (
     GameSerializer, RunSerializer, 
     ConventionSerializer, ConventionEventSerializer,
-    CitySerializer
+    CitySerializer, ConventionLinkSerializer
 )
 
 
@@ -58,7 +58,7 @@ class CityViewSet(viewsets.ModelViewSet):
 
 
 class GameViewSet(viewsets.ModelViewSet):
-    """API для игр (просмотр и создание)"""
+    """API для игр (просмотр, создание, редактирование)"""
     queryset = Game.objects.all()
     serializer_class = GameSerializer
     
@@ -67,6 +67,19 @@ class GameViewSet(viewsets.ModelViewSet):
             # Для создания/изменения требуется авторизация
             return [IsAuthenticated()]
         return [AllowAny()]
+    
+    def check_object_permissions(self, request, obj):
+        """Проверяем, что пользователь — создатель игры или staff"""
+        super().check_object_permissions(request, obj)
+        if request.method in ['PUT', 'PATCH', 'DELETE']:
+            if not request.user.is_staff and request.user not in obj.creators.all():
+                from rest_framework.exceptions import PermissionDenied
+                raise PermissionDenied('Только создатель игры может её редактировать')
+    
+    def perform_create(self, serializer):
+        """При создании игры автоматически добавляем текущего пользователя как создателя"""
+        game = serializer.save()
+        game.creators.add(self.request.user)
     
     @action(detail=False, methods=['post'])
     def import_csv(self, request):
@@ -139,13 +152,21 @@ class GameViewSet(viewsets.ModelViewSet):
 
 
 class RunViewSet(viewsets.ModelViewSet):
-    """API для прогонов (просмотр и создание)"""
+    """API для прогонов (просмотр, создание, редактирование)"""
     serializer_class = RunSerializer
     
     def get_permissions(self):
         if self.action in ['create', 'update', 'partial_update', 'destroy']:
             return [IsAuthenticated()]
         return [AllowAny()]
+    
+    def check_object_permissions(self, request, obj):
+        """Проверяем, что пользователь — мастер прогона или staff"""
+        super().check_object_permissions(request, obj)
+        if request.method in ['PUT', 'PATCH', 'DELETE']:
+            if not request.user.is_staff and request.user not in obj.masters.all():
+                from rest_framework.exceptions import PermissionDenied
+                raise PermissionDenied('Только мастер прогона может его редактировать')
     
     def get_queryset(self):
         queryset = Run.objects.select_related(
@@ -178,23 +199,121 @@ class RunViewSet(viewsets.ModelViewSet):
         """При создании прогона автоматически устанавливаем текущего пользователя как мастера"""
         run = serializer.save()
         run.masters.add(self.request.user)
+    
+    @action(detail=True, methods=['post'])
+    def add_master(self, request, pk=None):
+        """Добавить мастера к прогону"""
+        run = self.get_object()
+        username = request.data.get('username')
+        if not username:
+            return Response({'error': 'Укажите имя пользователя'}, status=status.HTTP_400_BAD_REQUEST)
+        
+        from django.contrib.auth import get_user_model
+        User = get_user_model()
+        try:
+            user = User.objects.get(username=username)
+        except User.DoesNotExist:
+            return Response({'error': 'Пользователь не найден'}, status=status.HTTP_404_NOT_FOUND)
+        
+        if user in run.masters.all():
+            return Response({'error': 'Пользователь уже является мастером'}, status=status.HTTP_400_BAD_REQUEST)
+        
+        run.masters.add(user)
+        return Response(RunSerializer(run, context={'request': request}).data)
+    
+    @action(detail=True, methods=['post'])
+    def remove_master(self, request, pk=None):
+        """Удалить мастера из прогона"""
+        run = self.get_object()
+        user_id = request.data.get('user_id')
+        if not user_id:
+            return Response({'error': 'Укажите ID пользователя'}, status=status.HTTP_400_BAD_REQUEST)
+        
+        from django.contrib.auth import get_user_model
+        User = get_user_model()
+        try:
+            user = User.objects.get(id=user_id)
+        except User.DoesNotExist:
+            return Response({'error': 'Пользователь не найден'}, status=status.HTTP_404_NOT_FOUND)
+        
+        if user not in run.masters.all():
+            return Response({'error': 'Пользователь не является мастером'}, status=status.HTTP_400_BAD_REQUEST)
+        
+        if run.masters.count() == 1:
+            return Response({'error': 'Нельзя удалить последнего мастера'}, status=status.HTTP_400_BAD_REQUEST)
+        
+        run.masters.remove(user)
+        return Response(RunSerializer(run, context={'request': request}).data)
 
 
 class ConventionViewSet(viewsets.ModelViewSet):
-    """API для конвентов (просмотр и создание)"""
+    """API для конвентов (просмотр, создание, редактирование)"""
     serializer_class = ConventionSerializer
-    queryset = Convention.objects.prefetch_related('events').all()
+    queryset = Convention.objects.prefetch_related('events', 'organizers').all()
     
     def get_permissions(self):
         if self.action in ['create', 'update', 'partial_update', 'destroy', 'import_csv']:
             return [IsAuthenticated()]
         return [AllowAny()]
     
+    def check_object_permissions(self, request, obj):
+        """Проверяем, что пользователь — организатор конвента или staff"""
+        super().check_object_permissions(request, obj)
+        if request.method in ['PUT', 'PATCH', 'DELETE']:
+            if not request.user.is_staff and request.user not in obj.organizers.all():
+                from rest_framework.exceptions import PermissionDenied
+                raise PermissionDenied('Только организатор конвента может его редактировать')
+    
     def perform_create(self, serializer):
         """При создании конвента автоматически устанавливаем текущего пользователя как организатора"""
         convention = serializer.save()
         convention.organizers.add(self.request.user)
     
+    @action(detail=True, methods=['post'])
+    def add_organizer(self, request, pk=None):
+        """Добавить организатора к конвенту"""
+        convention = self.get_object()
+        username = request.data.get('username')
+        if not username:
+            return Response({'error': 'Укажите имя пользователя'}, status=status.HTTP_400_BAD_REQUEST)
+        
+        from django.contrib.auth import get_user_model
+        User = get_user_model()
+        try:
+            user = User.objects.get(username=username)
+        except User.DoesNotExist:
+            return Response({'error': 'Пользователь не найден'}, status=status.HTTP_404_NOT_FOUND)
+        
+        if user in convention.organizers.all():
+            return Response({'error': 'Пользователь уже является организатором'}, status=status.HTTP_400_BAD_REQUEST)
+        
+        convention.organizers.add(user)
+        return Response(ConventionSerializer(convention, context={'request': request}).data)
+    
+    @action(detail=True, methods=['post'])
+    def remove_organizer(self, request, pk=None):
+        """Удалить организатора из конвента"""
+        convention = self.get_object()
+        user_id = request.data.get('user_id')
+        if not user_id:
+            return Response({'error': 'Укажите ID пользователя'}, status=status.HTTP_400_BAD_REQUEST)
+        
+        from django.contrib.auth import get_user_model
+        User = get_user_model()
+        try:
+            user = User.objects.get(id=user_id)
+        except User.DoesNotExist:
+            return Response({'error': 'Пользователь не найден'}, status=status.HTTP_404_NOT_FOUND)
+        
+        if user not in convention.organizers.all():
+            return Response({'error': 'Пользователь не является организатором'}, status=status.HTTP_400_BAD_REQUEST)
+        
+        if convention.organizers.count() == 1:
+            return Response({'error': 'Нельзя удалить последнего организатора'}, status=status.HTTP_400_BAD_REQUEST)
+        
+        convention.organizers.remove(user)
+        return Response(ConventionSerializer(convention, context={'request': request}).data)
+
     @action(detail=False, methods=['post'])
     def import_csv(self, request):
         """Импорт конвентов и проведений из CSV файла"""
@@ -289,13 +408,24 @@ class ConventionViewSet(viewsets.ModelViewSet):
 
 
 class ConventionEventViewSet(viewsets.ModelViewSet):
-    """API для проведений конвентов (просмотр и создание)"""
+    """API для проведений конвентов (просмотр, создание, редактирование)"""
     serializer_class = ConventionEventSerializer
     
     def get_permissions(self):
         if self.action in ['create', 'update', 'partial_update', 'destroy']:
             return [IsAuthenticated()]
         return [AllowAny()]
+    
+    def check_object_permissions(self, request, obj):
+        """Проверяем, что пользователь — организатор проведения/конвента или staff"""
+        super().check_object_permissions(request, obj)
+        if request.method in ['PUT', 'PATCH', 'DELETE']:
+            if not request.user.is_staff:
+                is_event_organizer = request.user in obj.organizers.all()
+                is_convention_organizer = request.user in obj.convention.organizers.all()
+                if not is_event_organizer and not is_convention_organizer:
+                    from rest_framework.exceptions import PermissionDenied
+                    raise PermissionDenied('Только организатор может редактировать проведение')
     
     def get_queryset(self):
         queryset = ConventionEvent.objects.select_related(
@@ -329,3 +459,30 @@ class ConventionEventViewSet(viewsets.ModelViewSet):
             convention_events__isnull=False
         ).distinct().values_list('name', flat=True).order_by('name')
         return Response(list(cities))
+
+
+class ConventionLinkViewSet(viewsets.ModelViewSet):
+    """API для ссылок конвентов"""
+    serializer_class = ConventionLinkSerializer
+    queryset = ConventionLink.objects.all()
+    
+    def get_permissions(self):
+        if self.action in ['create', 'update', 'partial_update', 'destroy']:
+            return [IsAuthenticated()]
+        return [AllowAny()]
+    
+    def check_object_permissions(self, request, obj):
+        """Проверяем, что пользователь — организатор конвента или staff"""
+        super().check_object_permissions(request, obj)
+        if request.method in ['PUT', 'PATCH', 'DELETE']:
+            if not request.user.is_staff and request.user not in obj.convention.organizers.all():
+                from rest_framework.exceptions import PermissionDenied
+                raise PermissionDenied('Только организатор конвента может редактировать ссылки')
+    
+    def perform_create(self, serializer):
+        """При создании ссылки проверяем права на конвент"""
+        convention = serializer.validated_data.get('convention')
+        if not self.request.user.is_staff and self.request.user not in convention.organizers.all():
+            from rest_framework.exceptions import PermissionDenied
+            raise PermissionDenied('Только организатор конвента может добавлять ссылки')
+        serializer.save()

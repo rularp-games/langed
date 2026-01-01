@@ -83,16 +83,74 @@
         <button class="modal-close" @click="closeConventionModal">×</button>
         <div class="modal-header-row">
           <h2>{{ selectedConvention.name }}</h2>
-          <button class="copy-link-btn" @click="copyConventionLink" :title="linkCopied ? 'Скопировано!' : 'Скопировать ссылку'">
-            <span v-if="linkCopied">✓</span>
-            <span v-else>🔗</span>
-          </button>
+          <div class="header-actions">
+            <button 
+              v-if="selectedConvention.can_edit" 
+              class="edit-btn" 
+              @click="startEditingConvention"
+              title="Редактировать"
+            >
+              ✏️
+            </button>
+            <button 
+              v-if="selectedConvention.can_edit" 
+              class="delete-btn" 
+              @click="confirmDeleteConvention"
+              title="Удалить"
+            >
+              🗑️
+            </button>
+            <button class="copy-link-btn" @click="copyConventionLink" :title="linkCopied ? 'Скопировано!' : 'Скопировать ссылку'">
+              <span v-if="linkCopied">✓</span>
+              <span v-else>🔗</span>
+            </button>
+          </div>
         </div>
         
-        <div v-if="selectedConvention.organizers && selectedConvention.organizers.length > 0" class="modal-organizers">
-          <span class="organizers-icon">👤</span>
-          <span class="organizers-label">{{ selectedConvention.organizers.length > 1 ? 'Организаторы:' : 'Организатор:' }}</span>
-          <span class="organizers-names">{{ selectedConvention.organizers.map(o => o.display_name).join(', ') }}</span>
+        <div class="modal-section">
+          <div class="section-header">
+            <h3>{{ selectedConvention.organizers && selectedConvention.organizers.length > 1 ? 'Организаторы' : 'Организатор' }}</h3>
+            <button 
+              v-if="selectedConvention.can_edit && !isManagingOrganizers" 
+              @click="isManagingOrganizers = true"
+              class="btn-add-inline"
+            >
+              + Добавить
+            </button>
+          </div>
+          <div class="organizers-list">
+            <div 
+              v-for="organizer in selectedConvention.organizers" 
+              :key="organizer.id"
+              class="organizer-item"
+            >
+              <span class="organizer-name">👤 {{ organizer.display_name }}</span>
+              <button 
+                v-if="selectedConvention.can_edit && selectedConvention.organizers.length > 1"
+                class="organizer-remove"
+                @click="removeOrganizer(organizer.id)"
+                title="Удалить организатора"
+              >
+                ×
+              </button>
+            </div>
+          </div>
+          <div v-if="isManagingOrganizers" class="add-organizer-form">
+            <input 
+              v-model="newOrganizerUsername"
+              type="text"
+              class="form-input"
+              placeholder="Имя пользователя"
+              @keydown.enter.prevent="addOrganizer"
+            />
+            <div class="add-organizer-actions">
+              <button @click="isManagingOrganizers = false" class="btn btn-secondary btn-sm">Отмена</button>
+              <button @click="addOrganizer" class="btn btn-primary btn-sm" :disabled="!newOrganizerUsername || addOrganizerLoading">
+                {{ addOrganizerLoading ? '...' : 'Добавить' }}
+              </button>
+            </div>
+            <p v-if="addOrganizerError" class="form-error-inline">{{ addOrganizerError }}</p>
+          </div>
         </div>
         
         <div class="modal-section" v-if="selectedConvention.description">
@@ -100,22 +158,85 @@
           <p>{{ selectedConvention.description }}</p>
         </div>
         
-        <div class="modal-section" v-if="selectedConvention.links && selectedConvention.links.length > 0">
-          <h3>Ссылки</h3>
-          <div class="links-list">
-            <a 
+        <div class="modal-section">
+          <div class="section-header">
+            <h3>Ссылки</h3>
+            <button 
+              v-if="selectedConvention.can_edit && !isManagingLinks" 
+              @click="isManagingLinks = true"
+              class="btn-add-inline"
+            >
+              + Добавить
+            </button>
+          </div>
+          <div v-if="selectedConvention.links && selectedConvention.links.length > 0" class="links-list-editable">
+            <div 
               v-for="link in selectedConvention.links" 
               :key="link.id"
-              :href="link.url"
-              target="_blank"
-              rel="noopener noreferrer"
-              class="link-item"
+              class="link-item-editable"
               :class="'link-type-' + link.link_type"
-              @click.stop
             >
-              <span class="link-icon">{{ getLinkIcon(link.link_type) }}</span>
-              <span class="link-title">{{ link.display_title }}</span>
-            </a>
+              <a 
+                :href="link.url"
+                target="_blank"
+                rel="noopener noreferrer"
+                class="link-content"
+                @click.stop
+              >
+                <span class="link-icon">{{ getLinkIcon(link.link_type) }}</span>
+                <span class="link-title">{{ link.display_title }}</span>
+              </a>
+              <button 
+                v-if="selectedConvention.can_edit"
+                class="link-remove"
+                @click="removeLink(link.id)"
+                title="Удалить ссылку"
+              >
+                ×
+              </button>
+            </div>
+          </div>
+          <p v-else-if="!isManagingLinks" class="no-links">Ссылки не добавлены</p>
+          <div v-if="isManagingLinks" class="add-link-form">
+            <div class="form-group">
+              <label>URL *</label>
+              <input 
+                v-model="newLink.url"
+                type="url"
+                class="form-input"
+                placeholder="https://..."
+              />
+            </div>
+            <div class="form-row">
+              <div class="form-group half">
+                <label>Тип</label>
+                <select v-model="newLink.link_type" class="form-input">
+                  <option 
+                    v-for="type in linkTypes" 
+                    :key="type.value" 
+                    :value="type.value"
+                  >
+                    {{ type.label }}
+                  </option>
+                </select>
+              </div>
+              <div class="form-group half">
+                <label>Название (опционально)</label>
+                <input 
+                  v-model="newLink.title"
+                  type="text"
+                  class="form-input"
+                  placeholder="Название"
+                />
+              </div>
+            </div>
+            <div class="add-link-actions">
+              <button @click="cancelAddLink" class="btn btn-secondary btn-sm">Отмена</button>
+              <button @click="addLink" class="btn btn-primary btn-sm" :disabled="!newLink.url || addLinkLoading">
+                {{ addLinkLoading ? '...' : 'Добавить' }}
+              </button>
+            </div>
+            <p v-if="addLinkError" class="form-error-inline">{{ addLinkError }}</p>
           </div>
         </div>
         
@@ -141,14 +262,32 @@
                 <div class="event-dates">
                   {{ formatConventionDates(event.date_start, event.date_end) }}
                 </div>
-                <button 
-                  class="copy-link-btn-small" 
-                  @click="copyEventLink(event)" 
-                  :title="eventLinkCopied === event.id ? 'Скопировано!' : 'Скопировать ссылку на проведение'"
-                >
-                  <span v-if="eventLinkCopied === event.id">✓</span>
-                  <span v-else>🔗</span>
-                </button>
+                <div class="event-actions">
+                  <button 
+                    v-if="event.can_edit"
+                    class="edit-btn-small" 
+                    @click.stop="startEditingEvent(event)"
+                    title="Редактировать проведение"
+                  >
+                    ✏️
+                  </button>
+                  <button 
+                    v-if="event.can_edit"
+                    class="delete-btn-small" 
+                    @click.stop="confirmDeleteEvent(event)"
+                    title="Удалить проведение"
+                  >
+                    🗑️
+                  </button>
+                  <button 
+                    class="copy-link-btn-small" 
+                    @click="copyEventLink(event)" 
+                    :title="eventLinkCopied === event.id ? 'Скопировано!' : 'Скопировать ссылку на проведение'"
+                  >
+                    <span v-if="eventLinkCopied === event.id">✓</span>
+                    <span v-else>🔗</span>
+                  </button>
+                </div>
               </div>
               <div class="event-city">📍 {{ event.city_name || (event.city && event.city.name) }}</div>
               <div class="event-stats">
@@ -378,6 +517,151 @@
         </form>
       </div>
     </div>
+
+    <!-- Модальное окно редактирования проведения конвента -->
+    <div v-if="showEditEventModal && isAuthenticated" class="modal-overlay" @click.self="closeEditEventModal">
+      <div class="modal-content add-event-modal">
+        <button class="modal-close" @click="closeEditEventModal">×</button>
+        
+        <h2>Редактировать проведение</h2>
+        
+        <form @submit.prevent="submitEditEvent" class="add-form">
+          <div class="form-group">
+            <label>Конвент</label>
+            <input 
+              type="text"
+              class="form-input"
+              :value="getConventionName(editEvent.convention_id)"
+              disabled
+            />
+          </div>
+          
+          <div class="form-group">
+            <label for="edit-event-city">Город *</label>
+            <select 
+              id="edit-event-city"
+              v-model="editEvent.city_id" 
+              required
+              class="form-input"
+            >
+              <option :value="null" disabled>Выберите город</option>
+              <option 
+                v-for="city in cities" 
+                :key="city.id" 
+                :value="city.id"
+              >
+                {{ city.name }}{{ city.region && city.region.name ? ` (${city.region.name})` : '' }}
+              </option>
+            </select>
+          </div>
+          
+          <div class="form-row">
+            <div class="form-group half">
+              <label for="edit-event-date-start">Дата начала *</label>
+              <input 
+                id="edit-event-date-start"
+                v-model="editEvent.date_start" 
+                type="date" 
+                required
+                class="form-input"
+              />
+            </div>
+            
+            <div class="form-group half">
+              <label for="edit-event-date-end">Дата окончания *</label>
+              <input 
+                id="edit-event-date-end"
+                v-model="editEvent.date_end" 
+                type="date" 
+                required
+                class="form-input"
+              />
+            </div>
+          </div>
+          
+          <div v-if="editEventError" class="form-error">{{ editEventError }}</div>
+          
+          <div class="form-actions">
+            <button type="button" @click="closeEditEventModal" class="btn btn-secondary">Отмена</button>
+            <button type="submit" class="btn btn-primary" :disabled="editEventLoading">
+              <span v-if="editEventLoading">Сохранение...</span>
+              <span v-else>Сохранить</span>
+            </button>
+          </div>
+        </form>
+      </div>
+    </div>
+
+    <!-- Модальное окно редактирования конвента -->
+    <div v-if="isEditingConvention && isAuthenticated" class="modal-overlay" @click.self="cancelEditingConvention">
+      <div class="modal-content add-convention-modal">
+        <button class="modal-close" @click="cancelEditingConvention">×</button>
+        
+        <h2>Редактировать конвент</h2>
+        
+        <form @submit.prevent="submitEditConvention" class="add-form">
+          <div class="form-group">
+            <label for="edit-conv-name">Название *</label>
+            <input 
+              id="edit-conv-name"
+              v-model="editConvention.name" 
+              type="text" 
+              required
+              class="form-input"
+              placeholder="Введите название конвента"
+            />
+          </div>
+          
+          <div class="form-group">
+            <label for="edit-conv-description">Описание</label>
+            <textarea 
+              id="edit-conv-description"
+              v-model="editConvention.description"
+              class="form-input form-textarea"
+              placeholder="Описание конвента"
+              rows="3"
+            ></textarea>
+          </div>
+          
+          <div v-if="editConventionError" class="form-error">{{ editConventionError }}</div>
+          
+          <div class="form-actions">
+            <button type="button" @click="cancelEditingConvention" class="btn btn-secondary">Отмена</button>
+            <button type="submit" class="btn btn-primary" :disabled="editConventionLoading">
+              <span v-if="editConventionLoading">Сохранение...</span>
+              <span v-else>Сохранить</span>
+            </button>
+          </div>
+        </form>
+      </div>
+    </div>
+
+    <!-- Модальное окно подтверждения удаления -->
+    <div v-if="showDeleteConfirm" class="modal-overlay" @click.self="cancelDelete">
+      <div class="modal-content delete-confirm-modal">
+        <button class="modal-close" @click="cancelDelete">×</button>
+        
+        <h2>Удалить {{ deleteType === 'convention' ? 'конвент' : 'проведение' }}?</h2>
+        
+        <p class="delete-warning">
+          Это действие нельзя отменить. 
+          <template v-if="deleteType === 'convention'">
+            Конвент "{{ deleteTarget?.name }}" и все его проведения будут удалены.
+          </template>
+          <template v-else>
+            Проведение конвента и все связанные прогоны будут удалены.
+          </template>
+        </p>
+        
+        <div class="form-actions">
+          <button type="button" @click="cancelDelete" class="btn btn-secondary">Отмена</button>
+          <button type="button" @click="executeDelete" class="btn btn-danger" :disabled="deleteLoading">
+            <span v-if="deleteLoading">Удаление...</span>
+            <span v-else>Удалить</span>
+          </button>
+        </div>
+      </div>
+    </div>
   </div>
 </template>
 
@@ -423,7 +707,54 @@ export default {
         date_end: ''
       },
       linkCopied: false,
-      eventLinkCopied: false
+      eventLinkCopied: false,
+      // Редактирование проведения конвента
+      showEditEventModal: false,
+      editEventLoading: false,
+      editEventError: null,
+      editEvent: {
+        id: null,
+        convention_id: null,
+        city_id: null,
+        date_start: '',
+        date_end: ''
+      },
+      // Редактирование конвента
+      isEditingConvention: false,
+      editConventionLoading: false,
+      editConventionError: null,
+      editConvention: {
+        id: null,
+        name: '',
+        description: ''
+      },
+      // Удаление
+      showDeleteConfirm: false,
+      deleteTarget: null,
+      deleteType: null,
+      deleteLoading: false,
+      // Управление организаторами
+      isManagingOrganizers: false,
+      newOrganizerUsername: '',
+      addOrganizerLoading: false,
+      addOrganizerError: null,
+      // Управление ссылками
+      isManagingLinks: false,
+      newLink: {
+        url: '',
+        link_type: 'other',
+        title: ''
+      },
+      addLinkLoading: false,
+      addLinkError: null,
+      linkTypes: [
+        { value: 'vk', label: 'ВКонтакте' },
+        { value: 'telegram', label: 'Telegram' },
+        { value: 'website', label: 'Сайт' },
+        { value: 'discord', label: 'Discord' },
+        { value: 'youtube', label: 'YouTube' },
+        { value: 'other', label: 'Другое' }
+      ]
     }
   },
   watch: {
@@ -514,6 +845,12 @@ export default {
       this.conventionEvents = []
       this.linkCopied = false
       this.eventLinkCopied = false
+      this.isManagingOrganizers = false
+      this.newOrganizerUsername = ''
+      this.addOrganizerError = null
+      this.isManagingLinks = false
+      this.newLink = { url: '', link_type: 'other', title: '' }
+      this.addLinkError = null
       this.updateUrlWithConvention(null)
     },
     updateUrlWithConvention(conventionId) {
@@ -842,6 +1179,333 @@ export default {
         this.addEventError = err.message
       } finally {
         this.addEventLoading = false
+      }
+    },
+    
+    // === Редактирование проведения конвента ===
+    getConventionName(conventionId) {
+      const convention = this.conventions.find(c => c.id === conventionId)
+      return convention ? convention.name : ''
+    },
+    startEditingEvent(event) {
+      this.editEvent = {
+        id: event.id,
+        convention_id: event.convention,
+        city_id: event.city ? event.city.id : null,
+        date_start: event.date_start,
+        date_end: event.date_end
+      }
+      this.editEventError = null
+      this.showEditEventModal = true
+    },
+    closeEditEventModal() {
+      this.showEditEventModal = false
+      this.editEventError = null
+    },
+    async submitEditEvent() {
+      this.editEventLoading = true
+      this.editEventError = null
+      
+      try {
+        if (!this.editEvent.city_id) {
+          throw new Error('Выберите город')
+        }
+        
+        const eventData = {
+          city_id: this.editEvent.city_id,
+          date_start: this.editEvent.date_start,
+          date_end: this.editEvent.date_end
+        }
+        
+        const response = await fetch(`/api/convention-events/${this.editEvent.id}/`, {
+          method: 'PATCH',
+          headers: {
+            'Content-Type': 'application/json',
+            'X-CSRFToken': this.csrfToken
+          },
+          body: JSON.stringify(eventData)
+        })
+        
+        if (!response.ok) {
+          if (response.status === 401 || response.status === 403) {
+            throw new Error('Нет прав для редактирования этого проведения')
+          }
+          const data = await response.json()
+          throw new Error(data.detail || data.non_field_errors?.[0] || 'Ошибка при сохранении')
+        }
+        
+        // Обновляем список
+        await this.fetchConventions()
+        if (this.selectedConvention) {
+          await this.openConvention(this.selectedConvention)
+        }
+        this.closeEditEventModal()
+      } catch (err) {
+        this.editEventError = err.message
+      } finally {
+        this.editEventLoading = false
+      }
+    },
+    
+    // === Редактирование конвента ===
+    startEditingConvention() {
+      if (!this.selectedConvention) return
+      
+      this.editConvention = {
+        id: this.selectedConvention.id,
+        name: this.selectedConvention.name,
+        description: this.selectedConvention.description || ''
+      }
+      this.editConventionError = null
+      this.isEditingConvention = true
+    },
+    cancelEditingConvention() {
+      this.isEditingConvention = false
+      this.editConventionError = null
+    },
+    async submitEditConvention() {
+      this.editConventionLoading = true
+      this.editConventionError = null
+      
+      try {
+        const response = await fetch(`/api/conventions/${this.editConvention.id}/`, {
+          method: 'PATCH',
+          headers: {
+            'Content-Type': 'application/json',
+            'X-CSRFToken': this.csrfToken
+          },
+          body: JSON.stringify({
+            name: this.editConvention.name,
+            description: this.editConvention.description
+          })
+        })
+        
+        if (!response.ok) {
+          if (response.status === 401 || response.status === 403) {
+            throw new Error('Нет прав для редактирования этого конвента')
+          }
+          const data = await response.json()
+          throw new Error(data.detail || data.name?.[0] || 'Ошибка при сохранении')
+        }
+        
+        const updatedConvention = await response.json()
+        
+        // Обновляем список
+        const index = this.conventions.findIndex(c => c.id === updatedConvention.id)
+        if (index !== -1) {
+          this.conventions.splice(index, 1, updatedConvention)
+        }
+        this.selectedConvention = updatedConvention
+        this.isEditingConvention = false
+      } catch (err) {
+        this.editConventionError = err.message
+      } finally {
+        this.editConventionLoading = false
+      }
+    },
+    
+    // === Удаление ===
+    confirmDeleteConvention() {
+      this.deleteTarget = this.selectedConvention
+      this.deleteType = 'convention'
+      this.showDeleteConfirm = true
+    },
+    confirmDeleteEvent(event) {
+      this.deleteTarget = event
+      this.deleteType = 'event'
+      this.showDeleteConfirm = true
+    },
+    cancelDelete() {
+      this.showDeleteConfirm = false
+      this.deleteTarget = null
+      this.deleteType = null
+    },
+    async executeDelete() {
+      if (!this.deleteTarget || !this.deleteType) return
+      
+      this.deleteLoading = true
+      
+      try {
+        const url = this.deleteType === 'convention' 
+          ? `/api/conventions/${this.deleteTarget.id}/`
+          : `/api/convention-events/${this.deleteTarget.id}/`
+        
+        const response = await fetch(url, {
+          method: 'DELETE',
+          headers: {
+            'X-CSRFToken': this.csrfToken
+          }
+        })
+        
+        if (!response.ok) {
+          if (response.status === 401 || response.status === 403) {
+            throw new Error('Нет прав для удаления')
+          }
+          throw new Error('Ошибка при удалении')
+        }
+        
+        if (this.deleteType === 'convention') {
+          // Закрываем модальное окно и обновляем список
+          this.closeConventionModal()
+          await this.fetchConventions()
+        } else {
+          // Обновляем проведения конвента
+          await this.fetchConventions()
+          if (this.selectedConvention) {
+            await this.openConvention(this.selectedConvention)
+          }
+        }
+        
+        this.cancelDelete()
+      } catch (err) {
+        alert(err.message)
+      } finally {
+        this.deleteLoading = false
+      }
+    },
+    
+    // === Управление организаторами ===
+    async addOrganizer() {
+      if (!this.newOrganizerUsername || !this.selectedConvention) return
+      
+      this.addOrganizerLoading = true
+      this.addOrganizerError = null
+      
+      try {
+        const response = await fetch(`/api/conventions/${this.selectedConvention.id}/add_organizer/`, {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+            'X-CSRFToken': this.csrfToken
+          },
+          body: JSON.stringify({ username: this.newOrganizerUsername })
+        })
+        
+        if (!response.ok) {
+          const data = await response.json()
+          throw new Error(data.error || 'Ошибка при добавлении организатора')
+        }
+        
+        const updatedConvention = await response.json()
+        this.selectedConvention = updatedConvention
+        
+        // Обновляем список конвентов
+        const index = this.conventions.findIndex(c => c.id === updatedConvention.id)
+        if (index !== -1) {
+          this.conventions.splice(index, 1, updatedConvention)
+        }
+        
+        this.newOrganizerUsername = ''
+        this.isManagingOrganizers = false
+      } catch (err) {
+        this.addOrganizerError = err.message
+      } finally {
+        this.addOrganizerLoading = false
+      }
+    },
+    async removeOrganizer(userId) {
+      if (!this.selectedConvention) return
+      
+      try {
+        const response = await fetch(`/api/conventions/${this.selectedConvention.id}/remove_organizer/`, {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+            'X-CSRFToken': this.csrfToken
+          },
+          body: JSON.stringify({ user_id: userId })
+        })
+        
+        if (!response.ok) {
+          const data = await response.json()
+          throw new Error(data.error || 'Ошибка при удалении организатора')
+        }
+        
+        const updatedConvention = await response.json()
+        this.selectedConvention = updatedConvention
+        
+        // Обновляем список конвентов
+        const index = this.conventions.findIndex(c => c.id === updatedConvention.id)
+        if (index !== -1) {
+          this.conventions.splice(index, 1, updatedConvention)
+        }
+      } catch (err) {
+        alert(err.message)
+      }
+    },
+    
+    // === Управление ссылками ===
+    cancelAddLink() {
+      this.isManagingLinks = false
+      this.newLink = { url: '', link_type: 'other', title: '' }
+      this.addLinkError = null
+    },
+    async addLink() {
+      if (!this.newLink.url || !this.selectedConvention) return
+      
+      this.addLinkLoading = true
+      this.addLinkError = null
+      
+      try {
+        const response = await fetch('/api/convention-links/', {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+            'X-CSRFToken': this.csrfToken
+          },
+          body: JSON.stringify({
+            convention_id: this.selectedConvention.id,
+            url: this.newLink.url,
+            link_type: this.newLink.link_type,
+            title: this.newLink.title
+          })
+        })
+        
+        if (!response.ok) {
+          const data = await response.json()
+          throw new Error(data.error || data.url?.[0] || 'Ошибка при добавлении ссылки')
+        }
+        
+        const newLinkData = await response.json()
+        
+        // Добавляем ссылку в список
+        if (!this.selectedConvention.links) {
+          this.selectedConvention.links = []
+        }
+        this.selectedConvention.links.push(newLinkData)
+        
+        // Обновляем список конвентов
+        await this.fetchConventions()
+        
+        this.cancelAddLink()
+      } catch (err) {
+        this.addLinkError = err.message
+      } finally {
+        this.addLinkLoading = false
+      }
+    },
+    async removeLink(linkId) {
+      if (!this.selectedConvention) return
+      
+      try {
+        const response = await fetch(`/api/convention-links/${linkId}/`, {
+          method: 'DELETE',
+          headers: {
+            'X-CSRFToken': this.csrfToken
+          }
+        })
+        
+        if (!response.ok) {
+          throw new Error('Ошибка при удалении ссылки')
+        }
+        
+        // Удаляем ссылку из списка
+        this.selectedConvention.links = this.selectedConvention.links.filter(l => l.id !== linkId)
+        
+        // Обновляем список конвентов
+        await this.fetchConventions()
+      } catch (err) {
+        alert(err.message)
       }
     }
   }
@@ -1229,7 +1893,14 @@ export default {
   padding-right: 40px;
 }
 
-.copy-link-btn {
+.header-actions {
+  display: flex;
+  gap: 8px;
+  align-items: center;
+}
+
+.copy-link-btn,
+.edit-btn {
   background: rgba(0, 204, 255, 0.1);
   border: 1px solid #00ccff55;
   color: #00ccff;
@@ -1245,10 +1916,22 @@ export default {
   flex-shrink: 0;
 }
 
-.copy-link-btn:hover {
+.copy-link-btn:hover,
+.edit-btn:hover {
   background: rgba(0, 204, 255, 0.2);
   border-color: #00ccff;
   transform: scale(1.1);
+}
+
+.edit-btn {
+  background: rgba(255, 107, 53, 0.1);
+  border-color: #ff6b3555;
+  color: #ff6b35;
+}
+
+.edit-btn:hover {
+  background: rgba(255, 107, 53, 0.2);
+  border-color: #ff6b35;
 }
 
 .copy-link-btn-small {
@@ -1316,6 +1999,292 @@ export default {
   justify-content: space-between;
   align-items: center;
   margin-bottom: 6px;
+}
+
+.event-actions {
+  display: flex;
+  gap: 6px;
+  align-items: center;
+}
+
+.edit-btn-small {
+  background: rgba(255, 107, 53, 0.1);
+  border: 1px solid #ff6b3544;
+  color: #ff6b35;
+  width: 28px;
+  height: 28px;
+  border-radius: 6px;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 0.8rem;
+  transition: all 0.2s ease;
+  flex-shrink: 0;
+}
+
+.edit-btn-small:hover {
+  background: rgba(255, 107, 53, 0.2);
+  border-color: #ff6b35;
+  transform: scale(1.1);
+}
+
+.delete-btn,
+.delete-btn-small {
+  background: rgba(255, 68, 68, 0.1);
+  border: 1px solid #ff444455;
+  color: #ff4444;
+  border-radius: 8px;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  transition: all 0.2s ease;
+  flex-shrink: 0;
+}
+
+.delete-btn {
+  width: 36px;
+  height: 36px;
+  font-size: 1rem;
+}
+
+.delete-btn-small {
+  width: 28px;
+  height: 28px;
+  font-size: 0.8rem;
+  border-radius: 6px;
+}
+
+.delete-btn:hover,
+.delete-btn-small:hover {
+  background: rgba(255, 68, 68, 0.2);
+  border-color: #ff4444;
+  transform: scale(1.1);
+}
+
+/* Модальное окно удаления */
+.delete-confirm-modal {
+  max-width: 450px;
+  text-align: center;
+}
+
+.delete-confirm-modal h2 {
+  color: #ff4444;
+  padding-right: 0;
+}
+
+.delete-warning {
+  color: #aaa;
+  line-height: 1.6;
+  margin-bottom: 24px;
+}
+
+.btn-danger {
+  background: linear-gradient(145deg, #ff4444, #cc3333);
+  border: none;
+  color: #fff;
+}
+
+.btn-danger:hover:not(:disabled) {
+  transform: translateY(-2px);
+  box-shadow: 0 6px 20px rgba(255, 68, 68, 0.35);
+}
+
+.btn-danger:disabled {
+  opacity: 0.6;
+  cursor: not-allowed;
+}
+
+/* Управление организаторами */
+.section-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 12px;
+}
+
+.section-header h3 {
+  margin-bottom: 0;
+}
+
+.btn-add-inline {
+  padding: 6px 14px;
+  background: transparent;
+  border: 1px solid #00ccff;
+  border-radius: 6px;
+  color: #00ccff;
+  font-size: 0.85rem;
+  cursor: pointer;
+  transition: all 0.2s ease;
+}
+
+.btn-add-inline:hover {
+  background: #00ccff;
+  color: #0a0a0a;
+}
+
+.organizers-list {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  margin-bottom: 12px;
+}
+
+.organizer-item {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 10px 14px;
+  background: rgba(0, 204, 255, 0.08);
+  border-radius: 8px;
+  border-left: 3px solid #00ccff;
+}
+
+.organizer-name {
+  color: #00ccff;
+  font-weight: 500;
+}
+
+.organizer-remove {
+  background: rgba(255, 68, 68, 0.2);
+  border: none;
+  color: #ff4444;
+  width: 24px;
+  height: 24px;
+  border-radius: 50%;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 1.2rem;
+  line-height: 1;
+  transition: all 0.2s ease;
+}
+
+.organizer-remove:hover {
+  background: #ff4444;
+  color: #fff;
+}
+
+.add-organizer-form {
+  padding: 16px;
+  background: rgba(0, 0, 0, 0.3);
+  border-radius: 8px;
+  border: 1px solid #ff6b3533;
+}
+
+.add-organizer-form .form-input {
+  margin-bottom: 12px;
+}
+
+.add-organizer-actions {
+  display: flex;
+  gap: 12px;
+  justify-content: flex-end;
+}
+
+.btn-sm {
+  padding: 8px 16px;
+  font-size: 0.9rem;
+}
+
+.form-error-inline {
+  color: #ff6b6b;
+  font-size: 0.85rem;
+  margin-top: 8px;
+}
+
+/* Управление ссылками */
+.links-list-editable {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 10px;
+  margin-bottom: 12px;
+}
+
+.link-item-editable {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 8px 14px;
+  background: rgba(0, 0, 0, 0.3);
+  border: 1px solid #ff6b3533;
+  border-radius: 8px;
+  transition: all 0.2s ease;
+}
+
+.link-item-editable:hover {
+  border-color: #ff6b3566;
+}
+
+.link-content {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  color: #ccc;
+  text-decoration: none;
+  font-size: 0.9rem;
+}
+
+.link-content:hover {
+  color: #fff;
+}
+
+.link-remove {
+  background: rgba(255, 68, 68, 0.2);
+  border: none;
+  color: #ff4444;
+  width: 20px;
+  height: 20px;
+  border-radius: 50%;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 1rem;
+  line-height: 1;
+  transition: all 0.2s ease;
+  margin-left: 8px;
+}
+
+.link-remove:hover {
+  background: #ff4444;
+  color: #fff;
+}
+
+.no-links {
+  color: #666;
+  font-style: italic;
+}
+
+.add-link-form {
+  padding: 16px;
+  background: rgba(0, 0, 0, 0.3);
+  border-radius: 8px;
+  border: 1px solid #ff6b3533;
+  margin-top: 12px;
+}
+
+.add-link-form .form-group {
+  margin-bottom: 12px;
+}
+
+.add-link-form .form-row {
+  display: flex;
+  gap: 16px;
+  margin-bottom: 12px;
+}
+
+.add-link-form .form-group.half {
+  flex: 1;
+  margin-bottom: 0;
+}
+
+.add-link-actions {
+  display: flex;
+  gap: 12px;
+  justify-content: flex-end;
 }
 
 .event-dates {
