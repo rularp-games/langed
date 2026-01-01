@@ -316,7 +316,7 @@
         <div class="modal-section" v-if="selectedConvention.games && selectedConvention.games.length > 0">
           <h3>Игры на конвенте ({{ selectedConvention.games.length }})</h3>
           <div class="modal-games-list">
-            <div v-for="game in selectedConvention.games" :key="game.id" class="modal-game-item">
+            <div v-for="game in sortedConventionGames" :key="game.id" class="modal-game-item">
               <span class="modal-game-name">{{ game.name }}</span>
               <span class="modal-game-players">{{ game.players_min }}–{{ game.players_max }} игроков</span>
             </div>
@@ -672,6 +672,12 @@ export default {
     },
     sortedGames() {
       return this.games.slice().sort((a, b) => a.name.localeCompare(b.name, 'ru'))
+    },
+    sortedConventionGames() {
+      if (!this.selectedConvention || !this.selectedConvention.games) {
+        return []
+      }
+      return this.selectedConvention.games.slice().sort((a, b) => a.name.localeCompare(b.name, 'ru'))
     },
     filteredGamesList() {
       if (!this.gameSearch) {
