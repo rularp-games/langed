@@ -65,12 +65,10 @@ class Game(models.Model):
     """Модель игры"""
     
     name = models.CharField(max_length=255, verbose_name='Название')
-    master = models.ForeignKey(
+    creators = models.ManyToManyField(
         settings.AUTH_USER_MODEL,
-        on_delete=models.SET_NULL,
         related_name='games',
-        verbose_name='Мастер',
-        null=True,
+        verbose_name='Создатели',
         blank=True
     )
     poster = models.ImageField(
@@ -117,12 +115,10 @@ class Convention(models.Model):
     """Модель конвента"""
     
     name = models.CharField(max_length=255, verbose_name='Название')
-    organizer = models.ForeignKey(
+    organizers = models.ManyToManyField(
         settings.AUTH_USER_MODEL,
-        on_delete=models.SET_NULL,
         related_name='organized_conventions',
-        verbose_name='Организатор',
-        null=True,
+        verbose_name='Организаторы',
         blank=True
     )
     description = models.TextField(blank=True, verbose_name='Описание')
@@ -196,6 +192,12 @@ class ConventionEvent(models.Model):
         related_name='events',
         verbose_name='Конвент'
     )
+    organizers = models.ManyToManyField(
+        settings.AUTH_USER_MODEL,
+        related_name='organized_convention_events',
+        verbose_name='Организаторы',
+        blank=True
+    )
     city = models.ForeignKey(
         City,
         on_delete=models.PROTECT,
@@ -230,12 +232,10 @@ class Run(models.Model):
         related_name='runs',
         verbose_name='Игра'
     )
-    master = models.ForeignKey(
+    masters = models.ManyToManyField(
         settings.AUTH_USER_MODEL,
-        on_delete=models.SET_NULL,
         related_name='runs',
-        verbose_name='Мастер',
-        null=True,
+        verbose_name='Мастера',
         blank=True
     )
     date = models.DateTimeField(verbose_name='Дата и время прогона')
