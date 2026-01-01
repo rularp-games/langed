@@ -1,0 +1,1490 @@
+<template>
+  <div class="schedule-editor">
+    <!-- Загрузка -->
+    <div v-if="loading" class="loading">
+      <div class="loading-spinner"></div>
+      <p>Загрузка расписания...</p>
+    </div>
+
+    <!-- Ошибка -->
+    <div v-else-if="error" class="error">
+      <p>{{ error }}</p>
+      <button @click="fetchSchedule" class="retry-btn">Повторить</button>
+    </div>
+
+    <!-- Редактор -->
+    <template v-else-if="schedule">
+      <!-- Шапка -->
+      <div class="editor-header">
+        <div class="header-info">
+          <h1>Редактор расписания</h1>
+          <h2 class="convention-name">{{ schedule.convention_name }}</h2>
+          <div class="convention-meta">
+            <span class="convention-dates">
+              📅 {{ formatDates(schedule.date_start, schedule.date_end) }}
+            </span>
+            <span class="convention-city">
+              📍 {{ schedule.city_name }}
+            </span>
+          </div>
+        </div>
+        
+        <div class="header-actions">
+          <button @click="$emit('view')" class="btn btn-secondary">
+            👁️ Просмотр
+          </button>
+          <button @click="$emit('close')" class="btn btn-outline">
+            ← Назад
+          </button>
+        </div>
+      </div>
+
+      <!-- Панель инструментов -->
+      <div class="editor-toolbar">
+        <button @click="openAddRunModal" class="add-run-btn">
+          <span class="add-icon">+</span>
+          Добавить прогон
+        </button>
+        
+        <div class="toolbar-right">
+          <select v-model="selectedDay" class="control-select">
+            <option value="">Все дни</option>
+            <option v-for="day in days" :key="day" :value="day">
+              {{ formatDayOption(day) }}
+            </option>
+          </select>
+          
+          <div class="runs-count">
+            {{ schedule.runs.length }} {{ pluralizeRuns(schedule.runs.length) }}
+          </div>
+        </div>
+      </div>
+
+      <!-- Список прогонов -->
+      <div v-if="filteredRuns.length === 0" class="empty-schedule">
+        <p v-if="schedule.runs.length === 0">Расписание пока пусто. Добавьте первый прогон!</p>
+        <p v-else>Нет прогонов на выбранный день</p>
+      </div>
+
+      <div v-else class="runs-editor">
+        <div v-for="day in filteredDays" :key="day" class="editor-day">
+          <div class="day-header">
+            <span class="day-name">{{ formatDayName(day) }}</span>
+            <span class="day-date">{{ formatDayDate(day) }}</span>
+            <span class="day-runs-count">{{ getRunsForDay(day).length }} {{ pluralizeRuns(getRunsForDay(day).length) }}</span>
+          </div>
+          
+          <div class="day-runs">
+            <div 
+              v-for="run in getRunsForDay(day)" 
+              :key="run.id"
+              class="run-card"
+              :class="{ 'run-full': run.is_full }"
+            >
+              <div class="run-time-block">
+                <span class="run-time">{{ formatTime(run.date) }}</span>
+                <span class="run-duration">{{ formatDuration(run.duration) }}</span>
+              </div>
+              
+              <div class="run-main">
+                <div class="run-name">{{ run.game_name }}</div>
+                <div class="run-details">
+                  <span v-if="run.venue_name" class="run-venue">📍 {{ run.venue_name }}</span>
+                  <span v-if="run.masters && run.masters.length" class="run-masters">
+                    👤 {{ run.masters.map(m => m.display_name).join(', ') }}
+                  </span>
+                </div>
+              </div>
+              
+              <div class="run-status">
+                <span class="run-slots" :class="{ 'slots-full': run.is_full }">
+                  {{ run.registered_count }}/{{ run.effective_max_players }}
+                </span>
+                <span v-if="run.is_full" class="full-badge">МЕСТ НЕТ</span>
+              </div>
+              
+              <div class="run-actions">
+                <button 
+                  @click="openEditRunModal(run)"
+                  class="action-btn edit-btn"
+                  title="Редактировать"
+                >
+                  ✏️
+                </button>
+                <button 
+                  @click="confirmDeleteRun(run)"
+                  class="action-btn delete-btn"
+                  title="Удалить"
+                >
+                  🗑️
+                </button>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+    </template>
+
+    <!-- Модальное окно добавления прогона -->
+    <div v-if="showAddModal" class="modal-overlay" @click.self="closeAddModal">
+      <div class="modal-content add-run-modal">
+        <button class="modal-close" @click="closeAddModal">×</button>
+        
+        <h2>Добавить прогон</h2>
+        
+        <form @submit.prevent="submitAddRun" class="add-form">
+          <div class="form-group">
+            <label>Игра *</label>
+            <select v-model="newRun.game_id" required class="form-input">
+              <option :value="null" disabled>Выберите игру</option>
+              <option v-for="game in games" :key="game.id" :value="game.id">
+                {{ game.name }}
+              </option>
+            </select>
+            <button type="button" @click="showGameSearch = true" class="btn-link">
+              🔍 Найти игру
+            </button>
+          </div>
+          
+          <div class="form-row">
+            <div class="form-group half">
+              <label>Дата *</label>
+              <input 
+                v-model="newRun.date" 
+                type="date" 
+                required
+                class="form-input"
+                :min="schedule.date_start"
+                :max="schedule.date_end"
+              />
+            </div>
+            
+            <div class="form-group half">
+              <label>Время *</label>
+              <input 
+                v-model="newRun.time" 
+                type="time" 
+                required
+                class="form-input"
+              />
+            </div>
+          </div>
+          
+          <div class="form-row">
+            <div class="form-group half">
+              <label>Длительность (мин) *</label>
+              <input 
+                v-model.number="newRun.duration" 
+                type="number" 
+                required
+                min="30"
+                max="720"
+                class="form-input"
+              />
+            </div>
+            
+            <div class="form-group half">
+              <label>Макс. игроков</label>
+              <input 
+                v-model.number="newRun.max_players" 
+                type="number" 
+                min="1"
+                class="form-input"
+                placeholder="Из игры"
+              />
+            </div>
+          </div>
+          
+          <div class="form-group">
+            <label>Площадка</label>
+            <select v-model="newRun.venue_id" class="form-input">
+              <option :value="null">Не указана</option>
+              <option v-for="venue in venues" :key="venue.id" :value="venue.id">
+                {{ venue.name }}
+              </option>
+            </select>
+          </div>
+          
+          <div class="form-group">
+            <label class="checkbox-label">
+              <input type="checkbox" v-model="newRun.registration_open" />
+              <span>Регистрация открыта</span>
+            </label>
+          </div>
+          
+          <div v-if="addError" class="form-error">{{ addError }}</div>
+          
+          <div class="form-actions">
+            <button type="button" @click="closeAddModal" class="btn btn-secondary">Отмена</button>
+            <button type="submit" class="btn btn-primary" :disabled="addLoading">
+              {{ addLoading ? 'Добавление...' : 'Добавить' }}
+            </button>
+          </div>
+        </form>
+      </div>
+    </div>
+
+    <!-- Модальное окно редактирования прогона -->
+    <div v-if="showEditModal" class="modal-overlay" @click.self="closeEditModal">
+      <div class="modal-content edit-run-modal">
+        <button class="modal-close" @click="closeEditModal">×</button>
+        
+        <h2>Редактировать прогон</h2>
+        
+        <form @submit.prevent="submitEditRun" class="edit-form">
+          <div class="form-group">
+            <label>Игра</label>
+            <input 
+              type="text" 
+              class="form-input" 
+              :value="editRun.game_name" 
+              disabled 
+            />
+          </div>
+          
+          <div class="form-row">
+            <div class="form-group half">
+              <label>Дата *</label>
+              <input 
+                v-model="editRun.date" 
+                type="date" 
+                required
+                class="form-input"
+                :min="schedule.date_start"
+                :max="schedule.date_end"
+              />
+            </div>
+            
+            <div class="form-group half">
+              <label>Время *</label>
+              <input 
+                v-model="editRun.time" 
+                type="time" 
+                required
+                class="form-input"
+              />
+            </div>
+          </div>
+          
+          <div class="form-row">
+            <div class="form-group half">
+              <label>Длительность (мин) *</label>
+              <input 
+                v-model.number="editRun.duration" 
+                type="number" 
+                required
+                min="30"
+                max="720"
+                class="form-input"
+              />
+            </div>
+            
+            <div class="form-group half">
+              <label>Макс. игроков</label>
+              <input 
+                v-model.number="editRun.max_players" 
+                type="number" 
+                min="1"
+                class="form-input"
+                placeholder="Из игры"
+              />
+            </div>
+          </div>
+          
+          <div class="form-group">
+            <label>Площадка</label>
+            <select v-model="editRun.venue_id" class="form-input">
+              <option :value="null">Не указана</option>
+              <option v-for="venue in venues" :key="venue.id" :value="venue.id">
+                {{ venue.name }}
+              </option>
+            </select>
+          </div>
+          
+          <div class="form-group">
+            <label class="checkbox-label">
+              <input type="checkbox" v-model="editRun.registration_open" />
+              <span>Регистрация открыта</span>
+            </label>
+          </div>
+          
+          <div v-if="editError" class="form-error">{{ editError }}</div>
+          
+          <div class="form-actions">
+            <button type="button" @click="closeEditModal" class="btn btn-secondary">Отмена</button>
+            <button type="submit" class="btn btn-primary" :disabled="editLoading">
+              {{ editLoading ? 'Сохранение...' : 'Сохранить' }}
+            </button>
+          </div>
+        </form>
+      </div>
+    </div>
+
+    <!-- Модальное окно подтверждения удаления -->
+    <div v-if="showDeleteConfirm" class="modal-overlay" @click.self="cancelDelete">
+      <div class="modal-content delete-confirm-modal">
+        <button class="modal-close" @click="cancelDelete">×</button>
+        
+        <h2>Удалить прогон?</h2>
+        
+        <p class="delete-warning">
+          Прогон "{{ deleteTarget?.game_name }}" будет удалён из расписания.
+          <template v-if="deleteTarget?.registered_count > 0">
+            <br><strong class="warning-highlight">Внимание: на этот прогон записано {{ deleteTarget.registered_count }} игроков!</strong>
+          </template>
+        </p>
+        
+        <div class="form-actions">
+          <button type="button" @click="cancelDelete" class="btn btn-secondary">Отмена</button>
+          <button type="button" @click="executeDelete" class="btn btn-danger" :disabled="deleteLoading">
+            {{ deleteLoading ? 'Удаление...' : 'Удалить' }}
+          </button>
+        </div>
+      </div>
+    </div>
+
+    <!-- Модальное окно поиска игры -->
+    <div v-if="showGameSearch" class="modal-overlay" @click.self="showGameSearch = false">
+      <div class="modal-content game-search-modal">
+        <button class="modal-close" @click="showGameSearch = false">×</button>
+        
+        <h2>Поиск игры</h2>
+        
+        <div class="search-input-wrapper">
+          <input 
+            v-model="gameSearchQuery"
+            type="text"
+            class="form-input search-input"
+            placeholder="Введите название игры..."
+            @input="searchGames"
+          />
+        </div>
+        
+        <div v-if="gameSearchLoading" class="search-loading">Поиск...</div>
+        
+        <div v-else-if="gameSearchResults.length > 0" class="search-results">
+          <div 
+            v-for="game in gameSearchResults" 
+            :key="game.id"
+            class="search-result-item"
+            @click="selectGame(game)"
+          >
+            <div class="result-name">{{ game.name }}</div>
+            <div class="result-info">
+              {{ game.players_min }}–{{ game.players_max }} игроков
+            </div>
+          </div>
+        </div>
+        
+        <div v-else-if="gameSearchQuery.length >= 2" class="search-empty">
+          Игры не найдены
+        </div>
+      </div>
+    </div>
+  </div>
+</template>
+
+<script>
+export default {
+  name: 'ScheduleEditor',
+  props: {
+    eventId: {
+      type: [String, Number],
+      required: true
+    }
+  },
+  emits: ['close', 'view', 'updated'],
+  data() {
+    return {
+      schedule: null,
+      loading: true,
+      error: null,
+      selectedDay: '',
+      games: [],
+      venues: [],
+      
+      // Добавление прогона
+      showAddModal: false,
+      addLoading: false,
+      addError: null,
+      newRun: this.getEmptyRun(),
+      
+      // Редактирование прогона
+      showEditModal: false,
+      editLoading: false,
+      editError: null,
+      editRun: {},
+      
+      // Удаление
+      showDeleteConfirm: false,
+      deleteTarget: null,
+      deleteLoading: false,
+      
+      // Поиск игры
+      showGameSearch: false,
+      gameSearchQuery: '',
+      gameSearchResults: [],
+      gameSearchLoading: false,
+      searchDebounceTimer: null
+    }
+  },
+  computed: {
+    csrfToken() {
+      const match = document.cookie.match(/csrftoken=([^;]+)/)
+      return match ? match[1] : ''
+    },
+    days() {
+      if (!this.schedule || !this.schedule.runs) return []
+      const daysSet = new Set()
+      
+      // Добавляем все дни конвента
+      const start = new Date(this.schedule.date_start)
+      const end = new Date(this.schedule.date_end)
+      for (let d = new Date(start); d <= end; d.setDate(d.getDate() + 1)) {
+        daysSet.add(d.toISOString().split('T')[0])
+      }
+      
+      return Array.from(daysSet).sort()
+    },
+    filteredDays() {
+      if (this.selectedDay) {
+        return [this.selectedDay]
+      }
+      // Показываем только дни с прогонами
+      return this.days.filter(day => this.getRunsForDay(day).length > 0)
+    },
+    filteredRuns() {
+      if (!this.schedule || !this.schedule.runs) return []
+      let runs = this.schedule.runs
+      
+      if (this.selectedDay) {
+        runs = runs.filter(run => run.date.startsWith(this.selectedDay))
+      }
+      
+      return runs.sort((a, b) => new Date(a.date) - new Date(b.date))
+    }
+  },
+  mounted() {
+    this.fetchSchedule()
+    this.fetchGames()
+    this.fetchVenues()
+  },
+  watch: {
+    eventId() {
+      this.fetchSchedule()
+    }
+  },
+  methods: {
+    getEmptyRun() {
+      return {
+        game_id: null,
+        date: '',
+        time: '12:00',
+        duration: 180,
+        venue_id: null,
+        max_players: null,
+        registration_open: true
+      }
+    },
+    
+    async fetchSchedule() {
+      this.loading = true
+      this.error = null
+      
+      try {
+        const response = await fetch(`/api/convention-events/${this.eventId}/schedule/`)
+        if (!response.ok) {
+          throw new Error('Ошибка загрузки расписания')
+        }
+        this.schedule = await response.json()
+      } catch (err) {
+        this.error = err.message
+      } finally {
+        this.loading = false
+      }
+    },
+    
+    async fetchGames() {
+      try {
+        const response = await fetch('/api/games/')
+        if (response.ok) {
+          this.games = await response.json()
+        }
+      } catch (err) {
+        console.error('Ошибка загрузки игр:', err)
+      }
+    },
+    
+    async fetchVenues() {
+      try {
+        const response = await fetch('/api/venues/')
+        if (response.ok) {
+          this.venues = await response.json()
+        }
+      } catch (err) {
+        console.error('Ошибка загрузки площадок:', err)
+      }
+    },
+    
+    formatDates(start, end) {
+      const startDate = new Date(start)
+      const endDate = new Date(end)
+      const startDay = startDate.getDate()
+      const endDay = endDate.getDate()
+      const month = startDate.toLocaleDateString('ru-RU', { month: 'long' })
+      const year = startDate.getFullYear()
+      
+      if (startDate.getMonth() === endDate.getMonth()) {
+        return `${startDay}–${endDay} ${month} ${year}`
+      }
+      const startFormatted = startDate.toLocaleDateString('ru-RU', { day: '2-digit', month: 'long', year: 'numeric' })
+      const endFormatted = endDate.toLocaleDateString('ru-RU', { day: '2-digit', month: 'long', year: 'numeric' })
+      return `${startFormatted} — ${endFormatted}`
+    },
+    
+    formatDayOption(day) {
+      const date = new Date(day)
+      return date.toLocaleDateString('ru-RU', { weekday: 'short', day: 'numeric', month: 'short' })
+    },
+    
+    formatDayName(day) {
+      const date = new Date(day)
+      return date.toLocaleDateString('ru-RU', { weekday: 'long' })
+    },
+    
+    formatDayDate(day) {
+      const date = new Date(day)
+      return date.toLocaleDateString('ru-RU', { day: 'numeric', month: 'long' })
+    },
+    
+    formatTime(dateStr) {
+      const date = new Date(dateStr)
+      return date.toLocaleTimeString('ru-RU', { hour: '2-digit', minute: '2-digit' })
+    },
+    
+    formatDuration(minutes) {
+      if (!minutes) return ''
+      const hours = Math.floor(minutes / 60)
+      const mins = minutes % 60
+      if (hours === 0) return `${mins} мин`
+      if (mins === 0) return `${hours} ч`
+      return `${hours} ч ${mins} мин`
+    },
+    
+    pluralizeRuns(count) {
+      const mod10 = count % 10
+      const mod100 = count % 100
+      if (mod100 >= 11 && mod100 <= 14) return 'прогонов'
+      if (mod10 === 1) return 'прогон'
+      if (mod10 >= 2 && mod10 <= 4) return 'прогона'
+      return 'прогонов'
+    },
+    
+    getRunsForDay(day) {
+      return this.filteredRuns.filter(run => run.date.startsWith(day))
+    },
+    
+    // === Добавление прогона ===
+    openAddRunModal() {
+      this.newRun = this.getEmptyRun()
+      // Устанавливаем первый день конвента по умолчанию
+      if (this.schedule) {
+        this.newRun.date = this.schedule.date_start
+      }
+      this.addError = null
+      this.showAddModal = true
+    },
+    
+    closeAddModal() {
+      this.showAddModal = false
+      this.addError = null
+    },
+    
+    async submitAddRun() {
+      this.addLoading = true
+      this.addError = null
+      
+      try {
+        // Формируем дату-время
+        const dateTime = `${this.newRun.date}T${this.newRun.time}:00`
+        
+        const data = {
+          game_id: this.newRun.game_id,
+          date: dateTime,
+          duration: this.newRun.duration,
+          venue_id: this.newRun.venue_id,
+          max_players: this.newRun.max_players || null,
+          registration_open: this.newRun.registration_open
+        }
+        
+        const response = await fetch(`/api/convention-events/${this.eventId}/add_run/`, {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+            'X-CSRFToken': this.csrfToken
+          },
+          body: JSON.stringify(data)
+        })
+        
+        if (!response.ok) {
+          const errData = await response.json()
+          throw new Error(errData.error || errData.detail || 'Ошибка при добавлении прогона')
+        }
+        
+        // Обновляем расписание
+        await this.fetchSchedule()
+        this.$emit('updated')
+        this.closeAddModal()
+      } catch (err) {
+        this.addError = err.message
+      } finally {
+        this.addLoading = false
+      }
+    },
+    
+    // === Редактирование прогона ===
+    openEditRunModal(run) {
+      const date = new Date(run.date)
+      this.editRun = {
+        id: run.id,
+        game_name: run.game_name,
+        date: date.toISOString().split('T')[0],
+        time: date.toTimeString().slice(0, 5),
+        duration: run.duration,
+        venue_id: run.venue ? run.venue.id : null,
+        max_players: run.max_players,
+        registration_open: run.registration_open
+      }
+      this.editError = null
+      this.showEditModal = true
+    },
+    
+    closeEditModal() {
+      this.showEditModal = false
+      this.editError = null
+    },
+    
+    async submitEditRun() {
+      this.editLoading = true
+      this.editError = null
+      
+      try {
+        // Формируем дату-время
+        const dateTime = `${this.editRun.date}T${this.editRun.time}:00`
+        
+        const data = {
+          run_id: this.editRun.id,
+          date: dateTime,
+          duration: this.editRun.duration,
+          venue_id: this.editRun.venue_id,
+          max_players: this.editRun.max_players || null,
+          registration_open: this.editRun.registration_open
+        }
+        
+        const response = await fetch(`/api/convention-events/${this.eventId}/update_run/`, {
+          method: 'PATCH',
+          headers: {
+            'Content-Type': 'application/json',
+            'X-CSRFToken': this.csrfToken
+          },
+          body: JSON.stringify(data)
+        })
+        
+        if (!response.ok) {
+          const errData = await response.json()
+          throw new Error(errData.error || errData.detail || 'Ошибка при сохранении прогона')
+        }
+        
+        // Обновляем расписание
+        await this.fetchSchedule()
+        this.$emit('updated')
+        this.closeEditModal()
+      } catch (err) {
+        this.editError = err.message
+      } finally {
+        this.editLoading = false
+      }
+    },
+    
+    // === Удаление прогона ===
+    confirmDeleteRun(run) {
+      this.deleteTarget = run
+      this.showDeleteConfirm = true
+    },
+    
+    cancelDelete() {
+      this.showDeleteConfirm = false
+      this.deleteTarget = null
+    },
+    
+    async executeDelete() {
+      if (!this.deleteTarget) return
+      
+      this.deleteLoading = true
+      
+      try {
+        const response = await fetch(
+          `/api/convention-events/${this.eventId}/remove_run/?run_id=${this.deleteTarget.id}`,
+          {
+            method: 'DELETE',
+            headers: {
+              'X-CSRFToken': this.csrfToken
+            }
+          }
+        )
+        
+        if (!response.ok && response.status !== 204) {
+          const errData = await response.json()
+          throw new Error(errData.error || 'Ошибка при удалении прогона')
+        }
+        
+        // Обновляем расписание
+        await this.fetchSchedule()
+        this.$emit('updated')
+        this.cancelDelete()
+      } catch (err) {
+        alert(err.message)
+      } finally {
+        this.deleteLoading = false
+      }
+    },
+    
+    // === Поиск игры ===
+    searchGames() {
+      if (this.searchDebounceTimer) {
+        clearTimeout(this.searchDebounceTimer)
+      }
+      
+      if (this.gameSearchQuery.length < 2) {
+        this.gameSearchResults = []
+        return
+      }
+      
+      this.searchDebounceTimer = setTimeout(async () => {
+        this.gameSearchLoading = true
+        try {
+          const query = this.gameSearchQuery.toLowerCase()
+          this.gameSearchResults = this.games.filter(g => 
+            g.name.toLowerCase().includes(query)
+          ).slice(0, 10)
+        } finally {
+          this.gameSearchLoading = false
+        }
+      }, 300)
+    },
+    
+    selectGame(game) {
+      this.newRun.game_id = game.id
+      this.showGameSearch = false
+      this.gameSearchQuery = ''
+      this.gameSearchResults = []
+    }
+  }
+}
+</script>
+
+<style scoped>
+/* ========== Базовые стили ========== */
+.schedule-editor {
+  min-height: 100vh;
+  background: linear-gradient(135deg, #0a0a0a 0%, #1a1a2e 50%, #0a0a0a 100%);
+  padding: 40px 20px;
+  color: #e0e0e0;
+}
+
+/* ========== Загрузка / Ошибка ========== */
+.loading {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  min-height: 400px;
+  color: #ff6b35;
+}
+
+.loading-spinner {
+  width: 50px;
+  height: 50px;
+  border: 3px solid #1a1a2e;
+  border-top-color: #ff6b35;
+  border-radius: 50%;
+  animation: spin 1s linear infinite;
+}
+
+@keyframes spin {
+  to { transform: rotate(360deg); }
+}
+
+.error {
+  text-align: center;
+  padding: 40px;
+  color: #ff4444;
+}
+
+.retry-btn {
+  margin-top: 20px;
+  padding: 10px 30px;
+  background: transparent;
+  border: 2px solid #ff6b35;
+  color: #ff6b35;
+  cursor: pointer;
+  border-radius: 8px;
+}
+
+.retry-btn:hover {
+  background: #ff6b35;
+  color: #0a0a0a;
+}
+
+/* ========== Шапка ========== */
+.editor-header {
+  max-width: 1200px;
+  margin: 0 auto 24px;
+  display: flex;
+  justify-content: space-between;
+  align-items: flex-start;
+  gap: 24px;
+  flex-wrap: wrap;
+}
+
+.header-info h1 {
+  font-family: 'Orbitron', 'Courier New', monospace;
+  font-size: 1.2rem;
+  color: #888;
+  text-transform: uppercase;
+  letter-spacing: 0.1em;
+  margin-bottom: 8px;
+}
+
+.convention-name {
+  font-family: 'Orbitron', 'Courier New', monospace;
+  font-size: 2rem;
+  color: #ff6b35;
+  text-shadow: 0 0 20px rgba(255, 107, 53, 0.5);
+  margin-bottom: 12px;
+}
+
+.convention-meta {
+  display: flex;
+  gap: 24px;
+  flex-wrap: wrap;
+}
+
+.convention-dates,
+.convention-city {
+  color: #00ccff;
+}
+
+.header-actions {
+  display: flex;
+  gap: 12px;
+  align-items: center;
+}
+
+/* ========== Панель инструментов ========== */
+.editor-toolbar {
+  max-width: 1200px;
+  margin: 0 auto 32px;
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: 24px;
+  flex-wrap: wrap;
+  padding: 16px 24px;
+  background: rgba(26, 26, 46, 0.6);
+  border-radius: 12px;
+  border: 1px solid #ff6b3533;
+}
+
+.add-run-btn {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 12px 24px;
+  background: linear-gradient(145deg, #ff6b35, #e55a2b);
+  border: none;
+  border-radius: 8px;
+  color: #fff;
+  font-size: 1rem;
+  font-weight: 600;
+  cursor: pointer;
+  transition: all 0.3s ease;
+}
+
+.add-run-btn:hover {
+  transform: translateY(-2px);
+  box-shadow: 0 8px 25px rgba(255, 107, 53, 0.4);
+}
+
+.add-icon {
+  font-size: 1.2rem;
+  font-weight: bold;
+}
+
+.toolbar-right {
+  display: flex;
+  gap: 16px;
+  align-items: center;
+}
+
+.control-select {
+  padding: 10px 16px;
+  background: #0a0a0a;
+  border: 2px solid #ff6b3555;
+  border-radius: 8px;
+  color: #e0e0e0;
+  font-size: 0.95rem;
+  cursor: pointer;
+  min-width: 160px;
+}
+
+.control-select:focus {
+  outline: none;
+  border-color: #ff6b35;
+}
+
+.runs-count {
+  color: #00ccff;
+  font-weight: 600;
+}
+
+/* ========== Пустое расписание ========== */
+.empty-schedule {
+  max-width: 1200px;
+  margin: 0 auto;
+  text-align: center;
+  padding: 80px 40px;
+  color: #666;
+  font-size: 1.2rem;
+}
+
+/* ========== Редактор прогонов ========== */
+.runs-editor {
+  max-width: 1200px;
+  margin: 0 auto;
+}
+
+.editor-day {
+  margin-bottom: 40px;
+}
+
+.day-header {
+  display: flex;
+  gap: 16px;
+  align-items: baseline;
+  margin-bottom: 20px;
+  padding-bottom: 12px;
+  border-bottom: 2px solid #ff6b3555;
+}
+
+.day-name {
+  font-family: 'Orbitron', 'Courier New', monospace;
+  font-size: 1.4rem;
+  color: #ff6b35;
+  text-transform: capitalize;
+}
+
+.day-date {
+  color: #888;
+  font-size: 1rem;
+}
+
+.day-runs-count {
+  color: #00ccff;
+  font-size: 0.9rem;
+  margin-left: auto;
+}
+
+.day-runs {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+
+.run-card {
+  display: flex;
+  gap: 20px;
+  align-items: center;
+  padding: 16px 20px;
+  background: linear-gradient(145deg, #1a1a2e, #16213e);
+  border: 1px solid #ff6b3533;
+  border-radius: 10px;
+  transition: all 0.2s ease;
+}
+
+.run-card:hover {
+  border-color: #ff6b3588;
+}
+
+.run-card.run-full {
+  opacity: 0.6;
+}
+
+.run-time-block {
+  flex-shrink: 0;
+  width: 80px;
+  text-align: center;
+}
+
+.run-time {
+  font-family: 'Courier New', monospace;
+  font-size: 1.1rem;
+  color: #ff6b35;
+  font-weight: bold;
+  display: block;
+}
+
+.run-duration {
+  font-size: 0.8rem;
+  color: #666;
+  display: block;
+  margin-top: 4px;
+}
+
+.run-main {
+  flex: 1;
+}
+
+.run-name {
+  font-weight: 600;
+  color: #e0e0e0;
+  font-size: 1.1rem;
+  margin-bottom: 6px;
+}
+
+.run-details {
+  display: flex;
+  gap: 16px;
+  flex-wrap: wrap;
+}
+
+.run-venue,
+.run-masters {
+  font-size: 0.9rem;
+  color: #888;
+}
+
+.run-status {
+  flex-shrink: 0;
+  text-align: right;
+  display: flex;
+  flex-direction: column;
+  align-items: flex-end;
+  gap: 4px;
+}
+
+.run-slots {
+  font-size: 1.1rem;
+  font-weight: 600;
+  color: #00ccff;
+}
+
+.run-slots.slots-full {
+  color: #ff4444;
+}
+
+.full-badge {
+  font-size: 0.7rem;
+  padding: 2px 6px;
+  background: #ff4444;
+  color: #fff;
+  border-radius: 4px;
+  text-transform: uppercase;
+}
+
+.run-actions {
+  display: flex;
+  gap: 8px;
+  flex-shrink: 0;
+}
+
+.action-btn {
+  width: 36px;
+  height: 36px;
+  border-radius: 8px;
+  border: 1px solid;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 1rem;
+  transition: all 0.2s ease;
+  background: transparent;
+}
+
+.action-btn.edit-btn {
+  border-color: #00ccff55;
+  color: #00ccff;
+}
+
+.action-btn.edit-btn:hover {
+  background: rgba(0, 204, 255, 0.2);
+  border-color: #00ccff;
+}
+
+.action-btn.delete-btn {
+  border-color: #ff444455;
+  color: #ff4444;
+}
+
+.action-btn.delete-btn:hover {
+  background: rgba(255, 68, 68, 0.2);
+  border-color: #ff4444;
+}
+
+/* ========== Модальные окна ========== */
+.modal-overlay {
+  position: fixed;
+  top: 0;
+  left: 0;
+  width: 100%;
+  height: 100%;
+  background: rgba(0, 0, 0, 0.85);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  z-index: 1000;
+  padding: 20px;
+}
+
+.modal-content {
+  background: linear-gradient(145deg, #1a1a2e, #16213e);
+  border: 2px solid #ff6b35;
+  border-radius: 16px;
+  padding: 32px;
+  max-width: 550px;
+  width: 100%;
+  max-height: 80vh;
+  overflow-y: auto;
+  position: relative;
+  box-shadow: 0 0 60px rgba(255, 107, 53, 0.3);
+}
+
+.modal-close {
+  position: absolute;
+  top: 16px;
+  right: 16px;
+  background: none;
+  border: none;
+  color: #ff6b35;
+  font-size: 2rem;
+  cursor: pointer;
+  line-height: 1;
+}
+
+.modal-close:hover {
+  transform: scale(1.2);
+}
+
+.modal-content h2 {
+  font-family: 'Orbitron', 'Courier New', monospace;
+  color: #e0e0e0;
+  font-size: 1.5rem;
+  margin-bottom: 24px;
+  padding-right: 40px;
+}
+
+/* ========== Формы ========== */
+.add-form,
+.edit-form {
+  display: flex;
+  flex-direction: column;
+  gap: 20px;
+}
+
+.form-group {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.form-group label {
+  color: #ff6b35;
+  font-size: 0.9rem;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+}
+
+.form-input {
+  padding: 12px 16px;
+  background: rgba(10, 10, 10, 0.6);
+  border: 2px solid #ff6b3544;
+  border-radius: 8px;
+  color: #e0e0e0;
+  font-size: 1rem;
+  transition: border-color 0.3s, box-shadow 0.3s;
+}
+
+.form-input::placeholder {
+  color: #555;
+}
+
+.form-input:focus {
+  outline: none;
+  border-color: #ff6b35;
+  box-shadow: 0 0 15px rgba(255, 107, 53, 0.15);
+}
+
+.form-input:disabled {
+  opacity: 0.6;
+  cursor: not-allowed;
+}
+
+.form-row {
+  display: flex;
+  gap: 20px;
+}
+
+.form-group.half {
+  flex: 1;
+}
+
+.checkbox-label {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  cursor: pointer;
+  color: #ccc;
+}
+
+.checkbox-label input[type="checkbox"] {
+  width: 18px;
+  height: 18px;
+  cursor: pointer;
+}
+
+.btn-link {
+  background: none;
+  border: none;
+  color: #00ccff;
+  cursor: pointer;
+  font-size: 0.9rem;
+  padding: 4px 0;
+  text-align: left;
+}
+
+.btn-link:hover {
+  text-decoration: underline;
+}
+
+.form-error {
+  background: rgba(255, 68, 68, 0.15);
+  border: 1px solid #ff4444;
+  border-radius: 8px;
+  padding: 12px 16px;
+  color: #ff6b6b;
+}
+
+.form-actions {
+  display: flex;
+  gap: 16px;
+  justify-content: flex-end;
+  margin-top: 12px;
+  padding-top: 20px;
+  border-top: 1px solid #ff6b3533;
+}
+
+.btn {
+  padding: 12px 28px;
+  border-radius: 8px;
+  font-size: 1rem;
+  font-weight: 600;
+  cursor: pointer;
+  transition: all 0.3s ease;
+  border: none;
+}
+
+.btn-primary {
+  background: linear-gradient(145deg, #ff6b35, #e55a2b);
+  color: #fff;
+}
+
+.btn-primary:hover:not(:disabled) {
+  transform: translateY(-2px);
+  box-shadow: 0 6px 20px rgba(255, 107, 53, 0.35);
+}
+
+.btn-primary:disabled {
+  opacity: 0.6;
+  cursor: not-allowed;
+}
+
+.btn-secondary {
+  background: transparent;
+  border: 2px solid #666;
+  color: #aaa;
+}
+
+.btn-secondary:hover {
+  border-color: #888;
+  color: #ccc;
+}
+
+.btn-outline {
+  background: transparent;
+  border: 2px solid #ff6b3566;
+  color: #ff6b35;
+}
+
+.btn-outline:hover {
+  border-color: #ff6b35;
+  background: rgba(255, 107, 53, 0.1);
+}
+
+.btn-danger {
+  background: linear-gradient(145deg, #ff4444, #cc3333);
+  color: #fff;
+}
+
+.btn-danger:hover:not(:disabled) {
+  box-shadow: 0 6px 20px rgba(255, 68, 68, 0.35);
+}
+
+.btn-danger:disabled {
+  opacity: 0.6;
+  cursor: not-allowed;
+}
+
+/* ========== Удаление ========== */
+.delete-confirm-modal {
+  max-width: 450px;
+  text-align: center;
+}
+
+.delete-confirm-modal h2 {
+  color: #ff4444;
+  padding-right: 0;
+}
+
+.delete-warning {
+  color: #aaa;
+  line-height: 1.6;
+  margin-bottom: 24px;
+}
+
+.warning-highlight {
+  color: #ff6b6b;
+}
+
+/* ========== Поиск игры ========== */
+.game-search-modal {
+  max-width: 500px;
+}
+
+.search-input-wrapper {
+  margin-bottom: 16px;
+}
+
+.search-input {
+  width: 100%;
+}
+
+.search-loading {
+  text-align: center;
+  color: #888;
+  padding: 20px;
+}
+
+.search-results {
+  max-height: 300px;
+  overflow-y: auto;
+}
+
+.search-result-item {
+  padding: 12px 16px;
+  border-bottom: 1px solid #ff6b3522;
+  cursor: pointer;
+  transition: background 0.2s;
+}
+
+.search-result-item:hover {
+  background: rgba(255, 107, 53, 0.1);
+}
+
+.result-name {
+  font-weight: 600;
+  color: #e0e0e0;
+  margin-bottom: 4px;
+}
+
+.result-info {
+  font-size: 0.85rem;
+  color: #888;
+}
+
+.search-empty {
+  text-align: center;
+  color: #666;
+  padding: 40px;
+}
+
+/* ========== Адаптив ========== */
+@media (max-width: 768px) {
+  .editor-header {
+    flex-direction: column;
+  }
+  
+  .header-actions {
+    width: 100%;
+    justify-content: flex-start;
+  }
+  
+  .editor-toolbar {
+    flex-direction: column;
+    gap: 16px;
+  }
+  
+  .add-run-btn {
+    width: 100%;
+    justify-content: center;
+  }
+  
+  .toolbar-right {
+    width: 100%;
+    flex-wrap: wrap;
+  }
+  
+  .control-select {
+    flex: 1;
+  }
+  
+  .run-card {
+    flex-wrap: wrap;
+  }
+  
+  .run-time-block {
+    width: auto;
+    text-align: left;
+  }
+  
+  .run-status {
+    width: 100%;
+    flex-direction: row;
+    justify-content: flex-start;
+    margin-top: 8px;
+    padding-top: 8px;
+    border-top: 1px solid #ff6b3522;
+    gap: 12px;
+  }
+  
+  .run-actions {
+    width: 100%;
+    justify-content: flex-end;
+    margin-top: 12px;
+  }
+  
+  .form-row {
+    flex-direction: column;
+  }
+  
+  .form-actions {
+    flex-direction: column-reverse;
+  }
+  
+  .btn {
+    width: 100%;
+    text-align: center;
+  }
+}
+</style>
+

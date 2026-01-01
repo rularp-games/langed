@@ -151,6 +151,120 @@ class RunBriefSerializer(serializers.ModelSerializer):
         fields = ['id', 'game_name', 'date']
 
 
+class ScheduleRunSerializer(serializers.ModelSerializer):
+    """Сериализатор прогона для расписания конвента"""
+    game = GameBriefSerializer(read_only=True)
+    game_id = serializers.PrimaryKeyRelatedField(
+        queryset=Game.objects.all(),
+        source='game',
+        write_only=True
+    )
+    game_name = serializers.CharField(source='game.name', read_only=True)
+    masters = UserBriefSerializer(many=True, read_only=True)
+    venue = VenueBriefSerializer(read_only=True)
+    venue_id = serializers.PrimaryKeyRelatedField(
+        queryset=Venue.objects.all(),
+        source='venue',
+        write_only=True,
+        required=False,
+        allow_null=True
+    )
+    venue_name = serializers.CharField(source='venue.name', read_only=True)
+    registered_count = serializers.SerializerMethodField()
+    available_slots = serializers.SerializerMethodField()
+    is_full = serializers.SerializerMethodField()
+    effective_max_players = serializers.SerializerMethodField()
+    can_edit = serializers.SerializerMethodField()
+    
+    class Meta:
+        model = Run
+        fields = [
+            'id', 'game', 'game_id', 'game_name', 'masters', 
+            'date', 'duration',
+            'venue', 'venue_id', 'venue_name',
+            'max_players', 'registration_open',
+            'registered_count', 'available_slots', 'is_full', 
+            'effective_max_players', 'can_edit'
+        ]
+        read_only_fields = ['id', 'masters', 'can_edit']
+    
+    def get_registered_count(self, obj):
+        return obj.get_registered_count()
+    
+    def get_available_slots(self, obj):
+        return obj.get_available_slots()
+    
+    def get_is_full(self, obj):
+        return obj.is_full()
+    
+    def get_effective_max_players(self, obj):
+        return obj.get_max_players()
+    
+    def get_can_edit(self, obj):
+        request = self.context.get('request')
+        if not request or not request.user.is_authenticated:
+            return False
+        if request.user.is_staff:
+            return True
+        # Может редактировать мастер прогона или организатор конвента
+        if request.user in obj.masters.all():
+            return True
+        if obj.convention_event:
+            if request.user in obj.convention_event.organizers.all():
+                return True
+            if request.user in obj.convention_event.convention.organizers.all():
+                return True
+        return False
+
+
+class ConventionScheduleSerializer(serializers.ModelSerializer):
+    """Сериализатор расписания проведения конвента"""
+    convention = serializers.PrimaryKeyRelatedField(read_only=True)
+    convention_name = serializers.CharField(source='convention.name', read_only=True)
+    convention_description = serializers.CharField(source='convention.description', read_only=True)
+    city = CitySerializer(read_only=True)
+    city_name = serializers.CharField(source='city.name', read_only=True)
+    organizers = UserBriefSerializer(many=True, read_only=True)
+    convention_organizers = UserBriefSerializer(source='convention.organizers', many=True, read_only=True)
+    links = serializers.SerializerMethodField()
+    runs = ScheduleRunSerializer(source='scheduled_runs', many=True, read_only=True)
+    venues = serializers.SerializerMethodField()
+    games = serializers.SerializerMethodField()
+    can_edit = serializers.SerializerMethodField()
+    
+    class Meta:
+        model = ConventionEvent
+        fields = [
+            'id', 'convention', 'convention_name', 'convention_description',
+            'city', 'city_name', 'date_start', 'date_end',
+            'organizers', 'convention_organizers', 'links',
+            'runs', 'venues', 'games', 'can_edit'
+        ]
+    
+    def get_links(self, obj):
+        return ConventionLinkSerializer(obj.convention.links.all(), many=True, context=self.context).data
+    
+    def get_venues(self, obj):
+        """Получить уникальные площадки из всех прогонов конвента"""
+        venues = {run.venue for run in obj.scheduled_runs.all() if run.venue}
+        return VenueBriefSerializer(list(venues), many=True, context=self.context).data
+    
+    def get_games(self, obj):
+        """Получить уникальные игры из всех прогонов конвента"""
+        games = {run.game for run in obj.scheduled_runs.all()}
+        return GameBriefSerializer(list(games), many=True, context=self.context).data
+    
+    def get_can_edit(self, obj):
+        request = self.context.get('request')
+        if not request or not request.user.is_authenticated:
+            return False
+        if request.user.is_staff:
+            return True
+        is_event_organizer = request.user in obj.organizers.all()
+        is_convention_organizer = request.user in obj.convention.organizers.all()
+        return is_event_organizer or is_convention_organizer
+
+
 class ConventionEventSerializer(serializers.ModelSerializer):
     """Сериализатор проведения конвента"""
     convention = serializers.PrimaryKeyRelatedField(read_only=True)

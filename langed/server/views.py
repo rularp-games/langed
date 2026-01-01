@@ -9,12 +9,13 @@ from django.utils import timezone
 from django.conf import settings
 from datetime import date
 
-from .models import Game, Run, Convention, ConventionEvent, City, ConventionLink, Venue, Registration
+from .models import Game, Run, Convention, ConventionEvent, City, ConventionLink, Venue, Registration, Region
 from .serializers import (
     GameSerializer, RunSerializer, 
     ConventionSerializer, ConventionEventSerializer,
     CitySerializer, ConventionLinkSerializer,
-    VenueSerializer, RegistrationSerializer
+    VenueSerializer, RegistrationSerializer,
+    ConventionScheduleSerializer, ScheduleRunSerializer
 )
 
 
@@ -625,6 +626,106 @@ class ConventionEventViewSet(viewsets.ModelViewSet):
             convention_events__isnull=False
         ).distinct().values_list('name', flat=True).order_by('name')
         return Response(list(cities))
+    
+    @action(detail=True, methods=['get'])
+    def schedule(self, request, pk=None):
+        """Получить полное расписание проведения конвента"""
+        event = self.get_object()
+        serializer = ConventionScheduleSerializer(event, context={'request': request})
+        return Response(serializer.data)
+    
+    @action(detail=True, methods=['post'], permission_classes=[IsAuthenticated])
+    def add_run(self, request, pk=None):
+        """Добавить прогон в расписание конвента"""
+        event = self.get_object()
+        
+        # Проверяем права
+        if not request.user.is_staff:
+            is_event_organizer = request.user in event.organizers.all()
+            is_convention_organizer = request.user in event.convention.organizers.all()
+            if not is_event_organizer and not is_convention_organizer:
+                return Response(
+                    {'error': 'Только организатор может добавлять прогоны в расписание'},
+                    status=status.HTTP_403_FORBIDDEN
+                )
+        
+        # Создаём прогон
+        serializer = ScheduleRunSerializer(data=request.data, context={'request': request})
+        if not serializer.is_valid():
+            return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
+        
+        run = serializer.save(
+            convention_event=event,
+            city=event.city
+        )
+        run.masters.add(request.user)
+        
+        return Response(
+            ScheduleRunSerializer(run, context={'request': request}).data,
+            status=status.HTTP_201_CREATED
+        )
+    
+    @action(detail=True, methods=['patch'], permission_classes=[IsAuthenticated])
+    def update_run(self, request, pk=None):
+        """Обновить прогон в расписании конвента"""
+        event = self.get_object()
+        run_id = request.data.get('run_id')
+        
+        if not run_id:
+            return Response({'error': 'run_id обязателен'}, status=status.HTTP_400_BAD_REQUEST)
+        
+        try:
+            run = Run.objects.get(id=run_id, convention_event=event)
+        except Run.DoesNotExist:
+            return Response({'error': 'Прогон не найден'}, status=status.HTTP_404_NOT_FOUND)
+        
+        # Проверяем права
+        if not request.user.is_staff:
+            is_master = request.user in run.masters.all()
+            is_event_organizer = request.user in event.organizers.all()
+            is_convention_organizer = request.user in event.convention.organizers.all()
+            if not is_master and not is_event_organizer and not is_convention_organizer:
+                return Response(
+                    {'error': 'Нет прав для редактирования этого прогона'},
+                    status=status.HTTP_403_FORBIDDEN
+                )
+        
+        # Обновляем прогон
+        update_data = {k: v for k, v in request.data.items() if k != 'run_id'}
+        serializer = ScheduleRunSerializer(run, data=update_data, partial=True, context={'request': request})
+        if not serializer.is_valid():
+            return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
+        
+        serializer.save()
+        return Response(serializer.data)
+    
+    @action(detail=True, methods=['delete'], permission_classes=[IsAuthenticated])
+    def remove_run(self, request, pk=None):
+        """Удалить прогон из расписания конвента"""
+        event = self.get_object()
+        run_id = request.query_params.get('run_id')
+        
+        if not run_id:
+            return Response({'error': 'run_id обязателен'}, status=status.HTTP_400_BAD_REQUEST)
+        
+        try:
+            run = Run.objects.get(id=run_id, convention_event=event)
+        except Run.DoesNotExist:
+            return Response({'error': 'Прогон не найден'}, status=status.HTTP_404_NOT_FOUND)
+        
+        # Проверяем права
+        if not request.user.is_staff:
+            is_master = request.user in run.masters.all()
+            is_event_organizer = request.user in event.organizers.all()
+            is_convention_organizer = request.user in event.convention.organizers.all()
+            if not is_master and not is_event_organizer and not is_convention_organizer:
+                return Response(
+                    {'error': 'Нет прав для удаления этого прогона'},
+                    status=status.HTTP_403_FORBIDDEN
+                )
+        
+        run.delete()
+        return Response({'message': 'Прогон удалён'}, status=status.HTTP_204_NO_CONTENT)
 
 
 class ConventionLinkViewSet(viewsets.ModelViewSet):

@@ -298,6 +298,23 @@
                   🎯 {{ event.runs_count }} {{ pluralizeRuns(event.runs_count) }}
                 </span>
               </div>
+              <div class="event-schedule-actions">
+                <router-link 
+                  :to="`/schedule/${event.id}`" 
+                  class="schedule-link"
+                  @click.stop
+                >
+                  📅 Расписание
+                </router-link>
+                <router-link 
+                  v-if="event.can_edit"
+                  :to="`/schedule/${event.id}/edit`" 
+                  class="schedule-edit-link"
+                  @click.stop
+                >
+                  ✏️ Редактировать расписание
+                </router-link>
+              </div>
             </div>
           </div>
           <p v-else class="no-events">Проведения пока не запланированы</p>
@@ -2302,11 +2319,58 @@ export default {
 .event-stats {
   display: flex;
   gap: 16px;
+  margin-bottom: 12px;
 }
 
 .games-count, .runs-count {
   color: #00ccff;
   font-size: 0.85rem;
+}
+
+.event-schedule-actions {
+  display: flex;
+  gap: 12px;
+  flex-wrap: wrap;
+  margin-top: 8px;
+  padding-top: 12px;
+  border-top: 1px solid #ff6b3522;
+}
+
+.schedule-link,
+.schedule-edit-link {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 8px 14px;
+  border-radius: 6px;
+  text-decoration: none;
+  font-size: 0.85rem;
+  font-weight: 600;
+  transition: all 0.2s ease;
+}
+
+.schedule-link {
+  background: rgba(0, 204, 255, 0.1);
+  border: 1px solid #00ccff55;
+  color: #00ccff;
+}
+
+.schedule-link:hover {
+  background: rgba(0, 204, 255, 0.2);
+  border-color: #00ccff;
+  transform: translateY(-1px);
+}
+
+.schedule-edit-link {
+  background: rgba(255, 107, 53, 0.1);
+  border: 1px solid #ff6b3555;
+  color: #ff6b35;
+}
+
+.schedule-edit-link:hover {
+  background: rgba(255, 107, 53, 0.2);
+  border-color: #ff6b35;
+  transform: translateY(-1px);
 }
 
 .no-events {
