@@ -42,16 +42,16 @@
         :key="game.id" 
         class="game-card"
         :class="{ 'has-poster': game.poster_url }"
-        @click="selectedGame = game"
+        @click="openGameModal(game)"
       >
         <div v-if="game.poster_url" class="game-poster">
           <img :src="game.poster_url" :alt="game.name" />
         </div>
         <div class="game-info">
           <h2 class="game-title">{{ game.name }}</h2>
-          <div v-if="game.master" class="game-master">
-            <span class="master-icon">👤</span>
-            <span class="master-name">{{ game.master.display_name }}</span>
+          <div v-if="game.creators && game.creators.length > 0" class="game-creators">
+            <span class="creators-icon">👤</span>
+            <span class="creators-names">{{ game.creators.map(c => c.display_name).join(', ') }}</span>
           </div>
           <div class="game-stats">
             <div class="stat">
@@ -76,21 +76,45 @@
     </div>
 
     <!-- Модальное окно с деталями игры -->
-    <div v-if="selectedGame" class="modal-overlay" @click.self="selectedGame = null">
+    <div v-if="selectedGame" class="modal-overlay" @click.self="closeGameModal">
       <div class="modal-content" :class="{ 'with-poster': selectedGame.poster_url }">
-        <button class="modal-close" @click="selectedGame = null">×</button>
+        <button class="modal-close" @click="closeGameModal">×</button>
         
         <div v-if="selectedGame.poster_url" class="modal-poster">
           <img :src="selectedGame.poster_url" :alt="selectedGame.name" />
         </div>
         
         <div class="modal-body">
-          <h2>{{ selectedGame.name }}</h2>
+          <div class="modal-header-row">
+            <h2>{{ selectedGame.name }}</h2>
+            <div class="header-actions">
+              <button 
+                v-if="selectedGame.can_edit" 
+                class="edit-btn" 
+                @click="startEditingGame"
+                title="Редактировать"
+              >
+                ✏️
+              </button>
+              <button 
+                v-if="selectedGame.can_edit" 
+                class="delete-btn" 
+                @click="showDeleteConfirm = true"
+                title="Удалить"
+              >
+                🗑️
+              </button>
+              <button class="copy-link-btn" @click="copyGameLink" :title="linkCopied ? 'Скопировано!' : 'Скопировать ссылку'">
+                <span v-if="linkCopied">✓</span>
+                <span v-else>🔗</span>
+              </button>
+            </div>
+          </div>
           
-          <div v-if="selectedGame.master" class="modal-master">
-            <span class="master-icon">👤</span>
-            <span class="master-label">Мастер:</span>
-            <span class="master-name">{{ selectedGame.master.display_name }}</span>
+          <div v-if="selectedGame.creators && selectedGame.creators.length > 0" class="modal-creators">
+            <span class="creators-icon">👤</span>
+            <span class="creators-label">{{ selectedGame.creators.length > 1 ? 'Создатели:' : 'Создатель:' }}</span>
+            <span class="creators-names">{{ selectedGame.creators.map(c => c.display_name).join(', ') }}</span>
           </div>
           
           <div class="modal-section" v-if="selectedGame.announcement">
@@ -351,6 +375,187 @@
         </div>
       </div>
     </div>
+
+    <!-- Модальное окно редактирования игры -->
+    <div v-if="isEditingGame" class="modal-overlay" @click.self="cancelEditingGame">
+      <div class="modal-content add-game-modal">
+        <button class="modal-close" @click="cancelEditingGame">×</button>
+        
+        <div class="modal-body">
+          <h2>Редактировать игру</h2>
+          
+          <form @submit.prevent="submitEditGame" class="add-game-form">
+            <div class="form-group">
+              <label for="edit-game-name">Название *</label>
+              <input 
+                id="edit-game-name"
+                v-model="editGame.name" 
+                type="text" 
+                required
+                class="form-input"
+                placeholder="Введите название игры"
+              />
+            </div>
+
+            <div class="form-group">
+              <label>Постер</label>
+              <div class="poster-upload">
+                <div v-if="editPosterPreview || (selectedGame && selectedGame.poster_url && !editPosterRemoved)" class="poster-preview">
+                  <img :src="editPosterPreview || selectedGame.poster_url" alt="Превью постера" />
+                  <button type="button" @click="removeEditPoster" class="poster-remove">×</button>
+                </div>
+                <label v-else class="poster-dropzone" for="edit-game-poster">
+                  <span class="poster-icon">🖼</span>
+                  <span class="poster-text">Нажмите для выбора изображения</span>
+                  <span class="poster-hint">JPG, PNG до 5 МБ</span>
+                </label>
+                <input 
+                  id="edit-game-poster"
+                  type="file"
+                  accept="image/jpeg,image/png,image/webp"
+                  @change="onEditPosterChange"
+                  class="poster-input"
+                />
+              </div>
+            </div>
+            
+            <div class="form-group">
+              <label for="edit-game-announcement">Анонс</label>
+              <textarea 
+                id="edit-game-announcement"
+                v-model="editGame.announcement"
+                class="form-input form-textarea"
+                placeholder="Описание игры"
+                rows="3"
+              ></textarea>
+            </div>
+            
+            <div class="form-group">
+              <label for="edit-game-red-flags">Красные флаги</label>
+              <textarea 
+                id="edit-game-red-flags"
+                v-model="editGame.red_flags"
+                class="form-input form-textarea"
+                placeholder="Предупреждения о контенте"
+                rows="2"
+              ></textarea>
+            </div>
+            
+            <div class="form-row">
+              <div class="form-group half">
+                <label>Игроки</label>
+                <div class="range-inputs">
+                  <input 
+                    v-model.number="editGame.players_min" 
+                    type="number" 
+                    min="1"
+                    class="form-input small"
+                    placeholder="Мин"
+                  />
+                  <span class="range-separator">–</span>
+                  <input 
+                    v-model.number="editGame.players_max" 
+                    type="number" 
+                    min="1"
+                    class="form-input small"
+                    placeholder="Макс"
+                  />
+                </div>
+              </div>
+            </div>
+            
+            <div class="form-row">
+              <div class="form-group half">
+                <label>Женские роли</label>
+                <div class="range-inputs">
+                  <input 
+                    v-model.number="editGame.female_roles_min" 
+                    type="number" 
+                    min="0"
+                    class="form-input small"
+                    placeholder="Мин"
+                  />
+                  <span class="range-separator">–</span>
+                  <input 
+                    v-model.number="editGame.female_roles_max" 
+                    type="number" 
+                    min="0"
+                    class="form-input small"
+                    placeholder="Макс"
+                  />
+                </div>
+              </div>
+              
+              <div class="form-group half">
+                <label>Мужские роли</label>
+                <div class="range-inputs">
+                  <input 
+                    v-model.number="editGame.male_roles_min" 
+                    type="number" 
+                    min="0"
+                    class="form-input small"
+                    placeholder="Мин"
+                  />
+                  <span class="range-separator">–</span>
+                  <input 
+                    v-model.number="editGame.male_roles_max" 
+                    type="number" 
+                    min="0"
+                    class="form-input small"
+                    placeholder="Макс"
+                  />
+                </div>
+              </div>
+            </div>
+            
+            <div class="form-row">
+              <div class="form-group half">
+                <label>Игротехники</label>
+                <input 
+                  v-model.number="editGame.technicians" 
+                  type="number" 
+                  min="0"
+                  class="form-input small"
+                  placeholder="0"
+                />
+              </div>
+            </div>
+            
+            <div v-if="editGameError" class="form-error">{{ editGameError }}</div>
+            
+            <div class="form-actions">
+              <button type="button" @click="cancelEditingGame" class="btn btn-secondary">Отмена</button>
+              <button type="submit" class="btn btn-primary" :disabled="editGameLoading">
+                <span v-if="editGameLoading">Сохранение...</span>
+                <span v-else>Сохранить</span>
+              </button>
+            </div>
+          </form>
+        </div>
+      </div>
+    </div>
+
+    <!-- Модальное окно подтверждения удаления -->
+    <div v-if="showDeleteConfirm" class="modal-overlay" @click.self="showDeleteConfirm = false">
+      <div class="modal-content delete-confirm-modal">
+        <button class="modal-close" @click="showDeleteConfirm = false">×</button>
+        
+        <h2>Удалить игру?</h2>
+        
+        <p class="delete-warning">
+          Это действие нельзя отменить. Игра "{{ selectedGame?.name }}" будет удалена.
+          Все прогоны этой игры также будут удалены.
+        </p>
+        
+        <div class="form-actions">
+          <button type="button" @click="showDeleteConfirm = false" class="btn btn-secondary">Отмена</button>
+          <button type="button" @click="deleteGame" class="btn btn-danger" :disabled="deleteLoading">
+            <span v-if="deleteLoading">Удаление...</span>
+            <span v-else>Удалить</span>
+          </button>
+        </div>
+      </div>
+    </div>
   </div>
 </template>
 
@@ -358,6 +563,12 @@
 export default {
   name: 'GamesPage',
   inject: ['getUser'],
+  props: {
+    gameId: {
+      type: [String, Number],
+      default: null
+    }
+  },
   data() {
     return {
       games: [],
@@ -373,7 +584,38 @@ export default {
       posterPreview: null,
       addMode: 'single',
       csvFile: null,
-      csvResult: null
+      csvResult: null,
+      linkCopied: false,
+      // Редактирование игры
+      isEditingGame: false,
+      editGameLoading: false,
+      editGameError: null,
+      editGame: this.getEmptyGame(),
+      editPosterFile: null,
+      editPosterPreview: null,
+      editPosterRemoved: false,
+      // Удаление
+      showDeleteConfirm: false,
+      deleteLoading: false
+    }
+  },
+  watch: {
+    // Реагируем на изменение параметра gameId в URL
+    gameId: {
+      handler(newId) {
+        if (newId && this.games.length > 0) {
+          this.openGameById(newId)
+        }
+      },
+      immediate: false
+    },
+    // Реагируем на загрузку списка игр
+    games: {
+      handler() {
+        if (this.gameId && this.games.length > 0 && !this.selectedGame) {
+          this.openGameById(this.gameId)
+        }
+      }
     }
   },
   computed: {
@@ -401,6 +643,44 @@ export default {
     this.fetchGames()
   },
   methods: {
+    openGameById(id) {
+      const gameId = parseInt(id, 10)
+      const game = this.games.find(g => g.id === gameId)
+      if (game) {
+        this.selectedGame = game
+        this.updateUrlWithGame(game.id)
+      }
+    },
+    openGameModal(game) {
+      this.selectedGame = game
+      this.updateUrlWithGame(game.id)
+    },
+    closeGameModal() {
+      this.selectedGame = null
+      this.linkCopied = false
+      this.updateUrlWithGame(null)
+    },
+    updateUrlWithGame(gameId) {
+      const query = { ...this.$route.query }
+      if (gameId) {
+        query.id = gameId
+      } else {
+        delete query.id
+      }
+      this.$router.replace({ query }).catch(() => {})
+    },
+    copyGameLink() {
+      if (!this.selectedGame) return
+      const url = `${window.location.origin}/games?id=${this.selectedGame.id}`
+      navigator.clipboard.writeText(url).then(() => {
+        this.linkCopied = true
+        setTimeout(() => {
+          this.linkCopied = false
+        }, 2000)
+      }).catch(err => {
+        console.error('Ошибка копирования:', err)
+      })
+    },
     getEmptyGame() {
       return {
         name: '',
@@ -574,6 +854,155 @@ export default {
         this.addError = err.message
       } finally {
         this.addLoading = false
+      }
+    },
+    
+    // === Редактирование игры ===
+    startEditingGame() {
+      if (!this.selectedGame) return
+      
+      this.editGame = {
+        id: this.selectedGame.id,
+        name: this.selectedGame.name,
+        announcement: this.selectedGame.announcement || '',
+        red_flags: this.selectedGame.red_flags || '',
+        players_min: this.selectedGame.players_min,
+        players_max: this.selectedGame.players_max,
+        female_roles_min: this.selectedGame.female_roles_min,
+        female_roles_max: this.selectedGame.female_roles_max,
+        male_roles_min: this.selectedGame.male_roles_min,
+        male_roles_max: this.selectedGame.male_roles_max,
+        technicians: this.selectedGame.technicians
+      }
+      
+      this.editPosterFile = null
+      this.editPosterPreview = null
+      this.editPosterRemoved = false
+      this.editGameError = null
+      this.isEditingGame = true
+    },
+    cancelEditingGame() {
+      this.isEditingGame = false
+      this.editGameError = null
+      if (this.editPosterPreview) {
+        URL.revokeObjectURL(this.editPosterPreview)
+      }
+      this.editPosterFile = null
+      this.editPosterPreview = null
+      this.editPosterRemoved = false
+    },
+    onEditPosterChange(event) {
+      const file = event.target.files[0]
+      if (!file) return
+      
+      if (file.size > 5 * 1024 * 1024) {
+        this.editGameError = 'Файл слишком большой. Максимум 5 МБ'
+        event.target.value = ''
+        return
+      }
+      
+      this.editPosterFile = file
+      this.editPosterPreview = URL.createObjectURL(file)
+      this.editPosterRemoved = false
+    },
+    removeEditPoster() {
+      if (this.editPosterPreview) {
+        URL.revokeObjectURL(this.editPosterPreview)
+      }
+      this.editPosterFile = null
+      this.editPosterPreview = null
+      this.editPosterRemoved = true
+      const input = document.getElementById('edit-game-poster')
+      if (input) input.value = ''
+    },
+    async submitEditGame() {
+      this.editGameLoading = true
+      this.editGameError = null
+      
+      try {
+        const formData = new FormData()
+        formData.append('name', this.editGame.name)
+        formData.append('announcement', this.editGame.announcement || '')
+        formData.append('red_flags', this.editGame.red_flags || '')
+        formData.append('players_min', this.editGame.players_min)
+        formData.append('players_max', this.editGame.players_max)
+        formData.append('female_roles_min', this.editGame.female_roles_min)
+        formData.append('female_roles_max', this.editGame.female_roles_max)
+        formData.append('male_roles_min', this.editGame.male_roles_min)
+        formData.append('male_roles_max', this.editGame.male_roles_max)
+        formData.append('technicians', this.editGame.technicians)
+        
+        if (this.editPosterFile) {
+          formData.append('poster', this.editPosterFile)
+        } else if (this.editPosterRemoved) {
+          formData.append('poster', '')
+        }
+        
+        const response = await fetch(`/api/games/${this.editGame.id}/`, {
+          method: 'PATCH',
+          headers: {
+            'X-CSRFToken': this.csrfToken
+          },
+          body: formData
+        })
+        
+        if (!response.ok) {
+          if (response.status === 401 || response.status === 403) {
+            throw new Error('Нет прав для редактирования этой игры')
+          }
+          const data = await response.json()
+          throw new Error(data.detail || data.name?.[0] || 'Ошибка при сохранении')
+        }
+        
+        const updatedGame = await response.json()
+        
+        // Обновляем список и выбранную игру
+        const index = this.games.findIndex(g => g.id === updatedGame.id)
+        if (index !== -1) {
+          this.games.splice(index, 1, updatedGame)
+        }
+        this.selectedGame = updatedGame
+        this.isEditingGame = false
+      } catch (err) {
+        this.editGameError = err.message
+      } finally {
+        this.editGameLoading = false
+      }
+    },
+    
+    // === Удаление игры ===
+    async deleteGame() {
+      if (!this.selectedGame) return
+      
+      this.deleteLoading = true
+      
+      try {
+        const response = await fetch(`/api/games/${this.selectedGame.id}/`, {
+          method: 'DELETE',
+          headers: {
+            'X-CSRFToken': this.csrfToken
+          }
+        })
+        
+        if (!response.ok) {
+          if (response.status === 401 || response.status === 403) {
+            throw new Error('Нет прав для удаления')
+          }
+          throw new Error('Ошибка при удалении')
+        }
+        
+        // Удаляем из списка
+        const index = this.games.findIndex(g => g.id === this.selectedGame.id)
+        if (index !== -1) {
+          this.games.splice(index, 1)
+        }
+        
+        this.showDeleteConfirm = false
+        this.closeGameModal()
+      } catch (err) {
+        alert(err.message)
+      } finally {
+        this.deleteLoading = false
       }
     }
   }
@@ -842,8 +1271,8 @@ export default {
   font-weight: bold;
 }
 
-/* Мастер в карточке игры */
-.game-master {
+/* Создатели в карточке игры */
+.game-creators {
   display: flex;
   align-items: center;
   gap: 8px;
@@ -852,18 +1281,18 @@ export default {
   border-bottom: 1px solid #ff6b3522;
 }
 
-.master-icon {
+.creators-icon {
   font-size: 1rem;
   opacity: 0.8;
 }
 
-.game-master .master-name {
+.game-creators .creators-names {
   color: #aaa;
   font-size: 0.9rem;
 }
 
-/* Мастер в модальном окне */
-.modal-master {
+/* Создатели в модальном окне */
+.modal-creators {
   display: flex;
   align-items: center;
   gap: 10px;
@@ -874,16 +1303,16 @@ export default {
   border-left: 3px solid #00ccff;
 }
 
-.modal-master .master-icon {
+.modal-creators .creators-icon {
   font-size: 1.2rem;
 }
 
-.modal-master .master-label {
+.modal-creators .creators-label {
   color: #888;
   font-size: 0.9rem;
 }
 
-.modal-master .master-name {
+.modal-creators .creators-names {
   color: #00ccff;
   font-weight: 600;
 }
@@ -960,6 +1389,18 @@ export default {
   transform: scale(1.2);
 }
 
+.modal-header-row {
+  display: flex;
+  align-items: flex-start;
+  gap: 12px;
+  margin-bottom: 24px;
+}
+
+.modal-header-row h2 {
+  flex: 1;
+  margin-bottom: 0;
+}
+
 .modal-content h2 {
   font-family: 'Orbitron', 'Courier New', monospace;
   color: #ff6b35;
@@ -970,6 +1411,102 @@ export default {
 
 .modal-content:not(.with-poster) h2 {
   padding-right: 40px;
+}
+
+.header-actions {
+  display: flex;
+  gap: 8px;
+  align-items: center;
+}
+
+.copy-link-btn,
+.edit-btn {
+  background: rgba(0, 204, 255, 0.1);
+  border: 1px solid #00ccff55;
+  color: #00ccff;
+  width: 36px;
+  height: 36px;
+  border-radius: 8px;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 1rem;
+  transition: all 0.2s ease;
+  flex-shrink: 0;
+}
+
+.copy-link-btn:hover,
+.edit-btn:hover {
+  background: rgba(0, 204, 255, 0.2);
+  border-color: #00ccff;
+  transform: scale(1.1);
+}
+
+.edit-btn {
+  background: rgba(255, 107, 53, 0.1);
+  border-color: #ff6b3555;
+  color: #ff6b35;
+}
+
+.edit-btn:hover {
+  background: rgba(255, 107, 53, 0.2);
+  border-color: #ff6b35;
+}
+
+.delete-btn {
+  background: rgba(255, 68, 68, 0.1);
+  border: 1px solid #ff444455;
+  color: #ff4444;
+  width: 36px;
+  height: 36px;
+  border-radius: 8px;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 1rem;
+  transition: all 0.2s ease;
+  flex-shrink: 0;
+}
+
+.delete-btn:hover {
+  background: rgba(255, 68, 68, 0.2);
+  border-color: #ff4444;
+  transform: scale(1.1);
+}
+
+/* Модальное окно удаления */
+.delete-confirm-modal {
+  max-width: 450px;
+  text-align: center;
+}
+
+.delete-confirm-modal h2 {
+  color: #ff4444;
+  padding-right: 0;
+}
+
+.delete-warning {
+  color: #aaa;
+  line-height: 1.6;
+  margin-bottom: 24px;
+}
+
+.btn-danger {
+  background: linear-gradient(145deg, #ff4444, #cc3333);
+  border: none;
+  color: #fff;
+}
+
+.btn-danger:hover:not(:disabled) {
+  transform: translateY(-2px);
+  box-shadow: 0 6px 20px rgba(255, 68, 68, 0.35);
+}
+
+.btn-danger:disabled {
+  opacity: 0.6;
+  cursor: not-allowed;
 }
 
 .modal-section {

@@ -143,11 +143,12 @@ from langed.private_settings import (
     OIDC_OP_JWKS_ENDPOINT,
 )
 
-# OIDC Redirect URL (optional - import if defined)
+# OIDC Redirect URI - must match what's configured in Keycloak
+# mozilla_django_oidc uses this to build the redirect_uri for token exchange
 try:
-    from langed.private_settings import OIDC_REDIRECT_URL
+    from langed.private_settings import OIDC_RP_REDIRECT_URI
 except ImportError:
-    OIDC_REDIRECT_URL = None
+    OIDC_RP_REDIRECT_URI = None
 
 # OIDC configuration
 OIDC_RP_SIGN_ALGO = 'RS256'

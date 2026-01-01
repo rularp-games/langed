@@ -35,13 +35,14 @@ OIDC_OP_LOGOUT_ENDPOINT = f'{KEYCLOAK_SERVER_URL}/realms/{KEYCLOAK_REALM}/protoc
 
 # CSRF trusted origins - add your domain here
 # Example: ['https://langed.example.com', 'https://www.langed.example.com']
-CSRF_TRUSTED_ORIGINS = ['localhost']
+CSRF_TRUSTED_ORIGINS = ['http://localhost', 'https://localhost']
 
-# Site URL for OIDC callback
-SITE_URL = 'localhost'
+# Site URL for OIDC callback (include https:// scheme)
+SITE_URL = 'https://localhost'
 
-# OIDC Redirect URL - must match what's configured in Keycloak
-OIDC_REDIRECT_URL = f'{SITE_URL}/oidc/callback/'
+# OIDC Redirect URI - must match what's configured in Keycloak
+# Use the correct setting name for mozilla_django_oidc
+OIDC_RP_REDIRECT_URI = f'{SITE_URL}/oidc/callback/'
 
 # Session cookie security - set to False for local HTTP development
 # In production (HTTPS), this should be True

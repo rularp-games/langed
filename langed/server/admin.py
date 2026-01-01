@@ -8,7 +8,7 @@ from .models import Game, City, Region, Convention, ConventionEvent, Run, Conven
 
 class ConventionEventForm(forms.ModelForm):
     selected_games = forms.ModelMultipleChoiceField(
-        queryset=Game.objects.all(),
+        queryset=Game.objects.all().order_by('name'),
         widget=forms.SelectMultiple(attrs={'size': 10}),
         required=False,
         label='Выбрать игры для создания прогонов',
@@ -17,7 +17,7 @@ class ConventionEventForm(forms.ModelForm):
 
     class Meta:
         model = ConventionEvent
-        fields = ['convention', 'city', 'date_start', 'date_end', 'runs']
+        fields = ['convention', 'city', 'date_start', 'date_end']
 
 
 @admin.register(Region)
@@ -33,8 +33,8 @@ class RegionAdmin(admin.ModelAdmin):
 
 @admin.register(City)
 class CityAdmin(admin.ModelAdmin):
-    list_display = ('name', 'region')
-    list_filter = ('region',)
+    list_display = ('name', 'region', 'timezone')
+    list_filter = ('region', 'timezone')
     search_fields = ('name', 'region__name')
     ordering = ('name',)
     autocomplete_fields = ('region',)
@@ -42,14 +42,14 @@ class CityAdmin(admin.ModelAdmin):
 
 @admin.register(Game)
 class GameAdmin(admin.ModelAdmin):
-    list_display = ('name', 'master', 'players_min', 'players_max', 'female_roles_min', 'female_roles_max', 
+    list_display = ('name', 'get_creators', 'players_min', 'players_max', 'female_roles_min', 'female_roles_max', 
                     'male_roles_min', 'male_roles_max', 'technicians', 'created_at')
-    list_filter = ('master', 'created_at')
-    search_fields = ('name', 'announcement', 'red_flags', 'master__username', 'master__first_name', 'master__last_name')
-    autocomplete_fields = ('master',)
+    list_filter = ('created_at',)
+    search_fields = ('name', 'announcement', 'red_flags', 'creators__username', 'creators__first_name', 'creators__last_name')
+    filter_horizontal = ('creators',)
     fieldsets = (
         ('Основная информация', {
-            'fields': ('name', 'master', 'poster', 'announcement', 'red_flags')
+            'fields': ('name', 'creators', 'poster', 'announcement', 'red_flags')
         }),
         ('Количество игроков', {
             'fields': (('players_min', 'players_max'),)
@@ -64,6 +64,10 @@ class GameAdmin(admin.ModelAdmin):
             'fields': ('technicians',)
         }),
     )
+    
+    def get_creators(self, obj):
+        return ', '.join([str(c) for c in obj.creators.all()])
+    get_creators.short_description = 'Создатели'
 
 
 class ConventionLinkInline(admin.TabularInline):
@@ -74,17 +78,21 @@ class ConventionLinkInline(admin.TabularInline):
 
 @admin.register(Convention)
 class ConventionAdmin(admin.ModelAdmin):
-    list_display = ('name', 'organizer', 'description', 'links_count', 'created_at')
-    list_filter = ('organizer',)
-    search_fields = ('name', 'description', 'organizer__username', 'organizer__first_name', 'organizer__last_name')
+    list_display = ('name', 'get_organizers', 'description', 'links_count', 'created_at')
+    list_filter = ()
+    search_fields = ('name', 'description', 'organizers__username', 'organizers__first_name', 'organizers__last_name')
     ordering = ('name',)
-    autocomplete_fields = ('organizer',)
+    filter_horizontal = ('organizers',)
     inlines = [ConventionLinkInline]
     fieldsets = (
         ('Основная информация', {
-            'fields': ('name', 'organizer', 'description')
+            'fields': ('name', 'organizers', 'description')
         }),
     )
+    
+    def get_organizers(self, obj):
+        return ', '.join([str(o) for o in obj.organizers.all()])
+    get_organizers.short_description = 'Организаторы'
     
     def links_count(self, obj):
         return obj.links.count()
@@ -108,7 +116,6 @@ class ConventionEventAdmin(admin.ModelAdmin):
     ordering = ('date_start',)
     date_hierarchy = 'date_start'
     autocomplete_fields = ('convention', 'city')
-    filter_horizontal = ('runs',)
 
     def get_fieldsets(self, request, obj=None):
         fieldsets = (
@@ -121,9 +128,6 @@ class ConventionEventAdmin(admin.ModelAdmin):
             ('Создание прогонов', {
                 'fields': ('selected_games',),
                 'description': 'Выберите игры для автоматического создания прогонов на дату начала конвента'
-            }),
-            ('Прогоны', {
-                'fields': ('runs',)
             }),
         )
 
@@ -168,22 +172,27 @@ class ConventionEventAdmin(admin.ModelAdmin):
                     )
 
     def runs_count(self, obj):
-        return obj.runs.count()
+        return obj.scheduled_runs.count()
     runs_count.short_description = 'Количество прогонов'
 
 
 @admin.register(Run)
 class RunAdmin(admin.ModelAdmin):
-    list_display = ('game', 'master', 'city', 'date', 'convention_event', 'created_at')
-    list_filter = ('master', 'city', 'convention_event', 'date')
-    search_fields = ('game__name', 'city__name', 'convention_event__convention__name', 'master__username', 'master__first_name', 'master__last_name')
+    list_display = ('game', 'get_masters', 'city', 'date', 'convention_event', 'created_at')
+    list_filter = ('city', 'convention_event', 'date')
+    search_fields = ('game__name', 'city__name', 'convention_event__convention__name', 'masters__username', 'masters__first_name', 'masters__last_name')
     date_hierarchy = 'date'
-    autocomplete_fields = ('game', 'master', 'city', 'convention_event')
+    autocomplete_fields = ('game', 'city', 'convention_event')
+    filter_horizontal = ('masters',)
     fieldsets = (
         ('Основная информация', {
-            'fields': ('game', 'master', 'city', 'convention_event')
+            'fields': ('game', 'masters', 'city', 'convention_event')
         }),
         ('Дата', {
             'fields': ('date',)
         }),
     )
+    
+    def get_masters(self, obj):
+        return ', '.join([str(m) for m in obj.masters.all()])
+    get_masters.short_description = 'Мастера'
