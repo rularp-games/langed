@@ -35,7 +35,7 @@ OIDC_OP_LOGOUT_ENDPOINT = f'{KEYCLOAK_SERVER_URL}/realms/{KEYCLOAK_REALM}/protoc
 
 # CSRF trusted origins - add your domain here
 # Example: ['https://langed.example.com', 'https://www.langed.example.com']
-CSRF_TRUSTED_ORIGINS = ['localhost']
+CSRF_TRUSTED_ORIGINS = ['http://localhost', 'https://localhost']
 
 # Site URL for OIDC callback (include https:// scheme)
 SITE_URL = 'https://localhost'
