@@ -489,7 +489,6 @@ export default {
       const convention = this.conventions.find(c => c.id === convId)
       if (convention) {
         this.openConvention(convention)
-        this.updateUrlWithConvention(convention.id)
       }
     },
     async openEventById(id) {
@@ -578,6 +577,8 @@ export default {
     },
     async openConvention(convention) {
       this.selectedConvention = convention
+      // Обновляем URL при открытии модального окна
+      this.updateUrlWithConvention(convention.id)
       // Загрузить проведения этого конвента
       try {
         const response = await fetch(`/api/convention-events/?convention=${convention.id}`)
