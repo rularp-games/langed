@@ -78,10 +78,16 @@
     </div>
 
     <!-- Модальное окно с деталями конвента -->
-    <div v-if="selectedConvention" class="modal-overlay" @click.self="selectedConvention = null">
+    <div v-if="selectedConvention" class="modal-overlay" @click.self="closeConventionModal">
       <div class="modal-content">
-        <button class="modal-close" @click="selectedConvention = null">×</button>
-        <h2>{{ selectedConvention.name }}</h2>
+        <button class="modal-close" @click="closeConventionModal">×</button>
+        <div class="modal-header-row">
+          <h2>{{ selectedConvention.name }}</h2>
+          <button class="copy-link-btn" @click="copyConventionLink" :title="linkCopied ? 'Скопировано!' : 'Скопировать ссылку'">
+            <span v-if="linkCopied">✓</span>
+            <span v-else>🔗</span>
+          </button>
+        </div>
         
         <div v-if="selectedConvention.organizer" class="modal-organizer">
           <span class="organizer-icon">👤</span>
@@ -131,8 +137,18 @@
               class="event-item"
               :class="{ 'past-event': isEventPast(event.date_end) }"
             >
-              <div class="event-dates">
-                {{ formatConventionDates(event.date_start, event.date_end) }}
+              <div class="event-header-row">
+                <div class="event-dates">
+                  {{ formatConventionDates(event.date_start, event.date_end) }}
+                </div>
+                <button 
+                  class="copy-link-btn-small" 
+                  @click="copyEventLink(event)" 
+                  :title="eventLinkCopied === event.id ? 'Скопировано!' : 'Скопировать ссылку на проведение'"
+                >
+                  <span v-if="eventLinkCopied === event.id">✓</span>
+                  <span v-else>🔗</span>
+                </button>
               </div>
               <div class="event-city">📍 {{ event.city_name || (event.city && event.city.name) }}</div>
               <div class="event-stats">
@@ -369,6 +385,16 @@
 export default {
   name: 'ConventionsPage',
   inject: ['getUser'],
+  props: {
+    conventionId: {
+      type: [String, Number],
+      default: null
+    },
+    eventId: {
+      type: [String, Number],
+      default: null
+    }
+  },
   data() {
     return {
       conventions: [],
@@ -395,6 +421,40 @@ export default {
         newCityName: '',
         date_start: '',
         date_end: ''
+      },
+      linkCopied: false,
+      eventLinkCopied: false
+    }
+  },
+  watch: {
+    // Реагируем на изменение параметра conventionId в URL
+    conventionId: {
+      handler(newId) {
+        if (newId && this.conventions.length > 0) {
+          this.openConventionById(newId)
+        }
+      },
+      immediate: false
+    },
+    // Реагируем на изменение параметра eventId в URL
+    eventId: {
+      handler(newId) {
+        if (newId && this.conventions.length > 0) {
+          this.openEventById(newId)
+        }
+      },
+      immediate: false
+    },
+    // Реагируем на загрузку списка конвентов
+    conventions: {
+      handler() {
+        if (this.conventions.length > 0 && !this.selectedConvention) {
+          if (this.conventionId) {
+            this.openConventionById(this.conventionId)
+          } else if (this.eventId) {
+            this.openEventById(this.eventId)
+          }
+        }
       }
     }
   },
@@ -424,6 +484,83 @@ export default {
     this.fetchCities()
   },
   methods: {
+    openConventionById(id) {
+      const convId = parseInt(id, 10)
+      const convention = this.conventions.find(c => c.id === convId)
+      if (convention) {
+        this.openConvention(convention)
+        this.updateUrlWithConvention(convention.id)
+      }
+    },
+    async openEventById(id) {
+      const eventId = parseInt(id, 10)
+      // Ищем конвент, у которого есть это проведение
+      try {
+        const response = await fetch(`/api/convention-events/${eventId}/`)
+        if (response.ok) {
+          const event = await response.json()
+          // Найдём конвент
+          const convention = this.conventions.find(c => c.id === event.convention)
+          if (convention) {
+            await this.openConvention(convention)
+            this.updateUrlWithEvent(eventId)
+          }
+        }
+      } catch (err) {
+        console.error('Ошибка загрузки проведения:', err)
+      }
+    },
+    closeConventionModal() {
+      this.selectedConvention = null
+      this.conventionEvents = []
+      this.linkCopied = false
+      this.eventLinkCopied = false
+      this.updateUrlWithConvention(null)
+    },
+    updateUrlWithConvention(conventionId) {
+      const query = { ...this.$route.query }
+      if (conventionId) {
+        query.id = conventionId
+        delete query.event
+      } else {
+        delete query.id
+        delete query.event
+      }
+      this.$router.replace({ query }).catch(() => {})
+    },
+    updateUrlWithEvent(eventId) {
+      const query = { ...this.$route.query }
+      if (eventId) {
+        query.event = eventId
+        delete query.id
+      } else {
+        delete query.event
+      }
+      this.$router.replace({ query }).catch(() => {})
+    },
+    copyConventionLink() {
+      if (!this.selectedConvention) return
+      const url = `${window.location.origin}/conventions?id=${this.selectedConvention.id}`
+      navigator.clipboard.writeText(url).then(() => {
+        this.linkCopied = true
+        setTimeout(() => {
+          this.linkCopied = false
+        }, 2000)
+      }).catch(err => {
+        console.error('Ошибка копирования:', err)
+      })
+    },
+    copyEventLink(event) {
+      const url = `${window.location.origin}/conventions?event=${event.id}`
+      navigator.clipboard.writeText(url).then(() => {
+        this.eventLinkCopied = event.id
+        setTimeout(() => {
+          this.eventLinkCopied = false
+        }, 2000)
+      }).catch(err => {
+        console.error('Ошибка копирования:', err)
+      })
+    },
     async fetchConventions() {
       this.loading = true
       this.error = null
@@ -1070,12 +1207,69 @@ export default {
   transform: scale(1.2);
 }
 
+.modal-header-row {
+  display: flex;
+  align-items: flex-start;
+  gap: 12px;
+  margin-bottom: 24px;
+}
+
+.modal-header-row h2 {
+  flex: 1;
+  margin-bottom: 0;
+  padding-right: 0;
+}
+
 .modal-content h2 {
   font-family: 'Orbitron', 'Courier New', monospace;
   color: #e0e0e0;
   font-size: 1.8rem;
   margin-bottom: 24px;
   padding-right: 40px;
+}
+
+.copy-link-btn {
+  background: rgba(0, 204, 255, 0.1);
+  border: 1px solid #00ccff55;
+  color: #00ccff;
+  width: 36px;
+  height: 36px;
+  border-radius: 8px;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 1rem;
+  transition: all 0.2s ease;
+  flex-shrink: 0;
+}
+
+.copy-link-btn:hover {
+  background: rgba(0, 204, 255, 0.2);
+  border-color: #00ccff;
+  transform: scale(1.1);
+}
+
+.copy-link-btn-small {
+  background: rgba(0, 204, 255, 0.1);
+  border: 1px solid #00ccff44;
+  color: #00ccff;
+  width: 28px;
+  height: 28px;
+  border-radius: 6px;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 0.8rem;
+  transition: all 0.2s ease;
+  flex-shrink: 0;
+}
+
+.copy-link-btn-small:hover {
+  background: rgba(0, 204, 255, 0.2);
+  border-color: #00ccff;
+  transform: scale(1.1);
 }
 
 .modal-section {
@@ -1116,12 +1310,18 @@ export default {
   border-left-color: #666;
 }
 
+.event-header-row {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 6px;
+}
+
 .event-dates {
   font-family: 'Courier New', monospace;
   color: #ff6b35;
   font-size: 0.9rem;
   font-weight: bold;
-  margin-bottom: 6px;
 }
 
 .event-city {

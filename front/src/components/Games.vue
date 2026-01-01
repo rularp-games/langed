@@ -42,7 +42,7 @@
         :key="game.id" 
         class="game-card"
         :class="{ 'has-poster': game.poster_url }"
-        @click="selectedGame = game"
+        @click="openGameModal(game)"
       >
         <div v-if="game.poster_url" class="game-poster">
           <img :src="game.poster_url" :alt="game.name" />
@@ -76,16 +76,22 @@
     </div>
 
     <!-- Модальное окно с деталями игры -->
-    <div v-if="selectedGame" class="modal-overlay" @click.self="selectedGame = null">
+    <div v-if="selectedGame" class="modal-overlay" @click.self="closeGameModal">
       <div class="modal-content" :class="{ 'with-poster': selectedGame.poster_url }">
-        <button class="modal-close" @click="selectedGame = null">×</button>
+        <button class="modal-close" @click="closeGameModal">×</button>
         
         <div v-if="selectedGame.poster_url" class="modal-poster">
           <img :src="selectedGame.poster_url" :alt="selectedGame.name" />
         </div>
         
         <div class="modal-body">
-          <h2>{{ selectedGame.name }}</h2>
+          <div class="modal-header-row">
+            <h2>{{ selectedGame.name }}</h2>
+            <button class="copy-link-btn" @click="copyGameLink" :title="linkCopied ? 'Скопировано!' : 'Скопировать ссылку'">
+              <span v-if="linkCopied">✓</span>
+              <span v-else>🔗</span>
+            </button>
+          </div>
           
           <div v-if="selectedGame.master" class="modal-master">
             <span class="master-icon">👤</span>
@@ -358,6 +364,12 @@
 export default {
   name: 'GamesPage',
   inject: ['getUser'],
+  props: {
+    gameId: {
+      type: [String, Number],
+      default: null
+    }
+  },
   data() {
     return {
       games: [],
@@ -373,7 +385,27 @@ export default {
       posterPreview: null,
       addMode: 'single',
       csvFile: null,
-      csvResult: null
+      csvResult: null,
+      linkCopied: false
+    }
+  },
+  watch: {
+    // Реагируем на изменение параметра gameId в URL
+    gameId: {
+      handler(newId) {
+        if (newId && this.games.length > 0) {
+          this.openGameById(newId)
+        }
+      },
+      immediate: false
+    },
+    // Реагируем на загрузку списка игр
+    games: {
+      handler() {
+        if (this.gameId && this.games.length > 0 && !this.selectedGame) {
+          this.openGameById(this.gameId)
+        }
+      }
     }
   },
   computed: {
@@ -401,6 +433,44 @@ export default {
     this.fetchGames()
   },
   methods: {
+    openGameById(id) {
+      const gameId = parseInt(id, 10)
+      const game = this.games.find(g => g.id === gameId)
+      if (game) {
+        this.selectedGame = game
+        this.updateUrlWithGame(game.id)
+      }
+    },
+    openGameModal(game) {
+      this.selectedGame = game
+      this.updateUrlWithGame(game.id)
+    },
+    closeGameModal() {
+      this.selectedGame = null
+      this.linkCopied = false
+      this.updateUrlWithGame(null)
+    },
+    updateUrlWithGame(gameId) {
+      const query = { ...this.$route.query }
+      if (gameId) {
+        query.id = gameId
+      } else {
+        delete query.id
+      }
+      this.$router.replace({ query }).catch(() => {})
+    },
+    copyGameLink() {
+      if (!this.selectedGame) return
+      const url = `${window.location.origin}/games?id=${this.selectedGame.id}`
+      navigator.clipboard.writeText(url).then(() => {
+        this.linkCopied = true
+        setTimeout(() => {
+          this.linkCopied = false
+        }, 2000)
+      }).catch(err => {
+        console.error('Ошибка копирования:', err)
+      })
+    },
     getEmptyGame() {
       return {
         name: '',
@@ -960,6 +1030,18 @@ export default {
   transform: scale(1.2);
 }
 
+.modal-header-row {
+  display: flex;
+  align-items: flex-start;
+  gap: 12px;
+  margin-bottom: 24px;
+}
+
+.modal-header-row h2 {
+  flex: 1;
+  margin-bottom: 0;
+}
+
 .modal-content h2 {
   font-family: 'Orbitron', 'Courier New', monospace;
   color: #ff6b35;
@@ -970,6 +1052,28 @@ export default {
 
 .modal-content:not(.with-poster) h2 {
   padding-right: 40px;
+}
+
+.copy-link-btn {
+  background: rgba(0, 204, 255, 0.1);
+  border: 1px solid #00ccff55;
+  color: #00ccff;
+  width: 36px;
+  height: 36px;
+  border-radius: 8px;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 1rem;
+  transition: all 0.2s ease;
+  flex-shrink: 0;
+}
+
+.copy-link-btn:hover {
+  background: rgba(0, 204, 255, 0.2);
+  border-color: #00ccff;
+  transform: scale(1.1);
 }
 
 .modal-section {

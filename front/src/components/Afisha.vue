@@ -96,6 +96,8 @@
               v-for="run in runs" 
               :key="run.id"
               :class="{ 'past-row': isPast(run.date) }"
+              @click="openRunModal(run)"
+              class="clickable-row"
             >
               <td class="date-cell">{{ formatDate(run.date, run.city_timezone) }}</td>
               <td class="time-cell">
@@ -190,7 +192,7 @@
           :key="event.id" 
           class="convention-card"
           :class="{ 'past-card': isConventionPast(event.date_end) }"
-          @click="selectedConvention = event"
+          @click="openConventionModal(event)"
         >
           <div class="convention-dates">
             {{ formatConventionDates(event.date_start, event.date_end) }}
@@ -222,14 +224,69 @@
       </div>
     </template>
 
+    <!-- Модальное окно с деталями прогона -->
+    <div v-if="selectedRun" class="modal-overlay" @click.self="closeRunModal">
+      <div class="modal-content run-modal">
+        <button class="modal-close" @click="closeRunModal">×</button>
+        <div class="modal-run-date">
+          {{ formatDate(selectedRun.date, selectedRun.city_timezone) }}
+          <span class="modal-run-time">{{ formatTime(selectedRun.date, selectedRun.city_timezone) }}</span>
+          <span class="timezone-hint">{{ getTimezoneAbbr(selectedRun.city_timezone) }}</span>
+        </div>
+        <div class="modal-header-row">
+          <h2>{{ selectedRun.game.name }}</h2>
+          <button class="copy-link-btn" @click="copyRunLink" :title="runLinkCopied ? 'Скопировано!' : 'Скопировать ссылку'">
+            <span v-if="runLinkCopied">✓</span>
+            <span v-else>🔗</span>
+          </button>
+        </div>
+        <div class="modal-city">📍 {{ selectedRun.city }}</div>
+        
+        <div class="modal-section" v-if="selectedRun.convention_name">
+          <h3>Конвент</h3>
+          <p class="convention-badge-lg">{{ selectedRun.convention_name }}</p>
+        </div>
+        
+        <div class="modal-section" v-if="selectedRun.master">
+          <h3>Мастер</h3>
+          <p>{{ selectedRun.master.display_name }}</p>
+        </div>
+        
+        <div class="modal-stats">
+          <div class="modal-stat">
+            <span class="modal-stat-label">Игроки</span>
+            <span class="modal-stat-value">{{ selectedRun.game.players_min }} – {{ selectedRun.game.players_max }}</span>
+          </div>
+          <div class="modal-stat">
+            <span class="modal-stat-label">Жен. роли</span>
+            <span class="modal-stat-value">{{ selectedRun.game.female_roles_min }} – {{ selectedRun.game.female_roles_max }}</span>
+          </div>
+          <div class="modal-stat">
+            <span class="modal-stat-label">Муж. роли</span>
+            <span class="modal-stat-value">{{ selectedRun.game.male_roles_min }} – {{ selectedRun.game.male_roles_max }}</span>
+          </div>
+        </div>
+        
+        <div :class="['modal-status', isPast(selectedRun.date) ? 'past' : 'upcoming']">
+          {{ isPast(selectedRun.date) ? 'Завершён' : 'Предстоит' }}
+        </div>
+      </div>
+    </div>
+
     <!-- Модальное окно с деталями проведения конвента -->
-    <div v-if="selectedConvention" class="modal-overlay" @click.self="selectedConvention = null">
+    <div v-if="selectedConvention" class="modal-overlay" @click.self="closeConventionModal">
       <div class="modal-content">
-        <button class="modal-close" @click="selectedConvention = null">×</button>
+        <button class="modal-close" @click="closeConventionModal">×</button>
         <div class="modal-dates">
           {{ formatConventionDates(selectedConvention.date_start, selectedConvention.date_end) }}
         </div>
-        <h2>{{ selectedConvention.convention_name }}</h2>
+        <div class="modal-header-row">
+          <h2>{{ selectedConvention.convention_name }}</h2>
+          <button class="copy-link-btn" @click="copyEventLink" :title="eventLinkCopied ? 'Скопировано!' : 'Скопировать ссылку'">
+            <span v-if="eventLinkCopied">✓</span>
+            <span v-else>🔗</span>
+          </button>
+        </div>
         <div class="modal-city">📍 {{ selectedConvention.city_name || (selectedConvention.city && selectedConvention.city.name) }}</div>
         
         <div class="modal-section" v-if="selectedConvention.description">
@@ -536,6 +593,16 @@
 export default {
   name: 'AfishaPage',
   inject: ['getUser'],
+  props: {
+    runId: {
+      type: [String, Number],
+      default: null
+    },
+    eventId: {
+      type: [String, Number],
+      default: null
+    }
+  },
   data() {
     return {
       activeTab: 'runs',
@@ -546,6 +613,8 @@ export default {
       timeFilter: 'upcoming',
       loading: true,
       error: null,
+      selectedRun: null,
+      runLinkCopied: false,
       // Конвенты
       conventions: [],
       conventionCities: [],
@@ -554,6 +623,7 @@ export default {
       conventionsLoading: true,
       conventionsError: null,
       selectedConvention: null,
+      eventLinkCopied: false,
       // Для добавления прогона
       showAddRunModal: false,
       addRunLoading: false,
@@ -657,6 +727,44 @@ export default {
       return regionName ? `${city.name} (${regionName})` : city.name
     }
   },
+  watch: {
+    // Реагируем на изменение параметра runId в URL
+    runId: {
+      handler(newId) {
+        if (newId) {
+          this.activeTab = 'runs'
+          this.openRunById(newId)
+        }
+      },
+      immediate: false
+    },
+    // Реагируем на изменение параметра eventId в URL
+    eventId: {
+      handler(newId) {
+        if (newId) {
+          this.activeTab = 'conventions'
+          this.openEventById(newId)
+        }
+      },
+      immediate: false
+    },
+    // Реагируем на загрузку прогонов
+    runs: {
+      handler() {
+        if (this.runId && this.runs.length > 0 && !this.selectedRun) {
+          this.openRunById(this.runId)
+        }
+      }
+    },
+    // Реагируем на загрузку проведений конвентов
+    conventions: {
+      handler() {
+        if (this.eventId && this.conventions.length > 0 && !this.selectedConvention) {
+          this.openEventById(this.eventId)
+        }
+      }
+    }
+  },
   mounted() {
     this.fetchCities()
     this.fetchRuns()
@@ -668,6 +776,98 @@ export default {
     this.fetchAllConventions()
   },
   methods: {
+    // === Работа с URL ===
+    async openRunById(id) {
+      const runId = parseInt(id, 10)
+      // Сначала ищем в уже загруженных прогонах
+      let run = this.runs.find(r => r.id === runId)
+      if (!run) {
+        // Если не нашли, загружаем с сервера
+        try {
+          const response = await fetch(`/api/runs/${runId}/`)
+          if (response.ok) {
+            run = await response.json()
+          }
+        } catch (err) {
+          console.error('Ошибка загрузки прогона:', err)
+        }
+      }
+      if (run) {
+        this.selectedRun = run
+        this.updateUrlWithRun(run.id)
+      }
+    },
+    openEventById(id) {
+      const eventId = parseInt(id, 10)
+      const event = this.conventions.find(e => e.id === eventId)
+      if (event) {
+        this.selectedConvention = event
+        this.updateUrlWithEvent(event.id)
+      }
+    },
+    openRunModal(run) {
+      this.selectedRun = run
+      this.updateUrlWithRun(run.id)
+    },
+    closeRunModal() {
+      this.selectedRun = null
+      this.runLinkCopied = false
+      this.updateUrlWithRun(null)
+    },
+    openConventionModal(event) {
+      this.selectedConvention = event
+      this.updateUrlWithEvent(event.id)
+    },
+    closeConventionModal() {
+      this.selectedConvention = null
+      this.eventLinkCopied = false
+      this.updateUrlWithEvent(null)
+    },
+    updateUrlWithRun(runId) {
+      const query = { ...this.$route.query }
+      if (runId) {
+        query.run = runId
+        delete query.event
+      } else {
+        delete query.run
+      }
+      this.$router.replace({ query }).catch(() => {})
+    },
+    updateUrlWithEvent(eventId) {
+      const query = { ...this.$route.query }
+      if (eventId) {
+        query.event = eventId
+        delete query.run
+      } else {
+        delete query.event
+      }
+      this.$router.replace({ query }).catch(() => {})
+    },
+    copyRunLink() {
+      if (!this.selectedRun) return
+      const url = `${window.location.origin}/?run=${this.selectedRun.id}`
+      navigator.clipboard.writeText(url).then(() => {
+        this.runLinkCopied = true
+        setTimeout(() => {
+          this.runLinkCopied = false
+        }, 2000)
+      }).catch(err => {
+        console.error('Ошибка копирования:', err)
+      })
+    },
+    copyEventLink() {
+      if (!this.selectedConvention) return
+      const url = `${window.location.origin}/?event=${this.selectedConvention.id}`
+      navigator.clipboard.writeText(url).then(() => {
+        this.eventLinkCopied = true
+        setTimeout(() => {
+          this.eventLinkCopied = false
+        }, 2000)
+      }).catch(err => {
+        console.error('Ошибка копирования:', err)
+      })
+    },
+    
     // === Прогоны ===
     async fetchCities() {
       try {
@@ -1776,12 +1976,131 @@ export default {
   letter-spacing: 0.05em;
 }
 
+.modal-header-row {
+  display: flex;
+  align-items: flex-start;
+  gap: 12px;
+  margin-bottom: 8px;
+}
+
+.modal-header-row h2 {
+  flex: 1;
+  margin-bottom: 0;
+  padding-right: 0;
+}
+
 .modal-content h2 {
   font-family: 'Orbitron', 'Courier New', monospace;
   color: #e0e0e0;
   font-size: 1.8rem;
   margin-bottom: 8px;
   padding-right: 40px;
+}
+
+.copy-link-btn {
+  background: rgba(0, 204, 255, 0.1);
+  border: 1px solid #00ccff55;
+  color: #00ccff;
+  width: 36px;
+  height: 36px;
+  border-radius: 8px;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 1rem;
+  transition: all 0.2s ease;
+  flex-shrink: 0;
+}
+
+.copy-link-btn:hover {
+  background: rgba(0, 204, 255, 0.2);
+  border-color: #00ccff;
+  transform: scale(1.1);
+}
+
+/* Модальное окно прогона */
+.run-modal {
+  max-width: 500px;
+}
+
+.modal-run-date {
+  font-family: 'Courier New', monospace;
+  color: #ff6b35;
+  font-size: 1rem;
+  font-weight: bold;
+  margin-bottom: 12px;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+}
+
+.modal-run-time {
+  color: #00ccff;
+  font-size: 1.2rem;
+  margin-left: 12px;
+}
+
+.modal-status {
+  margin-top: 20px;
+  padding: 12px;
+  border-radius: 8px;
+  text-align: center;
+  font-weight: bold;
+  text-transform: uppercase;
+  letter-spacing: 0.1em;
+}
+
+.modal-status.upcoming {
+  background: rgba(0, 255, 136, 0.15);
+  color: #00ff88;
+  border: 1px solid #00ff8844;
+}
+
+.modal-status.past {
+  background: rgba(136, 136, 136, 0.15);
+  color: #888;
+  border: 1px solid #88888844;
+}
+
+.modal-stats {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: 16px;
+  margin-top: 20px;
+  padding-top: 20px;
+  border-top: 1px solid #ff6b3533;
+}
+
+.modal-stat {
+  text-align: center;
+}
+
+.modal-stat-label {
+  display: block;
+  color: #888;
+  font-size: 0.8rem;
+  margin-bottom: 4px;
+}
+
+.modal-stat-value {
+  color: #00ccff;
+  font-family: 'Courier New', monospace;
+  font-size: 1.1rem;
+  font-weight: bold;
+}
+
+.convention-badge-lg {
+  display: inline-block;
+  padding: 8px 16px;
+  background: rgba(255, 107, 53, 0.15);
+  color: #ff8c5a;
+  border-radius: 8px;
+  font-size: 1rem;
+  border: 1px solid #ff6b3544;
+}
+
+.clickable-row {
+  cursor: pointer;
 }
 
 .modal-city {
