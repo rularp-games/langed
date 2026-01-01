@@ -170,6 +170,8 @@ class ScheduleRunSerializer(serializers.ModelSerializer):
         allow_null=True
     )
     venue_name = serializers.CharField(source='venue.name', read_only=True)
+    city_timezone = serializers.CharField(source='city.timezone', read_only=True)
+    date_local = serializers.SerializerMethodField()
     registered_count = serializers.SerializerMethodField()
     available_slots = serializers.SerializerMethodField()
     is_full = serializers.SerializerMethodField()
@@ -180,13 +182,63 @@ class ScheduleRunSerializer(serializers.ModelSerializer):
         model = Run
         fields = [
             'id', 'game', 'game_id', 'game_name', 'masters', 
-            'date', 'duration',
+            'date', 'date_local', 'duration', 'city_timezone',
             'venue', 'venue_id', 'venue_name',
             'max_players', 'registration_open',
             'registered_count', 'available_slots', 'is_full', 
             'effective_max_players', 'can_edit'
         ]
         read_only_fields = ['id', 'masters', 'can_edit']
+    
+    def get_date_local(self, obj):
+        """Возвращает дату и время в локальной таймзоне города"""
+        import pytz
+        if obj.date and obj.city and obj.city.timezone:
+            try:
+                tz = pytz.timezone(obj.city.timezone)
+                local_dt = obj.date.astimezone(tz)
+                return local_dt.strftime('%Y-%m-%dT%H:%M:%S')
+            except Exception:
+                pass
+        return obj.date.isoformat() if obj.date else None
+    
+    def validate_date(self, value):
+        """
+        Конвертирует локальное время в UTC с учётом таймзоны города.
+        Дата приходит с фронтенда в формате без таймзоны (например 2026-01-15T14:00:00),
+        интерпретируется как локальное время в таймзоне города конвента.
+        """
+        import pytz
+        from django.utils import timezone as django_timezone
+        
+        # Если дата уже aware (с таймзоной), возвращаем как есть
+        if django_timezone.is_aware(value):
+            return value
+        
+        # Получаем таймзону из контекста (передаётся явно из view)
+        city_timezone = self.context.get('city_timezone')
+        
+        # Если нет в контексте, пробуем из существующего прогона
+        if not city_timezone and self.instance and self.instance.city:
+            city_timezone = self.instance.city.timezone
+        
+        if city_timezone:
+            try:
+                tz = pytz.timezone(city_timezone)
+                # Интерпретируем naive datetime как локальное время в этой таймзоне
+                local_dt = tz.localize(value)
+                # Конвертируем в UTC
+                return local_dt.astimezone(pytz.UTC)
+            except Exception:
+                pass
+        
+        # Если не удалось определить таймзону, используем дефолтную (Москва)
+        try:
+            default_tz = pytz.timezone('Europe/Moscow')
+            local_dt = default_tz.localize(value)
+            return local_dt.astimezone(pytz.UTC)
+        except Exception:
+            return value
     
     def get_registered_count(self, obj):
         return obj.get_registered_count()
@@ -224,6 +276,7 @@ class ConventionScheduleSerializer(serializers.ModelSerializer):
     convention_description = serializers.CharField(source='convention.description', read_only=True)
     city = CitySerializer(read_only=True)
     city_name = serializers.CharField(source='city.name', read_only=True)
+    city_timezone = serializers.CharField(source='city.timezone', read_only=True)
     organizers = UserBriefSerializer(many=True, read_only=True)
     convention_organizers = UserBriefSerializer(source='convention.organizers', many=True, read_only=True)
     links = serializers.SerializerMethodField()
@@ -236,7 +289,7 @@ class ConventionScheduleSerializer(serializers.ModelSerializer):
         model = ConventionEvent
         fields = [
             'id', 'convention', 'convention_name', 'convention_description',
-            'city', 'city_name', 'date_start', 'date_end',
+            'city', 'city_name', 'city_timezone', 'date_start', 'date_end',
             'organizers', 'convention_organizers', 'links',
             'runs', 'venues', 'games', 'can_edit'
         ]

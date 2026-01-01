@@ -145,7 +145,7 @@
                     :class="{ 'run-full': run.is_full }"
                     @click="openRunModal(run)"
                   >
-                    <div class="run-time">{{ formatTime(run.date) }}</div>
+                    <div class="run-time">{{ formatTime(run.date_local || run.date) }}</div>
                     <div class="run-name">{{ run.game_name }}</div>
                     <div class="run-info">
                       <span class="run-slots">
@@ -178,7 +178,7 @@
               @click="openRunModal(run)"
             >
               <div class="run-time-col">
-                <span class="run-time">{{ formatTime(run.date) }}</span>
+                <span class="run-time">{{ formatTime(run.date_local || run.date) }}</span>
                 <span class="run-duration">{{ formatDuration(run.duration) }}</span>
               </div>
               <div class="run-main-col">
@@ -323,7 +323,9 @@ export default {
       if (!this.schedule || !this.schedule.runs) return []
       const daysSet = new Set()
       this.schedule.runs.forEach(run => {
-        const day = run.date.split('T')[0]
+        // Используем локальную дату если доступна
+        const dateStr = run.date_local || run.date
+        const day = dateStr.split('T')[0]
         daysSet.add(day)
       })
       return Array.from(daysSet).sort()
@@ -339,7 +341,10 @@ export default {
       let runs = this.schedule.runs
       
       if (this.selectedDay) {
-        runs = runs.filter(run => run.date.startsWith(this.selectedDay))
+        runs = runs.filter(run => {
+          const dateStr = run.date_local || run.date
+          return dateStr.startsWith(this.selectedDay)
+        })
       }
       
       if (this.selectedVenue) {
@@ -348,7 +353,12 @@ export default {
         })
       }
       
-      return runs.sort((a, b) => new Date(a.date) - new Date(b.date))
+      // Сортируем по локальной дате
+      return runs.sort((a, b) => {
+        const dateA = a.date_local || a.date
+        const dateB = b.date_local || b.date
+        return dateA.localeCompare(dateB)
+      })
     },
     timelineHours() {
       const hours = []
@@ -426,13 +436,34 @@ export default {
     },
     
     formatTime(dateStr) {
+      // dateStr может быть date_local (без таймзоны) или date (ISO с Z)
+      if (dateStr && !dateStr.endsWith('Z') && !dateStr.includes('+')) {
+        // Локальная дата без таймзоны - парсим напрямую
+        const parts = dateStr.split('T')
+        if (parts.length === 2) {
+          return parts[1].slice(0, 5)
+        }
+      }
       const date = new Date(dateStr)
       return date.toLocaleTimeString('ru-RU', { hour: '2-digit', minute: '2-digit' })
     },
     
     formatFullDate(dateStr) {
+      // Для локальной даты используем простой парсинг
+      if (dateStr && !dateStr.endsWith('Z') && !dateStr.includes('+')) {
+        const parts = dateStr.split('T')
+        if (parts.length >= 1) {
+          const date = new Date(parts[0] + 'T12:00:00')
+          return date.toLocaleDateString('ru-RU', { weekday: 'long', day: 'numeric', month: 'long' })
+        }
+      }
       const date = new Date(dateStr)
       return date.toLocaleDateString('ru-RU', { weekday: 'long', day: 'numeric', month: 'long' })
+    },
+    
+    // Получить локальную дату прогона
+    getRunLocalDate(run) {
+      return run.date_local || run.date
     },
     
     formatDuration(minutes) {
@@ -481,7 +512,10 @@ export default {
     },
     
     getRunsForDay(day) {
-      return this.filteredRuns.filter(run => run.date.startsWith(day))
+      return this.filteredRuns.filter(run => {
+        const dateStr = this.getRunLocalDate(run)
+        return dateStr && dateStr.startsWith(day)
+      })
     },
     
     getRunsForDayVenue(day, venueId) {
@@ -492,8 +526,18 @@ export default {
     },
     
     getRunStyle(run) {
-      const date = new Date(run.date)
-      const hours = date.getHours() + date.getMinutes() / 60
+      // Используем локальную дату для правильного позиционирования
+      const dateStr = this.getRunLocalDate(run)
+      let hours = 12 // default
+      
+      if (dateStr) {
+        const parts = dateStr.split('T')
+        if (parts.length === 2) {
+          const timeParts = parts[1].split(':')
+          hours = parseInt(timeParts[0], 10) + parseInt(timeParts[1] || 0, 10) / 60
+        }
+      }
+      
       const top = (hours - this.timelineStartHour) * this.hourHeight
       const height = (run.duration / 60) * this.hourHeight
       
@@ -506,14 +550,15 @@ export default {
     getTimeSlotsForDay(day) {
       const runs = this.getRunsForDay(day)
       const times = new Set()
-      runs.forEach(run => times.add(run.date))
+      runs.forEach(run => times.add(this.getRunLocalDate(run)))
       return Array.from(times).sort().map(time => ({ time }))
     },
     
     getRunsForSlotVenue(slot, venueId) {
       return this.filteredRuns.filter(run => {
         const runVenueId = run.venue ? run.venue.id : null
-        return run.date === slot.time && runVenueId === venueId
+        const runDate = this.getRunLocalDate(run)
+        return runDate === slot.time && runVenueId === venueId
       })
     },
     

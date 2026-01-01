@@ -650,7 +650,13 @@ class ConventionEventViewSet(viewsets.ModelViewSet):
                 )
         
         # Создаём прогон
-        serializer = ScheduleRunSerializer(data=request.data, context={'request': request})
+        serializer = ScheduleRunSerializer(
+            data=request.data, 
+            context={
+                'request': request,
+                'city_timezone': event.city.timezone if event.city else None
+            }
+        )
         if not serializer.is_valid():
             return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
         
@@ -692,7 +698,15 @@ class ConventionEventViewSet(viewsets.ModelViewSet):
         
         # Обновляем прогон
         update_data = {k: v for k, v in request.data.items() if k != 'run_id'}
-        serializer = ScheduleRunSerializer(run, data=update_data, partial=True, context={'request': request})
+        serializer = ScheduleRunSerializer(
+            run, 
+            data=update_data, 
+            partial=True, 
+            context={
+                'request': request,
+                'city_timezone': run.city.timezone if run.city else None
+            }
+        )
         if not serializer.is_valid():
             return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
         

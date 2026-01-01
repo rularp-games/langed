@@ -82,7 +82,7 @@
               :class="{ 'run-full': run.is_full }"
             >
               <div class="run-time-block">
-                <span class="run-time">{{ formatTime(run.date) }}</span>
+                <span class="run-time">{{ formatTime(run.date_local || run.date) }}</span>
                 <span class="run-duration">{{ formatDuration(run.duration) }}</span>
               </div>
               
@@ -458,10 +458,18 @@ export default {
       let runs = this.schedule.runs
       
       if (this.selectedDay) {
-        runs = runs.filter(run => run.date.startsWith(this.selectedDay))
+        runs = runs.filter(run => {
+          const localDate = run.date_local || run.date
+          return localDate && localDate.startsWith(this.selectedDay)
+        })
       }
       
-      return runs.sort((a, b) => new Date(a.date) - new Date(b.date))
+      // Сортируем по локальной дате
+      return runs.sort((a, b) => {
+        const dateA = a.date_local || a.date
+        const dateB = b.date_local || b.date
+        return dateA.localeCompare(dateB)
+      })
     }
   },
   mounted() {
@@ -558,8 +566,22 @@ export default {
     },
     
     formatTime(dateStr) {
+      // dateStr может быть date_local (без таймзоны) или date (ISO с Z)
+      // Для date_local просто парсим как локальное время
+      if (dateStr && !dateStr.endsWith('Z') && !dateStr.includes('+')) {
+        // Локальная дата без таймзоны - парсим напрямую
+        const parts = dateStr.split('T')
+        if (parts.length === 2) {
+          return parts[1].slice(0, 5)
+        }
+      }
       const date = new Date(dateStr)
       return date.toLocaleTimeString('ru-RU', { hour: '2-digit', minute: '2-digit' })
+    },
+    
+    // Получить локальную дату прогона (используем date_local если есть)
+    getRunLocalDate(run) {
+      return run.date_local || run.date
     },
     
     formatDuration(minutes) {
@@ -581,7 +603,10 @@ export default {
     },
     
     getRunsForDay(day) {
-      return this.filteredRuns.filter(run => run.date.startsWith(day))
+      return this.filteredRuns.filter(run => {
+        const localDate = this.getRunLocalDate(run)
+        return localDate && localDate.startsWith(day)
+      })
     },
     
     // === Добавление прогона ===
@@ -644,12 +669,27 @@ export default {
     
     // === Редактирование прогона ===
     openEditRunModal(run) {
-      const date = new Date(run.date)
+      // Используем локальную дату (date_local) если доступна
+      const localDateStr = run.date_local || run.date
+      let runDate = ''
+      let runTime = '12:00'
+      
+      if (localDateStr) {
+        // date_local имеет формат YYYY-MM-DDTHH:MM:SS (без таймзоны)
+        const parts = localDateStr.split('T')
+        if (parts.length >= 1) {
+          runDate = parts[0]
+        }
+        if (parts.length >= 2) {
+          runTime = parts[1].slice(0, 5)
+        }
+      }
+      
       this.editRun = {
         id: run.id,
         game_name: run.game_name,
-        date: date.toISOString().split('T')[0],
-        time: date.toTimeString().slice(0, 5),
+        date: runDate,
+        time: runTime,
         duration: run.duration,
         venue_id: run.venue ? run.venue.id : null,
         max_players: run.max_players,
