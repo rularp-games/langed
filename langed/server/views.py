@@ -9,6 +9,7 @@ from django.utils import timezone
 from django.conf import settings
 from datetime import date
 
+from django.db.models import Prefetch
 from .models import Game, Run, Convention, ConventionEvent, City, ConventionLink, Venue, Room, Registration, Region
 from .serializers import (
     GameSerializer, RunSerializer, 
@@ -621,9 +622,20 @@ class ConventionEventViewSet(viewsets.ModelViewSet):
                     raise PermissionDenied('Только организатор может редактировать проведение')
     
     def get_queryset(self):
+        # Используем явный Prefetch для надёжной загрузки прогонов и игр
+        runs_prefetch = Prefetch(
+            'scheduled_runs',
+            queryset=Run.objects.select_related('game').prefetch_related('masters', 'rooms')
+        )
+        
         queryset = ConventionEvent.objects.select_related(
-            'convention', 'city'
-        ).prefetch_related('scheduled_runs', 'scheduled_runs__game').all()
+            'convention', 'city', 'city__region'
+        ).prefetch_related(
+            runs_prefetch,
+            'organizers',
+            'convention__organizers',
+            'convention__links'
+        )
         
         # Фильтр по конвенту
         convention_id = self.request.query_params.get('convention')
