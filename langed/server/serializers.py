@@ -1,6 +1,6 @@
 from rest_framework import serializers
 from django.contrib.auth import get_user_model
-from .models import Game, Run, Convention, ConventionEvent, City, ConventionLink, Region, Venue, Registration
+from .models import Game, Run, Convention, ConventionEvent, City, ConventionLink, Region, Venue, Room, Registration
 
 User = get_user_model()
 
@@ -34,6 +34,28 @@ class CitySerializer(serializers.ModelSerializer):
         fields = ['id', 'name', 'region', 'timezone']
 
 
+class RoomSerializer(serializers.ModelSerializer):
+    """Сериализатор помещения"""
+    venue_id = serializers.PrimaryKeyRelatedField(
+        queryset=Venue.objects.all(),
+        source='venue',
+        write_only=True
+    )
+    venue_name = serializers.CharField(source='venue.name', read_only=True)
+    
+    class Meta:
+        model = Room
+        fields = ['id', 'venue_id', 'venue_name', 'name', 'blackbox', 'created_at', 'updated_at']
+        read_only_fields = ['id', 'created_at', 'updated_at']
+
+
+class RoomBriefSerializer(serializers.ModelSerializer):
+    """Краткий сериализатор помещения"""
+    class Meta:
+        model = Room
+        fields = ['id', 'name', 'blackbox']
+
+
 class VenueSerializer(serializers.ModelSerializer):
     """Сериализатор площадки"""
     city = CitySerializer(read_only=True)
@@ -42,10 +64,11 @@ class VenueSerializer(serializers.ModelSerializer):
         source='city',
         write_only=True
     )
+    rooms = RoomBriefSerializer(many=True, read_only=True)
     
     class Meta:
         model = Venue
-        fields = ['id', 'name', 'address', 'city', 'city_id', 'description', 'capacity', 'created_at', 'updated_at']
+        fields = ['id', 'name', 'address', 'city', 'city_id', 'description', 'capacity', 'rooms', 'created_at', 'updated_at']
         read_only_fields = ['id', 'created_at', 'updated_at']
 
 

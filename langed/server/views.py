@@ -9,12 +9,12 @@ from django.utils import timezone
 from django.conf import settings
 from datetime import date
 
-from .models import Game, Run, Convention, ConventionEvent, City, ConventionLink, Venue, Registration, Region
+from .models import Game, Run, Convention, ConventionEvent, City, ConventionLink, Venue, Room, Registration, Region
 from .serializers import (
     GameSerializer, RunSerializer, 
     ConventionSerializer, ConventionEventSerializer,
     CitySerializer, ConventionLinkSerializer,
-    VenueSerializer, RegistrationSerializer,
+    VenueSerializer, RoomSerializer, RegistrationSerializer,
     ConventionScheduleSerializer, ScheduleRunSerializer
 )
 
@@ -394,7 +394,7 @@ class RunViewSet(viewsets.ModelViewSet):
 
 class VenueViewSet(viewsets.ModelViewSet):
     """API для площадок"""
-    queryset = Venue.objects.select_related('city').all()
+    queryset = Venue.objects.select_related('city').prefetch_related('rooms').all()
     serializer_class = VenueSerializer
     
     def get_permissions(self):
@@ -411,6 +411,32 @@ class VenueViewSet(viewsets.ModelViewSet):
             queryset = queryset.filter(city_id=city_id)
         
         return queryset.order_by('name')
+
+
+class RoomViewSet(viewsets.ModelViewSet):
+    """API для помещений"""
+    queryset = Room.objects.select_related('venue', 'venue__city').all()
+    serializer_class = RoomSerializer
+    
+    def get_permissions(self):
+        if self.action in ['create', 'update', 'partial_update', 'destroy']:
+            return [IsAuthenticated()]
+        return [AllowAny()]
+    
+    def get_queryset(self):
+        queryset = super().get_queryset()
+        
+        # Фильтр по площадке
+        venue_id = self.request.query_params.get('venue')
+        if venue_id:
+            queryset = queryset.filter(venue_id=venue_id)
+        
+        # Фильтр по blackbox
+        blackbox = self.request.query_params.get('blackbox')
+        if blackbox is not None:
+            queryset = queryset.filter(blackbox=blackbox.lower() == 'true')
+        
+        return queryset.order_by('venue__name', 'name')
 
 
 class ConventionViewSet(viewsets.ModelViewSet):

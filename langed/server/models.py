@@ -253,6 +253,31 @@ class Venue(models.Model):
         return f'{self.name} ({self.city.name})'
 
 
+class Room(models.Model):
+    """Модель помещения на площадке"""
+    
+    venue = models.ForeignKey(
+        Venue,
+        on_delete=models.CASCADE,
+        related_name='rooms',
+        verbose_name='Площадка'
+    )
+    name = models.CharField(max_length=255, verbose_name='Название')
+    blackbox = models.BooleanField(default=False, verbose_name='Blackbox')
+    
+    created_at = models.DateTimeField(auto_now_add=True, verbose_name='Дата создания')
+    updated_at = models.DateTimeField(auto_now=True, verbose_name='Дата обновления')
+
+    class Meta:
+        verbose_name = 'Помещение'
+        verbose_name_plural = 'Помещения'
+        ordering = ['name']
+
+    def __str__(self):
+        blackbox_mark = ' [blackbox]' if self.blackbox else ''
+        return f'{self.name}{blackbox_mark} — {self.venue.name}'
+
+
 class Run(models.Model):
     """Модель прогона (сеанс игры)"""
     

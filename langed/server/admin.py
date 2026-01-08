@@ -3,7 +3,7 @@ from django import forms
 from django.contrib import messages
 from django.utils import timezone
 from datetime import time
-from .models import Game, City, Region, Convention, ConventionEvent, Run, ConventionLink, Venue
+from .models import Game, City, Region, Convention, ConventionEvent, Run, ConventionLink, Venue, Room
 
 
 class ConventionEventForm(forms.ModelForm):
@@ -176,13 +176,20 @@ class ConventionEventAdmin(admin.ModelAdmin):
     runs_count.short_description = 'Количество прогонов'
 
 
+class RoomInline(admin.TabularInline):
+    model = Room
+    extra = 1
+    fields = ('name', 'blackbox')
+
+
 @admin.register(Venue)
 class VenueAdmin(admin.ModelAdmin):
-    list_display = ('name', 'city', 'address', 'capacity', 'runs_count', 'created_at')
+    list_display = ('name', 'city', 'address', 'capacity', 'rooms_count', 'runs_count', 'created_at')
     list_filter = ('city', 'city__region')
     search_fields = ('name', 'address', 'city__name', 'description')
     ordering = ('name',)
     autocomplete_fields = ('city',)
+    inlines = [RoomInline]
     fieldsets = (
         ('Основная информация', {
             'fields': ('name', 'city', 'address')
@@ -192,9 +199,22 @@ class VenueAdmin(admin.ModelAdmin):
         }),
     )
     
+    def rooms_count(self, obj):
+        return obj.rooms.count()
+    rooms_count.short_description = 'Помещений'
+    
     def runs_count(self, obj):
         return obj.runs.count()
     runs_count.short_description = 'Прогонов'
+
+
+@admin.register(Room)
+class RoomAdmin(admin.ModelAdmin):
+    list_display = ('name', 'venue', 'blackbox', 'created_at')
+    list_filter = ('blackbox', 'venue', 'venue__city')
+    search_fields = ('name', 'venue__name', 'venue__city__name')
+    ordering = ('venue__name', 'name')
+    autocomplete_fields = ('venue',)
 
 
 @admin.register(Run)

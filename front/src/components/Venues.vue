@@ -63,6 +63,10 @@
               <span class="stat-label">Вместимость</span>
               <span class="stat-value">{{ venue.capacity }}</span>
             </div>
+            <div v-if="venue.rooms && venue.rooms.length > 0" class="stat">
+              <span class="stat-label">Помещений</span>
+              <span class="stat-value">{{ venue.rooms.length }}</span>
+            </div>
           </div>
         </div>
       </div>
@@ -121,6 +125,166 @@
               <span class="modal-stat-value">{{ selectedVenue.capacity }}</span>
             </div>
           </div>
+          
+          <!-- Секция помещений -->
+          <div class="modal-section rooms-section">
+            <div class="rooms-header">
+              <h3>Помещения</h3>
+              <button 
+                v-if="isAuthenticated" 
+                @click="openAddRoomModal" 
+                class="add-room-btn"
+                title="Добавить помещение"
+              >
+                +
+              </button>
+            </div>
+            
+            <div v-if="selectedVenue.rooms && selectedVenue.rooms.length > 0" class="rooms-list">
+              <div 
+                v-for="room in selectedVenue.rooms" 
+                :key="room.id" 
+                class="room-item"
+              >
+                <div class="room-info">
+                  <span class="room-name">{{ room.name }}</span>
+                  <span v-if="room.blackbox" class="room-badge blackbox">blackbox</span>
+                </div>
+                <div v-if="isAuthenticated" class="room-actions">
+                  <button 
+                    class="room-edit-btn" 
+                    @click="startEditingRoom(room)"
+                    title="Редактировать"
+                  >
+                    ✏️
+                  </button>
+                  <button 
+                    class="room-delete-btn" 
+                    @click="confirmDeleteRoom(room)"
+                    title="Удалить"
+                  >
+                    🗑️
+                  </button>
+                </div>
+              </div>
+            </div>
+            <p v-else class="no-rooms">Помещения не добавлены</p>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- Модальное окно добавления помещения -->
+    <div v-if="showAddRoomModal && isAuthenticated" class="modal-overlay" @click.self="closeAddRoomModal">
+      <div class="modal-content add-room-modal">
+        <button class="modal-close" @click="closeAddRoomModal">×</button>
+        
+        <div class="modal-body">
+          <h2>Добавить помещение</h2>
+          
+          <form @submit.prevent="submitRoom" class="add-room-form">
+            <div class="form-group">
+              <label for="room-name">Название *</label>
+              <input 
+                id="room-name"
+                v-model="newRoom.name" 
+                type="text" 
+                required
+                class="form-input"
+                placeholder="Например: Зал 1, Комната А"
+              />
+            </div>
+            
+            <div class="form-group checkbox-group">
+              <label class="checkbox-label">
+                <input 
+                  type="checkbox"
+                  v-model="newRoom.blackbox"
+                  class="checkbox-input"
+                />
+                <span class="checkbox-custom"></span>
+                <span class="checkbox-text">Blackbox</span>
+              </label>
+            </div>
+            
+            <div v-if="addRoomError" class="form-error">{{ addRoomError }}</div>
+            
+            <div class="form-actions">
+              <button type="button" @click="closeAddRoomModal" class="btn btn-secondary">Отмена</button>
+              <button type="submit" class="btn btn-primary" :disabled="addRoomLoading">
+                <span v-if="addRoomLoading">Сохранение...</span>
+                <span v-else>Добавить</span>
+              </button>
+            </div>
+          </form>
+        </div>
+      </div>
+    </div>
+
+    <!-- Модальное окно редактирования помещения -->
+    <div v-if="isEditingRoom" class="modal-overlay" @click.self="cancelEditingRoom">
+      <div class="modal-content add-room-modal">
+        <button class="modal-close" @click="cancelEditingRoom">×</button>
+        
+        <div class="modal-body">
+          <h2>Редактировать помещение</h2>
+          
+          <form @submit.prevent="submitEditRoom" class="add-room-form">
+            <div class="form-group">
+              <label for="edit-room-name">Название *</label>
+              <input 
+                id="edit-room-name"
+                v-model="editRoom.name" 
+                type="text" 
+                required
+                class="form-input"
+                placeholder="Например: Зал 1, Комната А"
+              />
+            </div>
+            
+            <div class="form-group checkbox-group">
+              <label class="checkbox-label">
+                <input 
+                  type="checkbox"
+                  v-model="editRoom.blackbox"
+                  class="checkbox-input"
+                />
+                <span class="checkbox-custom"></span>
+                <span class="checkbox-text">Blackbox</span>
+              </label>
+            </div>
+            
+            <div v-if="editRoomError" class="form-error">{{ editRoomError }}</div>
+            
+            <div class="form-actions">
+              <button type="button" @click="cancelEditingRoom" class="btn btn-secondary">Отмена</button>
+              <button type="submit" class="btn btn-primary" :disabled="editRoomLoading">
+                <span v-if="editRoomLoading">Сохранение...</span>
+                <span v-else>Сохранить</span>
+              </button>
+            </div>
+          </form>
+        </div>
+      </div>
+    </div>
+
+    <!-- Модальное окно подтверждения удаления помещения -->
+    <div v-if="showDeleteRoomConfirm" class="modal-overlay" @click.self="showDeleteRoomConfirm = false">
+      <div class="modal-content delete-confirm-modal">
+        <button class="modal-close" @click="showDeleteRoomConfirm = false">×</button>
+        
+        <h2>Удалить помещение?</h2>
+        
+        <p class="delete-warning">
+          Помещение "{{ roomToDelete?.name }}" будет удалено.
+        </p>
+        
+        <div class="form-actions">
+          <button type="button" @click="showDeleteRoomConfirm = false" class="btn btn-secondary">Отмена</button>
+          <button type="button" @click="deleteRoom" class="btn btn-danger" :disabled="deleteRoomLoading">
+            <span v-if="deleteRoomLoading">Удаление...</span>
+            <span v-else>Удалить</span>
+          </button>
         </div>
       </div>
     </div>
@@ -340,14 +504,26 @@ export default {
       addError: null,
       newVenue: this.getEmptyVenue(),
       linkCopied: false,
-      // Редактирование
+      // Редактирование площадки
       isEditingVenue: false,
       editVenueLoading: false,
       editVenueError: null,
       editVenue: this.getEmptyVenue(),
-      // Удаление
+      // Удаление площадки
       showDeleteConfirm: false,
-      deleteLoading: false
+      deleteLoading: false,
+      // Помещения
+      showAddRoomModal: false,
+      addRoomLoading: false,
+      addRoomError: null,
+      newRoom: this.getEmptyRoom(),
+      isEditingRoom: false,
+      editRoomLoading: false,
+      editRoomError: null,
+      editRoom: this.getEmptyRoom(),
+      showDeleteRoomConfirm: false,
+      deleteRoomLoading: false,
+      roomToDelete: null
     }
   },
   watch: {
@@ -434,6 +610,12 @@ export default {
         address: '',
         description: '',
         capacity: null
+      }
+    },
+    getEmptyRoom() {
+      return {
+        name: '',
+        blackbox: false
       }
     },
     openVenueById(id) {
@@ -572,7 +754,7 @@ export default {
       }
     },
     
-    // === Удаление ===
+    // === Удаление площадки ===
     async deleteVenue() {
       if (!this.selectedVenue) return
       
@@ -604,6 +786,177 @@ export default {
         alert(err.message)
       } finally {
         this.deleteLoading = false
+      }
+    },
+    
+    // === Помещения ===
+    openAddRoomModal() {
+      this.newRoom = this.getEmptyRoom()
+      this.addRoomError = null
+      this.showAddRoomModal = true
+    },
+    closeAddRoomModal() {
+      this.showAddRoomModal = false
+      this.addRoomError = null
+    },
+    async submitRoom() {
+      if (!this.selectedVenue) return
+      
+      this.addRoomLoading = true
+      this.addRoomError = null
+      
+      try {
+        const response = await fetch('/api/rooms/', {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+            'X-CSRFToken': this.csrfToken
+          },
+          body: JSON.stringify({
+            venue_id: this.selectedVenue.id,
+            name: this.newRoom.name,
+            blackbox: this.newRoom.blackbox
+          })
+        })
+        
+        if (!response.ok) {
+          if (response.status === 401 || response.status === 403) {
+            throw new Error('Необходима авторизация')
+          }
+          const data = await response.json()
+          throw new Error(data.detail || data.name?.[0] || 'Ошибка при сохранении')
+        }
+        
+        const createdRoom = await response.json()
+        
+        // Добавляем комнату в текущую площадку
+        if (!this.selectedVenue.rooms) {
+          this.selectedVenue.rooms = []
+        }
+        this.selectedVenue.rooms.push(createdRoom)
+        
+        // Обновляем площадку в общем списке
+        const venueIndex = this.venues.findIndex(v => v.id === this.selectedVenue.id)
+        if (venueIndex !== -1) {
+          this.venues[venueIndex] = { ...this.selectedVenue }
+        }
+        
+        this.closeAddRoomModal()
+      } catch (err) {
+        this.addRoomError = err.message
+      } finally {
+        this.addRoomLoading = false
+      }
+    },
+    
+    // Редактирование помещения
+    startEditingRoom(room) {
+      this.editRoom = {
+        id: room.id,
+        name: room.name,
+        blackbox: room.blackbox
+      }
+      this.editRoomError = null
+      this.isEditingRoom = true
+    },
+    cancelEditingRoom() {
+      this.isEditingRoom = false
+      this.editRoomError = null
+    },
+    async submitEditRoom() {
+      this.editRoomLoading = true
+      this.editRoomError = null
+      
+      try {
+        const response = await fetch(`/api/rooms/${this.editRoom.id}/`, {
+          method: 'PATCH',
+          headers: {
+            'Content-Type': 'application/json',
+            'X-CSRFToken': this.csrfToken
+          },
+          body: JSON.stringify({
+            name: this.editRoom.name,
+            blackbox: this.editRoom.blackbox
+          })
+        })
+        
+        if (!response.ok) {
+          if (response.status === 401 || response.status === 403) {
+            throw new Error('Нет прав для редактирования')
+          }
+          const data = await response.json()
+          throw new Error(data.detail || data.name?.[0] || 'Ошибка при сохранении')
+        }
+        
+        const updatedRoom = await response.json()
+        
+        // Обновляем комнату в списке
+        if (this.selectedVenue && this.selectedVenue.rooms) {
+          const roomIndex = this.selectedVenue.rooms.findIndex(r => r.id === updatedRoom.id)
+          if (roomIndex !== -1) {
+            this.selectedVenue.rooms.splice(roomIndex, 1, updatedRoom)
+          }
+        }
+        
+        // Обновляем площадку в общем списке
+        const venueIndex = this.venues.findIndex(v => v.id === this.selectedVenue.id)
+        if (venueIndex !== -1) {
+          this.venues[venueIndex] = { ...this.selectedVenue }
+        }
+        
+        this.isEditingRoom = false
+      } catch (err) {
+        this.editRoomError = err.message
+      } finally {
+        this.editRoomLoading = false
+      }
+    },
+    
+    // Удаление помещения
+    confirmDeleteRoom(room) {
+      this.roomToDelete = room
+      this.showDeleteRoomConfirm = true
+    },
+    async deleteRoom() {
+      if (!this.roomToDelete) return
+      
+      this.deleteRoomLoading = true
+      
+      try {
+        const response = await fetch(`/api/rooms/${this.roomToDelete.id}/`, {
+          method: 'DELETE',
+          headers: {
+            'X-CSRFToken': this.csrfToken
+          }
+        })
+        
+        if (!response.ok) {
+          if (response.status === 401 || response.status === 403) {
+            throw new Error('Нет прав для удаления')
+          }
+          throw new Error('Ошибка при удалении')
+        }
+        
+        // Удаляем комнату из списка
+        if (this.selectedVenue && this.selectedVenue.rooms) {
+          const roomIndex = this.selectedVenue.rooms.findIndex(r => r.id === this.roomToDelete.id)
+          if (roomIndex !== -1) {
+            this.selectedVenue.rooms.splice(roomIndex, 1)
+          }
+        }
+        
+        // Обновляем площадку в общем списке
+        const venueIndex = this.venues.findIndex(v => v.id === this.selectedVenue.id)
+        if (venueIndex !== -1) {
+          this.venues[venueIndex] = { ...this.selectedVenue }
+        }
+        
+        this.showDeleteRoomConfirm = false
+        this.roomToDelete = null
+      } catch (err) {
+        alert(err.message)
+      } finally {
+        this.deleteRoomLoading = false
       }
     }
   }
@@ -1251,6 +1604,190 @@ export default {
 .btn-danger:disabled {
   opacity: 0.6;
   cursor: not-allowed;
+}
+
+/* ========== Помещения ========== */
+.rooms-section {
+  margin-top: 24px;
+  padding-top: 24px;
+  border-top: 1px solid #ff6b3533;
+}
+
+.rooms-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 16px;
+}
+
+.rooms-header h3 {
+  margin-bottom: 0;
+}
+
+.add-room-btn {
+  width: 32px;
+  height: 32px;
+  border-radius: 50%;
+  background: linear-gradient(145deg, #ff6b35, #e55a2b);
+  border: none;
+  color: #fff;
+  font-size: 1.4rem;
+  font-weight: bold;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  transition: all 0.2s ease;
+}
+
+.add-room-btn:hover {
+  transform: scale(1.1);
+  box-shadow: 0 4px 15px rgba(255, 107, 53, 0.4);
+}
+
+.rooms-list {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.room-item {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: 12px 16px;
+  background: rgba(0, 0, 0, 0.3);
+  border-radius: 8px;
+  border: 1px solid #ff6b3522;
+}
+
+.room-info {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+}
+
+.room-name {
+  color: #e0e0e0;
+  font-size: 1rem;
+}
+
+.room-badge {
+  padding: 4px 10px;
+  border-radius: 12px;
+  font-size: 0.75rem;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+}
+
+.room-badge.blackbox {
+  background: rgba(138, 43, 226, 0.2);
+  color: #b380ff;
+  border: 1px solid #8a2be255;
+}
+
+.room-actions {
+  display: flex;
+  gap: 6px;
+}
+
+.room-edit-btn,
+.room-delete-btn {
+  width: 28px;
+  height: 28px;
+  border-radius: 6px;
+  border: none;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 0.85rem;
+  transition: all 0.2s ease;
+}
+
+.room-edit-btn {
+  background: rgba(255, 107, 53, 0.15);
+  color: #ff6b35;
+}
+
+.room-edit-btn:hover {
+  background: rgba(255, 107, 53, 0.3);
+}
+
+.room-delete-btn {
+  background: rgba(255, 68, 68, 0.15);
+  color: #ff4444;
+}
+
+.room-delete-btn:hover {
+  background: rgba(255, 68, 68, 0.3);
+}
+
+.no-rooms {
+  color: #666;
+  font-size: 0.95rem;
+  text-align: center;
+  padding: 16px;
+}
+
+/* Форма добавления помещения */
+.add-room-modal {
+  max-width: 450px;
+}
+
+.add-room-form {
+  display: flex;
+  flex-direction: column;
+  gap: 20px;
+}
+
+/* Чекбокс */
+.checkbox-group {
+  margin-top: 8px;
+}
+
+.checkbox-label {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  cursor: pointer;
+  user-select: none;
+}
+
+.checkbox-input {
+  display: none;
+}
+
+.checkbox-custom {
+  width: 24px;
+  height: 24px;
+  border: 2px solid #ff6b3555;
+  border-radius: 6px;
+  background: rgba(10, 10, 10, 0.6);
+  position: relative;
+  transition: all 0.2s ease;
+}
+
+.checkbox-input:checked + .checkbox-custom {
+  background: linear-gradient(145deg, #ff6b35, #e55a2b);
+  border-color: #ff6b35;
+}
+
+.checkbox-input:checked + .checkbox-custom::after {
+  content: '✓';
+  position: absolute;
+  top: 50%;
+  left: 50%;
+  transform: translate(-50%, -50%);
+  color: #fff;
+  font-size: 14px;
+  font-weight: bold;
+}
+
+.checkbox-text {
+  color: #e0e0e0;
+  font-size: 1rem;
 }
 
 /* ========== Адаптив ========== */
