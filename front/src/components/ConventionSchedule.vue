@@ -216,7 +216,7 @@
         </div>
         
         <div v-for="day in filteredDays" :key="day" class="grid-day">
-          <div class="grid-day-header" :style="{ gridColumn: `span ${gridVenues.length + 1}` }">
+          <div class="grid-day-header" :style="{ gridColumn: `span ${gridRooms.length + 1}` }">
             <span class="day-name">{{ formatDayName(day) }}</span>
             <span class="day-date">{{ formatDayDate(day) }}</span>
           </div>
