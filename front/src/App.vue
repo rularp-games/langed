@@ -5,6 +5,7 @@
         <router-link to="/">Афиша</router-link>
         <router-link to="/games">Игры</router-link>
         <router-link to="/conventions">Конвенты</router-link>
+        <router-link to="/venues">Площадки</router-link>
       </div>
       <div class="user-info">
         <template v-if="user && user.is_authenticated">

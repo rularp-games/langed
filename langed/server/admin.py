@@ -3,7 +3,7 @@ from django import forms
 from django.contrib import messages
 from django.utils import timezone
 from datetime import time
-from .models import Game, City, Region, Convention, ConventionEvent, Run, ConventionLink
+from .models import Game, City, Region, Convention, ConventionEvent, Run, ConventionLink, Venue
 
 
 class ConventionEventForm(forms.ModelForm):
@@ -176,17 +176,38 @@ class ConventionEventAdmin(admin.ModelAdmin):
     runs_count.short_description = 'Количество прогонов'
 
 
+@admin.register(Venue)
+class VenueAdmin(admin.ModelAdmin):
+    list_display = ('name', 'city', 'address', 'capacity', 'runs_count', 'created_at')
+    list_filter = ('city', 'city__region')
+    search_fields = ('name', 'address', 'city__name', 'description')
+    ordering = ('name',)
+    autocomplete_fields = ('city',)
+    fieldsets = (
+        ('Основная информация', {
+            'fields': ('name', 'city', 'address')
+        }),
+        ('Дополнительно', {
+            'fields': ('description', 'capacity')
+        }),
+    )
+    
+    def runs_count(self, obj):
+        return obj.runs.count()
+    runs_count.short_description = 'Прогонов'
+
+
 @admin.register(Run)
 class RunAdmin(admin.ModelAdmin):
-    list_display = ('game', 'get_masters', 'city', 'date', 'convention_event', 'created_at')
-    list_filter = ('city', 'convention_event', 'date')
-    search_fields = ('game__name', 'city__name', 'convention_event__convention__name', 'masters__username', 'masters__first_name', 'masters__last_name')
+    list_display = ('game', 'get_masters', 'city', 'venue', 'date', 'convention_event', 'created_at')
+    list_filter = ('city', 'venue', 'convention_event', 'date')
+    search_fields = ('game__name', 'city__name', 'venue__name', 'convention_event__convention__name', 'masters__username', 'masters__first_name', 'masters__last_name')
     date_hierarchy = 'date'
-    autocomplete_fields = ('game', 'city', 'convention_event')
+    autocomplete_fields = ('game', 'city', 'venue', 'convention_event')
     filter_horizontal = ('masters',)
     fieldsets = (
         ('Основная информация', {
-            'fields': ('game', 'masters', 'city', 'convention_event')
+            'fields': ('game', 'masters', 'city', 'venue', 'convention_event')
         }),
         ('Дата', {
             'fields': ('date',)

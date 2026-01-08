@@ -2,6 +2,7 @@ import { createRouter, createWebHistory } from 'vue-router'
 import Games from '../components/Games.vue'
 import Afisha from '../components/Afisha.vue'
 import Conventions from '../components/Conventions.vue'
+import Venues from '../components/Venues.vue'
 import ConventionSchedule from '../components/ConventionSchedule.vue'
 import ScheduleEditor from '../components/ScheduleEditor.vue'
 
@@ -30,6 +31,13 @@ const routes = [
       eventId: route.query.event,
       viewMode: route.query.view
     })
+  },
+  {
+    path: '/venues',
+    name: 'Venues',
+    component: Venues,
+    // Поддержка query параметра: ?id=ID
+    props: route => ({ venueId: route.query.id })
   },
   {
     path: '/schedule/:eventId',
