@@ -305,12 +305,10 @@ class Run(models.Model):
         related_name='runs',
         verbose_name='Город'
     )
-    venue = models.ForeignKey(
-        Venue,
-        on_delete=models.SET_NULL,
+    rooms = models.ManyToManyField(
+        Room,
         related_name='runs',
-        verbose_name='Площадка',
-        null=True,
+        verbose_name='Помещения',
         blank=True
     )
     convention_event = models.ForeignKey(

@@ -95,10 +95,10 @@
             </option>
           </select>
           
-          <select v-model="selectedVenue" class="control-select">
-            <option value="">Все площадки</option>
-            <option v-for="venue in schedule.venues" :key="venue.id" :value="venue.id">
-              {{ venue.name }}
+          <select v-model="selectedRoom" class="control-select">
+            <option value="">Все помещения</option>
+            <option v-for="room in allRooms" :key="room.id" :value="room.id">
+              {{ room.name }}
             </option>
           </select>
         </div>
@@ -131,17 +131,17 @@
               </div>
             </div>
             
-            <!-- Прогоны по площадкам -->
-            <div class="timeline-venues">
+            <!-- Прогоны по помещениям -->
+            <div class="timeline-rooms">
               <div 
-                v-for="venue in getVenuesForDay(day)" 
-                :key="venue.id || 'no-venue'"
-                class="timeline-venue"
+                v-for="room in getRoomsForDay(day)" 
+                :key="room.id || 'no-room'"
+                class="timeline-room"
               >
-                <div class="venue-header">{{ venue.name || 'Без площадки' }}</div>
-                <div class="venue-runs">
+                <div class="room-header">{{ room.name || 'Без помещения' }}</div>
+                <div class="room-runs">
                   <div 
-                    v-for="run in getRunsForDayVenue(day, venue.id)" 
+                    v-for="run in getRunsForDayRoom(day, room.id)" 
                     :key="run.id"
                     class="timeline-run"
                     :style="getRunStyle(run)"
@@ -186,7 +186,7 @@
               </div>
               <div class="run-main-col">
                 <div class="run-name">{{ run.game_name }}</div>
-                <div class="run-venue" v-if="run.venue_name">📍 {{ run.venue_name }}</div>
+                <div class="run-rooms" v-if="run.rooms && run.rooms.length">📍 {{ run.rooms.map(r => r.name).join(', ') }}</div>
                 <div class="run-masters" v-if="run.masters && run.masters.length">
                   👤 {{ run.masters.map(m => m.display_name).join(', ') }}
                 </div>
@@ -207,11 +207,11 @@
         <div class="grid-header">
           <div class="grid-time-col"></div>
           <div 
-            v-for="venue in gridVenues" 
-            :key="venue.id || 'no-venue'"
-            class="grid-venue-col"
+            v-for="room in gridRooms" 
+            :key="room.id || 'no-room'"
+            class="grid-room-col"
           >
-            {{ venue.name || 'Без площадки' }}
+            {{ room.name || 'Без помещения' }}
           </div>
         </div>
         
@@ -224,12 +224,12 @@
           <template v-for="slot in getTimeSlotsForDay(day)" :key="slot.time">
             <div class="grid-time-cell">{{ formatTime(slot.time) }}</div>
             <div 
-              v-for="venue in gridVenues" 
-              :key="(venue.id || 'no-venue') + '-' + slot.time"
+              v-for="room in gridRooms" 
+              :key="(room.id || 'no-room') + '-' + slot.time"
               class="grid-cell"
             >
               <div 
-                v-for="run in getRunsForSlotVenue(slot, venue.id)"
+                v-for="run in getRunsForSlotRoom(slot, room.id)"
                 :key="run.id"
                 class="grid-run"
                 :class="{ 'run-full': run.is_full }"
@@ -256,8 +256,8 @@
         
         <h2>{{ selectedRun.game_name }}</h2>
         
-        <div class="modal-venue" v-if="selectedRun.venue_name">
-          📍 {{ selectedRun.venue_name }}
+        <div class="modal-rooms" v-if="selectedRun.rooms && selectedRun.rooms.length">
+          📍 {{ selectedRun.rooms.map(r => r.name).join(', ') }}
         </div>
         
         <div class="modal-section" v-if="selectedRun.masters && selectedRun.masters.length > 0">
@@ -313,7 +313,7 @@ export default {
       error: null,
       viewMode: 'timeline',
       selectedDay: '',
-      selectedVenue: '',
+      selectedRoom: '',
       selectedRun: null,
       linkCopied: false,
       timelineStartHour: 9,
@@ -350,9 +350,9 @@ export default {
         })
       }
       
-      if (this.selectedVenue) {
+      if (this.selectedRoom) {
         runs = runs.filter(run => {
-          return run.venue && run.venue.id === this.selectedVenue
+          return run.rooms && run.rooms.some(r => r.id === this.selectedRoom)
         })
       }
       
@@ -370,15 +370,30 @@ export default {
       }
       return hours
     },
-    gridVenues() {
+    allRooms() {
+      // Собираем все уникальные помещения из прогонов
+      if (!this.schedule || !this.schedule.runs) return []
+      const roomsMap = new Map()
+      this.schedule.runs.forEach(run => {
+        if (run.rooms) {
+          run.rooms.forEach(room => {
+            if (!roomsMap.has(room.id)) {
+              roomsMap.set(room.id, room)
+            }
+          })
+        }
+      })
+      return Array.from(roomsMap.values())
+    },
+    gridRooms() {
       if (!this.schedule) return []
-      const venues = [...(this.schedule.venues || [])]
-      // Добавляем "Без площадки" если есть прогоны без venue
-      const hasNoVenue = this.schedule.runs.some(r => !r.venue)
-      if (hasNoVenue) {
-        venues.push({ id: null, name: 'Без площадки' })
+      const rooms = [...this.allRooms]
+      // Добавляем "Без помещения" если есть прогоны без rooms
+      const hasNoRoom = this.schedule.runs.some(r => !r.rooms || r.rooms.length === 0)
+      if (hasNoRoom) {
+        rooms.push({ id: null, name: 'Без помещения' })
       }
-      return venues
+      return rooms
     }
   },
   mounted() {
@@ -498,20 +513,29 @@ export default {
       return (hour - this.timelineStartHour) * this.hourHeight
     },
     
-    getVenuesForDay(day) {
+    getRoomsForDay(day) {
       const runs = this.getRunsForDay(day)
-      const venueIds = new Set()
-      const venues = []
+      const roomIds = new Set()
+      const rooms = []
       
       runs.forEach(run => {
-        const venueId = run.venue ? run.venue.id : null
-        if (!venueIds.has(venueId)) {
-          venueIds.add(venueId)
-          venues.push(run.venue || { id: null, name: 'Без площадки' })
+        if (run.rooms && run.rooms.length > 0) {
+          run.rooms.forEach(room => {
+            if (!roomIds.has(room.id)) {
+              roomIds.add(room.id)
+              rooms.push(room)
+            }
+          })
+        } else {
+          // Прогон без помещений
+          if (!roomIds.has(null)) {
+            roomIds.add(null)
+            rooms.push({ id: null, name: 'Без помещения' })
+          }
         }
       })
       
-      return venues
+      return rooms
     },
     
     getRunsForDay(day) {
@@ -521,10 +545,12 @@ export default {
       })
     },
     
-    getRunsForDayVenue(day, venueId) {
+    getRunsForDayRoom(day, roomId) {
       return this.getRunsForDay(day).filter(run => {
-        const runVenueId = run.venue ? run.venue.id : null
-        return runVenueId === venueId
+        if (roomId === null) {
+          return !run.rooms || run.rooms.length === 0
+        }
+        return run.rooms && run.rooms.some(r => r.id === roomId)
       })
     },
     
@@ -557,11 +583,15 @@ export default {
       return Array.from(times).sort().map(time => ({ time }))
     },
     
-    getRunsForSlotVenue(slot, venueId) {
+    getRunsForSlotRoom(slot, roomId) {
       return this.filteredRuns.filter(run => {
-        const runVenueId = run.venue ? run.venue.id : null
         const runDate = this.getRunLocalDate(run)
-        return runDate === slot.time && runVenueId === venueId
+        if (runDate !== slot.time) return false
+        
+        if (roomId === null) {
+          return !run.rooms || run.rooms.length === 0
+        }
+        return run.rooms && run.rooms.some(r => r.id === roomId)
       })
     },
     
@@ -901,7 +931,7 @@ export default {
   transform: translateY(-50%);
 }
 
-.timeline-venues {
+.timeline-rooms {
   flex: 1;
   display: flex;
   gap: 16px;
@@ -909,13 +939,13 @@ export default {
   padding-bottom: 20px;
 }
 
-.timeline-venue {
+.timeline-room {
   flex: 1;
   min-width: 200px;
   max-width: 300px;
 }
 
-.venue-header {
+.room-header {
   position: sticky;
   top: 0;
   background: rgba(26, 26, 46, 0.95);
@@ -929,7 +959,7 @@ export default {
   z-index: 1;
 }
 
-.venue-runs {
+.room-runs {
   position: relative;
   min-height: 600px;
   background: rgba(0, 0, 0, 0.2);
@@ -1065,7 +1095,7 @@ export default {
   margin-bottom: 6px;
 }
 
-.run-venue,
+.run-rooms,
 .run-masters {
   font-size: 0.9rem;
   color: #888;
@@ -1110,7 +1140,7 @@ export default {
 }
 
 .grid-time-col,
-.grid-venue-col {
+.grid-room-col {
   padding: 12px 16px;
   background: rgba(26, 26, 46, 0.95);
   color: #00ccff;
@@ -1241,7 +1271,7 @@ export default {
   padding-right: 40px;
 }
 
-.modal-venue {
+.modal-rooms {
   color: #00ccff;
   margin-bottom: 16px;
 }

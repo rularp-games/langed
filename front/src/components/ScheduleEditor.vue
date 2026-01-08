@@ -89,7 +89,7 @@
               <div class="run-main">
                 <div class="run-name">{{ run.game_name }}</div>
                 <div class="run-details">
-                  <span v-if="run.venue_name" class="run-venue">📍 {{ run.venue_name }}</span>
+                  <span v-if="run.rooms && run.rooms.length" class="run-rooms">📍 {{ run.rooms.map(r => r.name).join(', ') }}</span>
                   <span v-if="run.masters && run.masters.length" class="run-masters">
                     👤 {{ run.masters.map(m => m.display_name).join(', ') }}
                   </span>
@@ -196,13 +196,13 @@
           </div>
           
           <div class="form-group">
-            <label>Площадка</label>
-            <select v-model="newRun.venue_id" class="form-input">
-              <option :value="null">Не указана</option>
-              <option v-for="venue in venues" :key="venue.id" :value="venue.id">
-                {{ venue.name }}
+            <label>Помещения</label>
+            <select v-model="newRun.room_ids" class="form-input" multiple size="4">
+              <option v-for="room in rooms" :key="room.id" :value="room.id">
+                {{ room.venue_name }} — {{ room.name }}{{ room.blackbox ? ' [blackbox]' : '' }}
               </option>
             </select>
+            <span class="form-hint">Зажмите Ctrl для выбора нескольких</span>
           </div>
           
           <div class="form-group">
@@ -292,13 +292,13 @@
           </div>
           
           <div class="form-group">
-            <label>Площадка</label>
-            <select v-model="editRun.venue_id" class="form-input">
-              <option :value="null">Не указана</option>
-              <option v-for="venue in venues" :key="venue.id" :value="venue.id">
-                {{ venue.name }}
+            <label>Помещения</label>
+            <select v-model="editRun.room_ids" class="form-input" multiple size="4">
+              <option v-for="room in rooms" :key="room.id" :value="room.id">
+                {{ room.venue_name }} — {{ room.name }}{{ room.blackbox ? ' [blackbox]' : '' }}
               </option>
             </select>
+            <span class="form-hint">Зажмите Ctrl для выбора нескольких</span>
           </div>
           
           <div class="form-group">
@@ -401,7 +401,7 @@ export default {
       error: null,
       selectedDay: '',
       games: [],
-      venues: [],
+      rooms: [],
       
       // Добавление прогона
       showAddModal: false,
@@ -475,7 +475,7 @@ export default {
   mounted() {
     this.fetchSchedule()
     this.fetchGames()
-    this.fetchVenues()
+    this.fetchRooms()
   },
   watch: {
     eventId() {
@@ -489,7 +489,7 @@ export default {
         date: '',
         time: '12:00',
         duration: 180,
-        venue_id: null,
+        room_ids: [],
         max_players: null,
         registration_open: true
       }
@@ -523,14 +523,14 @@ export default {
       }
     },
     
-    async fetchVenues() {
+    async fetchRooms() {
       try {
-        const response = await fetch('/api/venues/')
+        const response = await fetch('/api/rooms/')
         if (response.ok) {
-          this.venues = await response.json()
+          this.rooms = await response.json()
         }
       } catch (err) {
-        console.error('Ошибка загрузки площадок:', err)
+        console.error('Ошибка загрузки помещений:', err)
       }
     },
     
@@ -637,7 +637,7 @@ export default {
           game_id: this.newRun.game_id,
           date: dateTime,
           duration: this.newRun.duration,
-          venue_id: this.newRun.venue_id,
+          room_ids: this.newRun.room_ids || [],
           max_players: this.newRun.max_players || null,
           registration_open: this.newRun.registration_open
         }
@@ -691,7 +691,7 @@ export default {
         date: runDate,
         time: runTime,
         duration: run.duration,
-        venue_id: run.venue ? run.venue.id : null,
+        room_ids: run.rooms ? run.rooms.map(r => r.id) : [],
         max_players: run.max_players,
         registration_open: run.registration_open
       }
@@ -716,7 +716,7 @@ export default {
           run_id: this.editRun.id,
           date: dateTime,
           duration: this.editRun.duration,
-          venue_id: this.editRun.venue_id,
+          room_ids: this.editRun.room_ids || [],
           max_players: this.editRun.max_players || null,
           registration_open: this.editRun.registration_open
         }
@@ -1098,10 +1098,16 @@ export default {
   flex-wrap: wrap;
 }
 
-.run-venue,
+.run-rooms,
 .run-masters {
   font-size: 0.9rem;
   color: #888;
+}
+
+.form-hint {
+  font-size: 0.8rem;
+  color: #666;
+  margin-top: 4px;
 }
 
 .run-status {

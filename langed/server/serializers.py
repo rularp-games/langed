@@ -184,15 +184,14 @@ class ScheduleRunSerializer(serializers.ModelSerializer):
     )
     game_name = serializers.CharField(source='game.name', read_only=True)
     masters = UserBriefSerializer(many=True, read_only=True)
-    venue = VenueBriefSerializer(read_only=True)
-    venue_id = serializers.PrimaryKeyRelatedField(
-        queryset=Venue.objects.all(),
-        source='venue',
+    rooms = RoomBriefSerializer(many=True, read_only=True)
+    room_ids = serializers.PrimaryKeyRelatedField(
+        queryset=Room.objects.all(),
+        source='rooms',
         write_only=True,
-        required=False,
-        allow_null=True
+        many=True,
+        required=False
     )
-    venue_name = serializers.CharField(source='venue.name', read_only=True)
     city_timezone = serializers.CharField(source='city.timezone', read_only=True)
     date_local = serializers.SerializerMethodField()
     registered_count = serializers.SerializerMethodField()
@@ -206,7 +205,7 @@ class ScheduleRunSerializer(serializers.ModelSerializer):
         fields = [
             'id', 'game', 'game_id', 'game_name', 'masters', 
             'date', 'date_local', 'duration', 'city_timezone',
-            'venue', 'venue_id', 'venue_name',
+            'rooms', 'room_ids',
             'max_players', 'registration_open',
             'registered_count', 'available_slots', 'is_full', 
             'effective_max_players', 'can_edit'
@@ -321,8 +320,11 @@ class ConventionScheduleSerializer(serializers.ModelSerializer):
         return ConventionLinkSerializer(obj.convention.links.all(), many=True, context=self.context).data
     
     def get_venues(self, obj):
-        """Получить уникальные площадки из всех прогонов конвента"""
-        venues = {run.venue for run in obj.scheduled_runs.all() if run.venue}
+        """Получить уникальные площадки из всех прогонов конвента (через помещения)"""
+        venues = set()
+        for run in obj.scheduled_runs.all():
+            for room in run.rooms.all():
+                venues.add(room.venue)
         return VenueBriefSerializer(list(venues), many=True, context=self.context).data
     
     def get_games(self, obj):
@@ -444,13 +446,13 @@ class RunSerializer(serializers.ModelSerializer):
         source='city',
         write_only=True
     )
-    venue = VenueBriefSerializer(read_only=True)
-    venue_id = serializers.PrimaryKeyRelatedField(
-        queryset=Venue.objects.all(),
-        source='venue',
+    rooms = RoomBriefSerializer(many=True, read_only=True)
+    room_ids = serializers.PrimaryKeyRelatedField(
+        queryset=Room.objects.all(),
+        source='rooms',
         write_only=True,
-        required=False,
-        allow_null=True
+        many=True,
+        required=False
     )
     convention_event = serializers.PrimaryKeyRelatedField(read_only=True)
     convention_event_id = serializers.PrimaryKeyRelatedField(
@@ -476,7 +478,7 @@ class RunSerializer(serializers.ModelSerializer):
         fields = [
             'id', 'game', 'game_id', 'masters', 'date', 'duration',
             'city', 'city_id', 'city_timezone',
-            'venue', 'venue_id',
+            'rooms', 'room_ids',
             'convention_event', 'convention_event_id', 'convention_name',
             'max_players', 'registration_open',
             'registrations', 'registered_count', 'available_slots', 'is_full',

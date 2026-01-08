@@ -184,7 +184,7 @@ class RoomInline(admin.TabularInline):
 
 @admin.register(Venue)
 class VenueAdmin(admin.ModelAdmin):
-    list_display = ('name', 'city', 'address', 'capacity', 'rooms_count', 'runs_count', 'created_at')
+    list_display = ('name', 'city', 'address', 'capacity', 'rooms_count', 'created_at')
     list_filter = ('city', 'city__region')
     search_fields = ('name', 'address', 'city__name', 'description')
     ordering = ('name',)
@@ -202,10 +202,6 @@ class VenueAdmin(admin.ModelAdmin):
     def rooms_count(self, obj):
         return obj.rooms.count()
     rooms_count.short_description = 'Помещений'
-    
-    def runs_count(self, obj):
-        return obj.runs.count()
-    runs_count.short_description = 'Прогонов'
 
 
 @admin.register(Room)
@@ -219,15 +215,15 @@ class RoomAdmin(admin.ModelAdmin):
 
 @admin.register(Run)
 class RunAdmin(admin.ModelAdmin):
-    list_display = ('game', 'get_masters', 'city', 'venue', 'date', 'convention_event', 'created_at')
-    list_filter = ('city', 'venue', 'convention_event', 'date')
-    search_fields = ('game__name', 'city__name', 'venue__name', 'convention_event__convention__name', 'masters__username', 'masters__first_name', 'masters__last_name')
+    list_display = ('game', 'get_masters', 'city', 'get_rooms', 'date', 'convention_event', 'created_at')
+    list_filter = ('city', 'rooms__venue', 'convention_event', 'date')
+    search_fields = ('game__name', 'city__name', 'rooms__name', 'rooms__venue__name', 'convention_event__convention__name', 'masters__username', 'masters__first_name', 'masters__last_name')
     date_hierarchy = 'date'
-    autocomplete_fields = ('game', 'city', 'venue', 'convention_event')
-    filter_horizontal = ('masters',)
+    autocomplete_fields = ('game', 'city', 'convention_event')
+    filter_horizontal = ('masters', 'rooms')
     fieldsets = (
         ('Основная информация', {
-            'fields': ('game', 'masters', 'city', 'venue', 'convention_event')
+            'fields': ('game', 'masters', 'city', 'rooms', 'convention_event')
         }),
         ('Дата', {
             'fields': ('date',)
@@ -237,3 +233,7 @@ class RunAdmin(admin.ModelAdmin):
     def get_masters(self, obj):
         return ', '.join([str(m) for m in obj.masters.all()])
     get_masters.short_description = 'Мастера'
+    
+    def get_rooms(self, obj):
+        return ', '.join([r.name for r in obj.rooms.all()])
+    get_rooms.short_description = 'Помещения'

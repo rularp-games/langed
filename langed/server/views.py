@@ -172,8 +172,8 @@ class RunViewSet(viewsets.ModelViewSet):
     
     def get_queryset(self):
         queryset = Run.objects.select_related(
-            'game', 'city', 'venue', 'convention_event', 'convention_event__convention'
-        ).prefetch_related('masters', 'registrations', 'registrations__user').all()
+            'game', 'city', 'convention_event', 'convention_event__convention'
+        ).prefetch_related('masters', 'rooms', 'rooms__venue', 'registrations', 'registrations__user').all()
         
         # Фильтр по городу
         city = self.request.query_params.get('city')
