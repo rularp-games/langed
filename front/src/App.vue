@@ -61,7 +61,7 @@ export default {
 </script>
 
 <style>
-@import url('https://fonts.googleapis.com/css2?family=Orbitron:wght@400;700&display=swap');
+@import url('https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;500;600;700&display=swap');
 
 * {
   margin: 0;
@@ -76,7 +76,7 @@ body {
 }
 
 #app {
-  font-family: 'Orbitron', 'Courier New', monospace;
+  font-family: 'JetBrains Mono', monospace;
   -webkit-font-smoothing: antialiased;
   -moz-osx-font-smoothing: grayscale;
   min-height: 100vh;
@@ -179,7 +179,7 @@ nav {
   border: 1px solid #ff4444;
   color: #ff4444;
   cursor: pointer;
-  font-family: 'Orbitron', 'Courier New', monospace;
+  font-family: 'JetBrains Mono', monospace;
 }
 
 .logout-btn:hover {

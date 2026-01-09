@@ -649,7 +649,7 @@ export default {
 }
 
 .modal-content h2 {
-  font-family: 'Orbitron', 'Courier New', monospace;
+  font-family: 'JetBrains Mono', monospace;
   color: #e0e0e0;
   font-size: 1.5rem;
   margin-bottom: 24px;
@@ -872,7 +872,7 @@ export default {
 }
 
 .date-input {
-  font-family: 'Courier New', monospace;
+  font-family: 'JetBrains Mono', monospace;
   letter-spacing: 0.05em;
 }
 

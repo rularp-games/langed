@@ -589,7 +589,7 @@ export default {
 }
 
 .header-info h1 {
-  font-family: 'Orbitron', 'Courier New', monospace;
+  font-family: 'JetBrains Mono', monospace;
   font-size: 1.2rem;
   color: #888;
   text-transform: uppercase;
@@ -598,7 +598,7 @@ export default {
 }
 
 .convention-name {
-  font-family: 'Orbitron', 'Courier New', monospace;
+  font-family: 'JetBrains Mono', monospace;
   font-size: 2rem;
   color: #ff6b35;
   text-shadow: 0 0 20px rgba(255, 107, 53, 0.5);
@@ -720,7 +720,7 @@ export default {
 }
 
 .day-name {
-  font-family: 'Orbitron', 'Courier New', monospace;
+  font-family: 'JetBrains Mono', monospace;
   font-size: 1.4rem;
   color: #ff6b35;
   text-transform: capitalize;
@@ -769,7 +769,7 @@ export default {
 }
 
 .run-time {
-  font-family: 'Courier New', monospace;
+  font-family: 'JetBrains Mono', monospace;
   font-size: 1.1rem;
   color: #ff6b35;
   font-weight: bold;
@@ -925,7 +925,7 @@ export default {
 }
 
 .modal-content h2 {
-  font-family: 'Orbitron', 'Courier New', monospace;
+  font-family: 'JetBrains Mono', monospace;
   color: #e0e0e0;
   font-size: 1.5rem;
   margin-bottom: 24px;

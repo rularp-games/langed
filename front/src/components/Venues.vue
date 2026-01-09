@@ -978,7 +978,7 @@ export default {
 }
 
 .page-header h1 {
-  font-family: 'Orbitron', 'Courier New', monospace;
+  font-family: 'JetBrains Mono', monospace;
   font-size: 3rem;
   color: #ff6b35;
   text-shadow: 0 0 20px rgba(255, 107, 53, 0.5);
@@ -1189,7 +1189,7 @@ export default {
 }
 
 .venue-title {
-  font-family: 'Orbitron', 'Courier New', monospace;
+  font-family: 'JetBrains Mono', monospace;
   font-size: 1.4rem;
   color: #ff6b35;
   margin-bottom: 12px;
@@ -1239,7 +1239,7 @@ export default {
 
 .stat-value {
   color: #00ccff;
-  font-family: 'Courier New', monospace;
+  font-family: 'JetBrains Mono', monospace;
   font-weight: bold;
 }
 
@@ -1312,7 +1312,7 @@ export default {
 }
 
 .modal-content h2 {
-  font-family: 'Orbitron', 'Courier New', monospace;
+  font-family: 'JetBrains Mono', monospace;
   color: #ff6b35;
   font-size: 1.8rem;
   margin-bottom: 24px;
@@ -1442,7 +1442,7 @@ export default {
 
 .modal-stat-value {
   color: #00ccff;
-  font-family: 'Courier New', monospace;
+  font-family: 'JetBrains Mono', monospace;
   font-size: 1.2rem;
   font-weight: bold;
 }

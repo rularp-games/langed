@@ -662,7 +662,7 @@ export default {
 }
 
 .convention-title {
-  font-family: 'Orbitron', 'Courier New', monospace;
+  font-family: 'JetBrains Mono', monospace;
   font-size: 2.5rem;
   color: #ff6b35;
   text-shadow: 0 0 20px rgba(255, 107, 53, 0.5);
@@ -876,7 +876,7 @@ export default {
 }
 
 .day-name {
-  font-family: 'Orbitron', 'Courier New', monospace;
+  font-family: 'JetBrains Mono', monospace;
   font-size: 1.5rem;
   color: #ff6b35;
   text-transform: capitalize;
@@ -903,7 +903,7 @@ export default {
   position: absolute;
   color: #666;
   font-size: 0.85rem;
-  font-family: 'Courier New', monospace;
+  font-family: 'JetBrains Mono', monospace;
   transform: translateY(-50%);
 }
 
@@ -986,7 +986,7 @@ export default {
 }
 
 .run-time {
-  font-family: 'Courier New', monospace;
+  font-family: 'JetBrains Mono', monospace;
   font-size: 0.8rem;
   color: #ff6b35;
   margin-bottom: 4px;
@@ -1066,7 +1066,7 @@ export default {
 }
 
 .run-time-col .run-time {
-  font-family: 'Courier New', monospace;
+  font-family: 'JetBrains Mono', monospace;
   font-size: 1.1rem;
   color: #ff6b35;
   font-weight: bold;
@@ -1166,13 +1166,13 @@ export default {
 }
 
 .modal-run-time {
-  font-family: 'Courier New', monospace;
+  font-family: 'JetBrains Mono', monospace;
   font-weight: bold;
   margin-left: 8px;
 }
 
 .modal-content h2 {
-  font-family: 'Orbitron', 'Courier New', monospace;
+  font-family: 'JetBrains Mono', monospace;
   color: #e0e0e0;
   font-size: 1.5rem;
   margin-bottom: 16px;

@@ -588,6 +588,15 @@ export default {
         }
       }
       
+      // Определяем convention_event_id
+      const conventionEventId = this.lockConvention ? this.conventionEventId : (run.convention_event_id || run.convention_event || null)
+      
+      // Находим проведение конвента, если есть
+      let conventionEvent = null
+      if (conventionEventId && this.conventionEvents && this.conventionEvents.length > 0) {
+        conventionEvent = this.conventionEvents.find(e => e.id === conventionEventId)
+      }
+      
       // Определяем city_id
       let cityId = null
       let cityTimezone = 'Europe/Moscow'
@@ -599,6 +608,12 @@ export default {
         cityTimezone = this.defaultCity.timezone || 'Europe/Moscow'
         const regionName = this.defaultCity.region && this.defaultCity.region.name ? this.defaultCity.region.name : ''
         cityName = regionName ? `${this.defaultCity.name} (${regionName})` : this.defaultCity.name
+      } else if (conventionEvent && conventionEvent.city) {
+        // Если есть проведение конвента - берём город из него
+        cityId = conventionEvent.city.id
+        cityTimezone = conventionEvent.city.timezone || 'Europe/Moscow'
+        const regionName = conventionEvent.city.region && conventionEvent.city.region.name ? conventionEvent.city.region.name : ''
+        cityName = regionName ? `${conventionEvent.city.name} (${regionName})` : conventionEvent.city.name
       } else if (run.city_id) {
         cityId = run.city_id
       } else if (run.city) {
@@ -623,7 +638,7 @@ export default {
       
       this.formData = {
         game_id: run.game_id || (run.game && run.game.id) || null,
-        convention_event_id: this.lockConvention ? this.conventionEventId : (run.convention_event_id || run.convention_event || null),
+        convention_event_id: conventionEventId,
         city_id: cityId,
         city_timezone: run.city_timezone || cityTimezone,
         newCityName: '',
@@ -643,10 +658,16 @@ export default {
       // Загружаем площадки и помещения
       if (cityId) {
         if (this.lockConvention && this.conventionVenue) {
-          // Для конвента используем площадку конвента
+          // Для конвента используем площадку конвента (режим lockConvention)
           this.formData.venue_id = this.conventionVenue.id
           this.venuesList = [{ id: this.conventionVenue.id, name: this.conventionVenue.name }]
           // roomsList уже заполнен из availableRooms через watcher
+        } else if (conventionEvent && conventionEvent.venue && conventionEvent.venue.id) {
+          // Если прогон привязан к проведению конвента с площадкой - используем её
+          this.formData.venue_id = conventionEvent.venue.id
+          this.venuesList = [{ id: conventionEvent.venue.id, name: conventionEvent.venue.name }]
+          // Загружаем помещения площадки конвента
+          this.fetchRoomsByVenue(conventionEvent.venue.id)
         } else {
           this.fetchVenuesByCity(cityId).then(() => {
             if (venueId) {
@@ -1050,7 +1071,7 @@ export default {
 }
 
 .modal-content h2 {
-  font-family: 'Orbitron', 'Courier New', monospace;
+  font-family: 'JetBrains Mono', monospace;
   color: #e0e0e0;
   font-size: 1.5rem;
   margin-bottom: 24px;
@@ -1351,7 +1372,7 @@ export default {
 
 .date-input,
 .time-input {
-  font-family: 'Courier New', monospace;
+  font-family: 'JetBrains Mono', monospace;
   letter-spacing: 0.05em;
 }
 

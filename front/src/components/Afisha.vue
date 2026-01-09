@@ -1736,7 +1736,7 @@ export default {
 }
 
 .page-header h1 {
-  font-family: 'Orbitron', 'Courier New', monospace;
+  font-family: 'JetBrains Mono', monospace;
   font-size: 3rem;
   color: #ff6b35;
   text-shadow: 0 0 20px rgba(255, 107, 53, 0.5);
@@ -1977,14 +1977,14 @@ export default {
 }
 
 .date-cell {
-  font-family: 'Courier New', monospace;
+  font-family: 'JetBrains Mono', monospace;
   color: #ff6b35;
   font-weight: bold;
   white-space: nowrap;
 }
 
 .time-cell {
-  font-family: 'Courier New', monospace;
+  font-family: 'JetBrains Mono', monospace;
   color: #00ccff;
   font-size: 1.1rem;
 }
@@ -2124,7 +2124,7 @@ export default {
 }
 
 .convention-dates {
-  font-family: 'Courier New', monospace;
+  font-family: 'JetBrains Mono', monospace;
   color: #ff6b35;
   font-size: 0.9rem;
   font-weight: bold;
@@ -2134,7 +2134,7 @@ export default {
 }
 
 .convention-title {
-  font-family: 'Orbitron', 'Courier New', monospace;
+  font-family: 'JetBrains Mono', monospace;
   font-size: 1.4rem;
   color: #e0e0e0;
   margin-bottom: 8px;
@@ -2156,7 +2156,7 @@ export default {
 
 .runs-count, .games-count {
   color: #00ccff;
-  font-family: 'Courier New', monospace;
+  font-family: 'JetBrains Mono', monospace;
   font-size: 0.9rem;
 }
 
@@ -2298,7 +2298,7 @@ export default {
 }
 
 .modal-dates {
-  font-family: 'Courier New', monospace;
+  font-family: 'JetBrains Mono', monospace;
   color: #ff6b35;
   font-size: 1rem;
   font-weight: bold;
@@ -2321,7 +2321,7 @@ export default {
 }
 
 .modal-content h2 {
-  font-family: 'Orbitron', 'Courier New', monospace;
+  font-family: 'JetBrains Mono', monospace;
   color: #e0e0e0;
   font-size: 1.8rem;
   margin-bottom: 8px;
@@ -2529,7 +2529,7 @@ export default {
 }
 
 .modal-run-date {
-  font-family: 'Courier New', monospace;
+  font-family: 'JetBrains Mono', monospace;
   color: #ff6b35;
   font-size: 1rem;
   font-weight: bold;
@@ -2586,7 +2586,7 @@ export default {
 }
 
 .registration-count {
-  font-family: 'Courier New', monospace;
+  font-family: 'JetBrains Mono', monospace;
   color: #00ff88;
   font-size: 1.1rem;
   font-weight: bold;
@@ -2807,7 +2807,7 @@ export default {
 
 .modal-stat-value {
   color: #00ccff;
-  font-family: 'Courier New', monospace;
+  font-family: 'JetBrains Mono', monospace;
   font-size: 1.1rem;
   font-weight: bold;
 }
@@ -2942,7 +2942,7 @@ export default {
 }
 
 .modal-run-time {
-  font-family: 'Courier New', monospace;
+  font-family: 'JetBrains Mono', monospace;
   color: #00ccff;
   font-weight: bold;
   min-width: 50px;
@@ -3049,7 +3049,7 @@ export default {
 }
 
 .add-run-modal h2 {
-  font-family: 'Orbitron', 'Courier New', monospace;
+  font-family: 'JetBrains Mono', monospace;
   margin-bottom: 24px;
   padding-right: 40px;
 }
