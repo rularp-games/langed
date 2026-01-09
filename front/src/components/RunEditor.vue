@@ -656,7 +656,7 @@ export default {
       return `${formatDate(start)} — ${formatDate(end)}`
     },
     
-    convertToTimezone(date, time, timezone) {
+    convertToTimezone(date, time, _timezone) {
       // Создаём строку даты-времени и конвертируем в ISO
       const dateTimeStr = `${date}T${time}:00`
       
