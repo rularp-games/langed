@@ -206,8 +206,8 @@
         <button class="modal-close" @click="closeRunModal">×</button>
         
         <div class="modal-run-date">
-          {{ formatFullDate(selectedRun.date) }}
-          <span class="modal-run-time">{{ formatTime(selectedRun.date) }}</span>
+          {{ formatFullDate(selectedRun.date_local || selectedRun.date) }}
+          <span class="modal-run-time">{{ formatTime(selectedRun.date_local || selectedRun.date) }}</span>
         </div>
         
         <h2>{{ selectedRun.game_name }}</h2>

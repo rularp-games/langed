@@ -1082,29 +1082,28 @@ export default {
     // === Форматирование ===
     formatDate(dateStr, timezone) {
       const date = new Date(dateStr)
+      const tz = timezone || 'Europe/Moscow'
       const options = {
         day: '2-digit',
         month: 'long',
-        year: 'numeric'
-      }
-      if (timezone) {
-        options.timeZone = timezone
+        year: 'numeric',
+        timeZone: tz
       }
       return date.toLocaleDateString('ru-RU', options)
     },
     formatTime(dateStr, timezone) {
       const date = new Date(dateStr)
+      const tz = timezone || 'Europe/Moscow'
       const options = {
         hour: '2-digit',
-        minute: '2-digit'
-      }
-      if (timezone) {
-        options.timeZone = timezone
+        minute: '2-digit',
+        timeZone: tz
       }
       return date.toLocaleTimeString('ru-RU', options)
     },
     getTimezoneAbbr(timezone) {
       // Возвращает сокращённое название таймзоны (UTC offset)
+      const tz = timezone || 'Europe/Moscow'
       const tzMap = {
         'Europe/Kaliningrad': 'UTC+2',
         'Europe/Moscow': 'МСК',
@@ -1118,10 +1117,11 @@ export default {
         'Asia/Magadan': 'UTC+11',
         'Asia/Kamchatka': 'UTC+12'
       }
-      return tzMap[timezone] || ''
+      return tzMap[tz] || 'МСК'
     },
     getTimezoneOffset(timezone) {
       // Возвращает смещение таймзоны в формате +HH:MM
+      const tz = timezone || 'Europe/Moscow'
       const offsetMap = {
         'Europe/Kaliningrad': '+02:00',
         'Europe/Moscow': '+03:00',
@@ -1135,7 +1135,7 @@ export default {
         'Asia/Magadan': '+11:00',
         'Asia/Kamchatka': '+12:00'
       }
-      return offsetMap[timezone] || '+03:00'
+      return offsetMap[tz] || '+03:00'
     },
     convertToTimezone(dateStr, timeStr, timezone) {
       // Создаём ISO строку с правильным смещением таймзоны
