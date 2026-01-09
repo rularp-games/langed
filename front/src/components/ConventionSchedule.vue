@@ -117,12 +117,12 @@
           
           <div class="timeline-content">
             <!-- Шкала времени -->
-            <div class="timeline-scale">
+            <div class="timeline-scale" :style="{ height: getTimelineHeightForDay(day) + 'px' }">
               <div 
-                v-for="hour in timelineHours" 
+                v-for="hour in getTimelineHoursForDay(day)" 
                 :key="hour"
                 class="timeline-hour"
-                :style="{ top: getHourPosition(hour) + 'px' }"
+                :style="{ top: getHourPosition(hour, day) + 'px' }"
               >
                 {{ formatHour(hour) }}
               </div>
@@ -130,28 +130,40 @@
             
             <!-- Прогоны по помещениям -->
             <div class="timeline-rooms">
-              <div 
-                v-for="room in getRoomsForDay(day)" 
-                :key="room.id || 'no-room'"
-                class="timeline-room"
-              >
-                <div class="room-header">{{ room.name || 'Без помещения' }}</div>
-                <div class="room-runs">
-                  <div 
-                    v-for="run in getRunsForDayRoom(day, room.id)" 
-                    :key="run.id"
-                    class="timeline-run"
-                    :style="getRunStyle(run)"
-                    :class="{ 'run-full': run.is_full }"
-                    @click="openRunModal(run)"
-                  >
-                    <div class="run-time">{{ formatTime(run.date_local || run.date) }}</div>
-                    <div class="run-name">{{ run.game_name }}</div>
-                    <div class="run-info">
-                      <span class="run-slots">
-                        {{ run.registered_count }}/{{ run.effective_max_players }}
-                      </span>
-                      <span v-if="run.is_full" class="run-full-badge">МЕСТ НЕТ</span>
+              <!-- Заголовки помещений (выровнены по высоте) -->
+              <div class="timeline-rooms-headers">
+                <div 
+                  v-for="room in getRoomsForDay(day)" 
+                  :key="'header-' + (room.id || 'no-room')"
+                  class="room-header"
+                >
+                  {{ room.name || 'Без помещения' }}
+                </div>
+              </div>
+              <!-- Колонки с прогонами -->
+              <div class="timeline-rooms-columns">
+                <div 
+                  v-for="room in getRoomsForDay(day)" 
+                  :key="room.id || 'no-room'"
+                  class="timeline-room"
+                >
+                  <div class="room-runs" :style="{ height: getTimelineHeightForDay(day) + 'px' }">
+                    <div 
+                      v-for="run in getRunsForDayRoom(day, room.id)" 
+                      :key="run.id"
+                      class="timeline-run"
+                      :style="getRunStyle(run, day)"
+                      :class="{ 'run-full': run.is_full }"
+                      @click="openRunModal(run)"
+                    >
+                      <div class="run-time">{{ formatTime(run.date_local || run.date) }}</div>
+                      <div class="run-name">{{ run.game_name }}</div>
+                      <div class="run-info">
+                        <span class="run-slots">
+                          {{ run.registered_count }}/{{ run.effective_max_players }}
+                        </span>
+                        <span v-if="run.is_full" class="run-full-badge">МЕСТ НЕТ</span>
+                      </div>
                     </div>
                   </div>
                 </div>
@@ -319,13 +331,7 @@ export default {
         return dateA.localeCompare(dateB)
       })
     },
-    timelineHours() {
-      const hours = []
-      for (let h = this.timelineStartHour; h <= this.timelineEndHour; h++) {
-        hours.push(h)
-      }
-      return hours
-    },
+    // timelineHours теперь вычисляется динамически в getTimelineHoursForDay
     allRooms() {
       // Собираем все уникальные помещения из прогонов
       if (!this.schedule || !this.schedule.runs) return []
@@ -453,8 +459,54 @@ export default {
       return icons[linkType] || '🔗'
     },
     
-    getHourPosition(hour) {
-      return (hour - this.timelineStartHour) * this.hourHeight
+    getHourPosition(hour, day) {
+      const timeRange = this.getTimeRangeForDay(day)
+      return (hour - timeRange.startHour) * this.hourHeight
+    },
+    
+    getTimeRangeForDay(day) {
+      const runs = this.getRunsForDay(day)
+      if (runs.length === 0) {
+        return { startHour: 9, endHour: 24 }
+      }
+      
+      let minHour = 24
+      let maxHour = 0
+      
+      runs.forEach(run => {
+        const dateStr = this.getRunLocalDate(run)
+        if (dateStr) {
+          const parts = dateStr.split('T')
+          if (parts.length === 2) {
+            const timeParts = parts[1].split(':')
+            const startHour = parseInt(timeParts[0], 10)
+            const endHour = startHour + Math.ceil((run.duration || 60) / 60)
+            
+            minHour = Math.min(minHour, startHour)
+            maxHour = Math.max(maxHour, endHour)
+          }
+        }
+      })
+      
+      // Добавляем небольшой отступ
+      return { 
+        startHour: Math.max(0, minHour), 
+        endHour: Math.min(24, maxHour) 
+      }
+    },
+    
+    getTimelineHoursForDay(day) {
+      const timeRange = this.getTimeRangeForDay(day)
+      const hours = []
+      for (let h = timeRange.startHour; h <= timeRange.endHour; h++) {
+        hours.push(h)
+      }
+      return hours
+    },
+    
+    getTimelineHeightForDay(day) {
+      const timeRange = this.getTimeRangeForDay(day)
+      return (timeRange.endHour - timeRange.startHour) * this.hourHeight
     },
     
     getRoomsForDay(day) {
@@ -498,7 +550,7 @@ export default {
       })
     },
     
-    getRunStyle(run) {
+    getRunStyle(run, day) {
       // Используем локальную дату для правильного позиционирования
       const dateStr = this.getRunLocalDate(run)
       let hours = 12 // default
@@ -511,7 +563,8 @@ export default {
         }
       }
       
-      const top = (hours - this.timelineStartHour) * this.hourHeight
+      const timeRange = this.getTimeRangeForDay(day)
+      const top = (hours - timeRange.startHour) * this.hourHeight
       const height = (run.duration / 60) * this.hourHeight
       
       return {
@@ -840,13 +893,13 @@ export default {
 .timeline-content {
   display: flex;
   position: relative;
-  min-height: 600px;
 }
 
 .timeline-scale {
   width: 60px;
   flex-shrink: 0;
   position: relative;
+  margin-top: 52px; /* Отступ для заголовков помещений (44px min-height + 8px gap) */
 }
 
 .timeline-hour {
@@ -860,9 +913,41 @@ export default {
 .timeline-rooms {
   flex: 1;
   display: flex;
-  gap: 16px;
+  flex-direction: column;
   overflow-x: auto;
   padding-bottom: 20px;
+}
+
+.timeline-rooms-headers {
+  display: flex;
+  gap: 16px;
+  position: sticky;
+  top: 0;
+  z-index: 2;
+  background: linear-gradient(135deg, #0a0a0a 0%, #1a1a2e 50%, #0a0a0a 100%);
+  padding-bottom: 8px;
+}
+
+.room-header {
+  flex: 1;
+  min-width: 200px;
+  max-width: 300px;
+  background: rgba(26, 26, 46, 0.95);
+  padding: 12px 16px;
+  border-radius: 8px;
+  border: 1px solid #ff6b3555;
+  color: #00ccff;
+  font-weight: 600;
+  text-align: center;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  min-height: 44px;
+}
+
+.timeline-rooms-columns {
+  display: flex;
+  gap: 16px;
 }
 
 .timeline-room {
@@ -871,26 +956,11 @@ export default {
   max-width: 300px;
 }
 
-.room-header {
-  position: sticky;
-  top: 0;
-  background: rgba(26, 26, 46, 0.95);
-  padding: 12px 16px;
-  border-radius: 8px 8px 0 0;
-  border: 1px solid #ff6b3555;
-  border-bottom: none;
-  color: #00ccff;
-  font-weight: 600;
-  text-align: center;
-  z-index: 1;
-}
-
 .room-runs {
   position: relative;
-  min-height: 600px;
   background: rgba(0, 0, 0, 0.2);
   border: 1px solid #ff6b3533;
-  border-radius: 0 0 8px 8px;
+  border-radius: 8px;
 }
 
 .timeline-run {
