@@ -538,7 +538,15 @@ export default {
       // Определяем city_id
       let cityId = null
       let cityTimezone = 'Europe/Moscow'
-      if (run.city_id) {
+      let cityName = ''
+      
+      // При lockConvention берём город из defaultCity (город конвента)
+      if (this.lockConvention && this.defaultCity) {
+        cityId = this.defaultCity.id
+        cityTimezone = this.defaultCity.timezone || 'Europe/Moscow'
+        const regionName = this.defaultCity.region && this.defaultCity.region.name ? this.defaultCity.region.name : ''
+        cityName = regionName ? `${this.defaultCity.name} (${regionName})` : this.defaultCity.name
+      } else if (run.city_id) {
         cityId = run.city_id
       } else if (run.city) {
         // Ищем город по названию
@@ -577,7 +585,7 @@ export default {
       
       // Устанавливаем поисковые поля
       this.gameSearch = run.game_name || (run.game && run.game.name) || ''
-      this.citySearch = this.selectedCityName || run.city || ''
+      this.citySearch = cityName || this.selectedCityName || run.city || ''
       
       // Загружаем площадки и помещения
       if (cityId && !this.lockConvention) {
