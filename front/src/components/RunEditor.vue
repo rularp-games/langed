@@ -656,7 +656,8 @@ export default {
       return `${formatDate(start)} — ${formatDate(end)}`
     },
     
-    convertToTimezone(date, time, _timezone) {
+    // eslint-disable-next-line no-unused-vars
+    convertToTimezone(date, time, timezone) {
       // Создаём строку даты-времени и конвертируем в ISO
       const dateTimeStr = `${date}T${time}:00`
       
