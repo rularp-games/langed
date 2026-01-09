@@ -524,7 +524,8 @@ export default {
       return (timeRange.endHour - timeRange.startHour) * this.hourHeight
     },
     
-    getRoomsForDay(_day) {
+    // eslint-disable-next-line no-unused-vars
+    getRoomsForDay(day) {
       // Возвращаем все помещения из всех дней (чтобы столбцы были одинаковыми)
       // Помещения уже отсортированы по алфавиту в allRooms
       return this.allRooms
