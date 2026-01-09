@@ -523,6 +523,48 @@ class RunSerializer(serializers.ModelSerializer):
                 pass
         return obj.date.isoformat() if obj.date else None
     
+    def validate(self, attrs):
+        """
+        Конвертирует локальное время в UTC с учётом таймзоны города.
+        Дата приходит с фронтенда в формате без таймзоны (например 2026-01-15T14:00:00),
+        интерпретируется как локальное время в таймзоне города.
+        """
+        import pytz
+        from django.utils import timezone as django_timezone
+        
+        date_value = attrs.get('date')
+        if date_value and not django_timezone.is_aware(date_value):
+            city_timezone = None
+            
+            # Получаем таймзону из города в данных запроса
+            city = attrs.get('city')
+            if city and hasattr(city, 'timezone'):
+                city_timezone = city.timezone
+            
+            # Если нет в данных, пробуем из существующего прогона
+            if not city_timezone and self.instance and self.instance.city:
+                city_timezone = self.instance.city.timezone
+            
+            if city_timezone:
+                try:
+                    tz = pytz.timezone(city_timezone)
+                    # Интерпретируем naive datetime как локальное время в этой таймзоне
+                    local_dt = tz.localize(date_value)
+                    # Конвертируем в UTC
+                    attrs['date'] = local_dt.astimezone(pytz.UTC)
+                except Exception:
+                    pass
+            else:
+                # Если не удалось определить таймзону, используем дефолтную (Москва)
+                try:
+                    default_tz = pytz.timezone('Europe/Moscow')
+                    local_dt = default_tz.localize(date_value)
+                    attrs['date'] = local_dt.astimezone(pytz.UTC)
+                except Exception:
+                    pass
+        
+        return attrs
+    
     def get_convention_name(self, obj):
         if obj.convention_event:
             return obj.convention_event.convention.name

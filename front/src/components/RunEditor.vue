@@ -1232,11 +1232,13 @@ export default {
   position: relative;
   display: flex;
   align-items: center;
+  width: 100%;
 }
 
 .date-picker-wrapper .date-input {
-  flex: 1;
+  width: 100%;
   padding-right: 44px;
+  box-sizing: border-box;
 }
 
 .date-picker-native {
