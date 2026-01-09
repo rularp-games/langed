@@ -185,8 +185,10 @@ class RunViewSet(viewsets.ModelViewSet):
         time_filter = self.request.query_params.get('time')
         if time_filter == 'upcoming':
             queryset = queryset.filter(date__gte=timezone.now())
+            return queryset.order_by('date')  # Ближайшие первыми
         elif time_filter == 'past':
             queryset = queryset.filter(date__lt=timezone.now())
+            return queryset.order_by('-date')  # Недавно прошедшие первыми
         
         return queryset.order_by('-date')
     
@@ -629,12 +631,13 @@ class ConventionEventViewSet(viewsets.ModelViewSet):
         )
         
         queryset = ConventionEvent.objects.select_related(
-            'convention', 'city', 'city__region'
+            'convention', 'city', 'city__region', 'venue'
         ).prefetch_related(
             runs_prefetch,
             'organizers',
             'convention__organizers',
-            'convention__links'
+            'convention__links',
+            'venue__rooms'
         )
         
         # Фильтр по конвенту
@@ -652,8 +655,10 @@ class ConventionEventViewSet(viewsets.ModelViewSet):
         today = date.today()
         if time_filter == 'upcoming':
             queryset = queryset.filter(date_end__gte=today)
+            return queryset.order_by('date_start')  # Ближайшие первыми
         elif time_filter == 'past':
             queryset = queryset.filter(date_end__lt=today)
+            return queryset.order_by('-date_start')  # Недавно прошедшие первыми
         
         return queryset.order_by('-date_start')
     

@@ -299,6 +299,9 @@ class ConventionScheduleSerializer(serializers.ModelSerializer):
     city = CitySerializer(read_only=True)
     city_name = serializers.CharField(source='city.name', read_only=True)
     city_timezone = serializers.CharField(source='city.timezone', read_only=True)
+    venue = VenueBriefSerializer(read_only=True)
+    venue_name = serializers.CharField(source='venue.name', read_only=True, allow_null=True)
+    venue_rooms = serializers.SerializerMethodField()
     organizers = UserBriefSerializer(many=True, read_only=True)
     convention_organizers = UserBriefSerializer(source='convention.organizers', many=True, read_only=True)
     links = serializers.SerializerMethodField()
@@ -312,12 +315,19 @@ class ConventionScheduleSerializer(serializers.ModelSerializer):
         fields = [
             'id', 'convention', 'convention_name', 'convention_description',
             'city', 'city_name', 'city_timezone', 'date_start', 'date_end',
+            'venue', 'venue_name', 'venue_rooms',
             'organizers', 'convention_organizers', 'links',
             'runs', 'venues', 'games', 'can_edit'
         ]
     
     def get_links(self, obj):
         return ConventionLinkSerializer(obj.convention.links.all(), many=True, context=self.context).data
+    
+    def get_venue_rooms(self, obj):
+        """Получить помещения площадки конвента"""
+        if obj.venue:
+            return RoomBriefSerializer(obj.venue.rooms.all(), many=True, context=self.context).data
+        return []
     
     def get_venues(self, obj):
         """Получить уникальные площадки из всех прогонов конвента (через помещения)"""
@@ -360,6 +370,15 @@ class ConventionEventSerializer(serializers.ModelSerializer):
         write_only=True,
         required=False
     )
+    venue = VenueBriefSerializer(read_only=True)
+    venue_name = serializers.CharField(source='venue.name', read_only=True, allow_null=True)
+    venue_id = serializers.PrimaryKeyRelatedField(
+        queryset=Venue.objects.all(),
+        source='venue',
+        write_only=True,
+        required=False,
+        allow_null=True
+    )
     organizers = UserBriefSerializer(many=True, read_only=True)
     games = serializers.SerializerMethodField()
     runs = RunBriefSerializer(source='scheduled_runs', many=True, read_only=True)
@@ -394,6 +413,7 @@ class ConventionEventSerializer(serializers.ModelSerializer):
         fields = [
             'id', 'convention', 'convention_id', 'convention_name', 
             'city', 'city_name', 'city_id',
+            'venue', 'venue_name', 'venue_id',
             'date_start', 'date_end', 'description', 'links',
             'organizers', 'games', 'runs', 'runs_count',
             'can_edit', 'created_at', 'updated_at'

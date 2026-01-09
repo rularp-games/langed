@@ -26,6 +26,9 @@
             <span class="convention-city">
               📍 {{ schedule.city_name }}
             </span>
+            <span v-if="schedule.venue_name" class="convention-venue">
+              🏢 {{ schedule.venue_name }}
+            </span>
           </div>
         </div>
         
@@ -198,8 +201,8 @@
           <div class="form-group">
             <label>Помещения</label>
             <select v-model="newRun.room_ids" class="form-input" multiple size="4">
-              <option v-for="room in rooms" :key="room.id" :value="room.id">
-                {{ room.venue_name }} — {{ room.name }}{{ room.blackbox ? ' [blackbox]' : '' }}
+              <option v-for="room in availableRooms" :key="room.id" :value="room.id">
+                {{ room.name }}{{ room.blackbox ? ' [blackbox]' : '' }}
               </option>
             </select>
             <span class="form-hint">Зажмите Ctrl для выбора нескольких</span>
@@ -294,8 +297,8 @@
           <div class="form-group">
             <label>Помещения</label>
             <select v-model="editRun.room_ids" class="form-input" multiple size="4">
-              <option v-for="room in rooms" :key="room.id" :value="room.id">
-                {{ room.venue_name }} — {{ room.name }}{{ room.blackbox ? ' [blackbox]' : '' }}
+              <option v-for="room in availableRooms" :key="room.id" :value="room.id">
+                {{ room.name }}{{ room.blackbox ? ' [blackbox]' : '' }}
               </option>
             </select>
             <span class="form-hint">Зажмите Ctrl для выбора нескольких</span>
@@ -432,6 +435,14 @@ export default {
     csrfToken() {
       const match = document.cookie.match(/csrftoken=([^;]+)/)
       return match ? match[1] : ''
+    },
+    availableRooms() {
+      // Если у конвента указана площадка, показываем только её помещения
+      if (this.schedule && this.schedule.venue_rooms && this.schedule.venue_rooms.length > 0) {
+        return this.schedule.venue_rooms
+      }
+      // Иначе показываем все помещения
+      return this.rooms
     },
     days() {
       if (!this.schedule || !this.schedule.runs) return []
@@ -911,7 +922,8 @@ export default {
 }
 
 .convention-dates,
-.convention-city {
+.convention-city,
+.convention-venue {
   color: #00ccff;
 }
 

@@ -25,6 +25,9 @@
             <span class="convention-city">
               📍 {{ schedule.city_name }}
             </span>
+            <span v-if="schedule.venue_name" class="convention-venue">
+              🏢 {{ schedule.venue_name }}
+            </span>
           </div>
           <p v-if="schedule.convention_description" class="convention-description">
             {{ schedule.convention_description }}
@@ -78,12 +81,6 @@
             @click="viewMode = 'list'"
           >
             Список
-          </button>
-          <button 
-            :class="{ active: viewMode === 'grid' }"
-            @click="viewMode = 'grid'"
-          >
-            Сетка
           </button>
         </div>
         
@@ -199,47 +196,6 @@
               </div>
             </div>
           </div>
-        </div>
-      </div>
-
-      <!-- Сетка (по площадкам) -->
-      <div v-else-if="viewMode === 'grid'" class="grid-view">
-        <div class="grid-header">
-          <div class="grid-time-col"></div>
-          <div 
-            v-for="room in gridRooms" 
-            :key="room.id || 'no-room'"
-            class="grid-room-col"
-          >
-            {{ room.name || 'Без помещения' }}
-          </div>
-        </div>
-        
-        <div v-for="day in filteredDays" :key="day" class="grid-day">
-          <div class="grid-day-header" :style="{ gridColumn: `span ${gridRooms.length + 1}` }">
-            <span class="day-name">{{ formatDayName(day) }}</span>
-            <span class="day-date">{{ formatDayDate(day) }}</span>
-          </div>
-          
-          <template v-for="slot in getTimeSlotsForDay(day)" :key="slot.time">
-            <div class="grid-time-cell">{{ formatTime(slot.time) }}</div>
-            <div 
-              v-for="room in gridRooms" 
-              :key="(room.id || 'no-room') + '-' + slot.time"
-              class="grid-cell"
-            >
-              <div 
-                v-for="run in getRunsForSlotRoom(slot, room.id)"
-                :key="run.id"
-                class="grid-run"
-                :class="{ 'run-full': run.is_full }"
-                @click="openRunModal(run)"
-              >
-                <div class="run-name">{{ run.game_name }}</div>
-                <div class="run-slots">{{ run.registered_count }}/{{ run.effective_max_players }}</div>
-              </div>
-            </div>
-          </template>
         </div>
       </div>
     </template>
@@ -384,16 +340,6 @@ export default {
         }
       })
       return Array.from(roomsMap.values())
-    },
-    gridRooms() {
-      if (!this.schedule) return []
-      const rooms = [...this.allRooms]
-      // Добавляем "Без помещения" если есть прогоны без rooms
-      const hasNoRoom = this.schedule.runs.some(r => !r.rooms || r.rooms.length === 0)
-      if (hasNoRoom) {
-        rooms.push({ id: null, name: 'Без помещения' })
-      }
-      return rooms
     }
   },
   mounted() {
@@ -576,25 +522,6 @@ export default {
       }
     },
     
-    getTimeSlotsForDay(day) {
-      const runs = this.getRunsForDay(day)
-      const times = new Set()
-      runs.forEach(run => times.add(this.getRunLocalDate(run)))
-      return Array.from(times).sort().map(time => ({ time }))
-    },
-    
-    getRunsForSlotRoom(slot, roomId) {
-      return this.filteredRuns.filter(run => {
-        const runDate = this.getRunLocalDate(run)
-        if (runDate !== slot.time) return false
-        
-        if (roomId === null) {
-          return !run.rooms || run.rooms.length === 0
-        }
-        return run.rooms && run.rooms.some(r => r.id === roomId)
-      })
-    },
-    
     openRunModal(run) {
       this.selectedRun = run
     },
@@ -703,7 +630,8 @@ export default {
 }
 
 .convention-dates,
-.convention-city {
+.convention-city,
+.convention-venue {
   color: #00ccff;
   font-size: 1.1rem;
 }
@@ -1118,91 +1046,6 @@ export default {
 
 .run-slots-col .slots-full {
   color: #ff4444;
-}
-
-/* ========== Сетка ========== */
-.grid-view {
-  max-width: 1400px;
-  margin: 0 auto;
-  overflow-x: auto;
-}
-
-.grid-header {
-  display: grid;
-  grid-auto-columns: minmax(150px, 1fr);
-  grid-auto-flow: column;
-  gap: 1px;
-  background: #ff6b3533;
-  padding: 1px;
-  position: sticky;
-  top: 0;
-  z-index: 10;
-}
-
-.grid-time-col,
-.grid-room-col {
-  padding: 12px 16px;
-  background: rgba(26, 26, 46, 0.95);
-  color: #00ccff;
-  font-weight: 600;
-  text-align: center;
-}
-
-.grid-time-col {
-  width: 80px;
-}
-
-.grid-day {
-  display: grid;
-  grid-auto-columns: minmax(150px, 1fr);
-  grid-auto-flow: column;
-  gap: 1px;
-  background: #ff6b3522;
-  padding: 1px;
-  margin-top: 24px;
-}
-
-.grid-day-header {
-  padding: 16px;
-  background: rgba(26, 26, 46, 0.9);
-}
-
-.grid-time-cell {
-  padding: 12px;
-  background: rgba(10, 10, 10, 0.5);
-  font-family: 'Courier New', monospace;
-  color: #ff6b35;
-  text-align: center;
-  width: 80px;
-}
-
-.grid-cell {
-  padding: 8px;
-  background: rgba(0, 0, 0, 0.3);
-  min-height: 60px;
-}
-
-.grid-run {
-  padding: 8px 12px;
-  background: linear-gradient(145deg, #1a1a2e, #16213e);
-  border: 1px solid #ff6b3555;
-  border-radius: 6px;
-  cursor: pointer;
-  margin-bottom: 4px;
-  transition: all 0.2s ease;
-}
-
-.grid-run:hover {
-  border-color: #ff6b35;
-}
-
-.grid-run .run-name {
-  font-size: 0.85rem;
-  margin-bottom: 4px;
-}
-
-.grid-run .run-slots {
-  font-size: 0.75rem;
 }
 
 /* ========== Модальное окно ========== */

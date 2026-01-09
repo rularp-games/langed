@@ -204,6 +204,14 @@ class ConventionEvent(models.Model):
         related_name='convention_events',
         verbose_name='Город'
     )
+    venue = models.ForeignKey(
+        'Venue',
+        on_delete=models.SET_NULL,
+        related_name='convention_events',
+        verbose_name='Площадка',
+        null=True,
+        blank=True
+    )
     date_start = models.DateField(verbose_name='Дата начала')
     date_end = models.DateField(verbose_name='Дата окончания')
     
