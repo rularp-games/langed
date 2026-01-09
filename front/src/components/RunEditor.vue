@@ -442,7 +442,7 @@ export default {
       },
       set(val) {
         // Парсим дд/мм/гггг в yyyy-mm-dd
-        const parts = val.replace(/[^\d\/]/g, '').split('/')
+        const parts = val.replace(/[^\d/]/g, '').split('/')
         if (parts.length === 3 && parts[0].length === 2 && parts[1].length === 2 && parts[2].length === 4) {
           this.formData.date = `${parts[2]}-${parts[1]}-${parts[0]}`
         }
@@ -731,7 +731,7 @@ export default {
     handleDateInput(event) {
       let value = event.target.value
       // Оставляем только цифры и слэши
-      value = value.replace(/[^\d\/]/g, '')
+      value = value.replace(/[^\d/]/g, '')
       
       // Автоматически добавляем слэши
       if (value.length === 2 && !value.includes('/')) {
