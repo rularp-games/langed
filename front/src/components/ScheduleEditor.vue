@@ -136,17 +136,34 @@
         <h2>Добавить прогон</h2>
         
         <form @submit.prevent="submitAddRun" class="add-form">
-          <div class="form-group">
+          <div class="form-group searchable-select">
             <label>Игра *</label>
-            <select v-model="newRun.game_id" required class="form-input">
-              <option :value="null" disabled>Выберите игру</option>
-              <option v-for="game in games" :key="game.id" :value="game.id">
-                {{ game.name }}
-              </option>
-            </select>
-            <button type="button" @click="showGameSearch = true" class="btn-link">
-              🔍 Найти игру
-            </button>
+            <input 
+              v-model="gameSearch"
+              type="text"
+              class="form-input"
+              placeholder="Введите название игры..."
+              autocomplete="off"
+              @focus="showGameDropdown = true"
+              @blur="onGameInputBlur"
+              @keydown.enter.prevent
+            />
+            <div v-if="showGameDropdown" class="dropdown-list">
+              <div 
+                v-for="game in filteredGamesList" 
+                :key="game.id" 
+                class="dropdown-item"
+                :class="{ selected: newRun.game_id === game.id }"
+                @mousedown.prevent="selectGameForNewRun(game)"
+              >
+                <span class="dropdown-item-name">{{ game.name }}</span>
+                <span class="dropdown-item-info">{{ game.players_min }}–{{ game.players_max }} игроков</span>
+              </div>
+              <div v-if="filteredGamesList.length === 0" class="dropdown-empty">
+                Игры не найдены
+              </div>
+            </div>
+            <input type="hidden" :value="newRun.game_id" required />
           </div>
           
           <div class="form-row">
@@ -346,44 +363,6 @@
       </div>
     </div>
 
-    <!-- Модальное окно поиска игры -->
-    <div v-if="showGameSearch" class="modal-overlay" @click.self="showGameSearch = false">
-      <div class="modal-content game-search-modal">
-        <button class="modal-close" @click="showGameSearch = false">×</button>
-        
-        <h2>Поиск игры</h2>
-        
-        <div class="search-input-wrapper">
-          <input 
-            v-model="gameSearchQuery"
-            type="text"
-            class="form-input search-input"
-            placeholder="Введите название игры..."
-            @input="searchGames"
-          />
-        </div>
-        
-        <div v-if="gameSearchLoading" class="search-loading">Поиск...</div>
-        
-        <div v-else-if="gameSearchResults.length > 0" class="search-results">
-          <div 
-            v-for="game in gameSearchResults" 
-            :key="game.id"
-            class="search-result-item"
-            @click="selectGame(game)"
-          >
-            <div class="result-name">{{ game.name }}</div>
-            <div class="result-info">
-              {{ game.players_min }}–{{ game.players_max }} игроков
-            </div>
-          </div>
-        </div>
-        
-        <div v-else-if="gameSearchQuery.length >= 2" class="search-empty">
-          Игры не найдены
-        </div>
-      </div>
-    </div>
   </div>
 </template>
 
@@ -424,17 +403,29 @@ export default {
       deleteLoading: false,
       
       // Поиск игры
-      showGameSearch: false,
-      gameSearchQuery: '',
-      gameSearchResults: [],
-      gameSearchLoading: false,
-      searchDebounceTimer: null
+      gameSearch: '',
+      showGameDropdown: false
     }
   },
   computed: {
     csrfToken() {
       const match = document.cookie.match(/csrftoken=([^;]+)/)
       return match ? match[1] : ''
+    },
+    sortedGames() {
+      return this.games.slice().sort((a, b) => a.name.localeCompare(b.name, 'ru'))
+    },
+    filteredGamesList() {
+      if (!this.gameSearch) {
+        return this.sortedGames
+      }
+      const query = this.gameSearch.toLowerCase()
+      return this.sortedGames.filter(g => g.name.toLowerCase().includes(query))
+    },
+    selectedGameName() {
+      if (!this.newRun.game_id) return ''
+      const game = this.games.find(g => g.id === this.newRun.game_id)
+      return game ? game.name : ''
     },
     availableRooms() {
       // Если у конвента указана площадка, показываем только её помещения
@@ -545,25 +536,22 @@ export default {
       }
     },
     
+    formatDateDDMMYYYY(date) {
+      const d = new Date(date)
+      const day = String(d.getDate()).padStart(2, '0')
+      const month = String(d.getMonth() + 1).padStart(2, '0')
+      const year = d.getFullYear()
+      return `${day}/${month}/${year}`
+    },
+    
     formatDates(start, end) {
-      const startDate = new Date(start)
-      const endDate = new Date(end)
-      const startDay = startDate.getDate()
-      const endDay = endDate.getDate()
-      const month = startDate.toLocaleDateString('ru-RU', { month: 'long' })
-      const year = startDate.getFullYear()
-      
-      if (startDate.getMonth() === endDate.getMonth()) {
-        return `${startDay}–${endDay} ${month} ${year}`
-      }
-      const startFormatted = startDate.toLocaleDateString('ru-RU', { day: '2-digit', month: 'long', year: 'numeric' })
-      const endFormatted = endDate.toLocaleDateString('ru-RU', { day: '2-digit', month: 'long', year: 'numeric' })
-      return `${startFormatted} — ${endFormatted}`
+      return `${this.formatDateDDMMYYYY(start)} — ${this.formatDateDDMMYYYY(end)}`
     },
     
     formatDayOption(day) {
       const date = new Date(day)
-      return date.toLocaleDateString('ru-RU', { weekday: 'short', day: 'numeric', month: 'short' })
+      const weekday = date.toLocaleDateString('ru-RU', { weekday: 'short' })
+      return `${weekday}, ${this.formatDateDDMMYYYY(day)}`
     },
     
     formatDayName(day) {
@@ -572,8 +560,7 @@ export default {
     },
     
     formatDayDate(day) {
-      const date = new Date(day)
-      return date.toLocaleDateString('ru-RU', { day: 'numeric', month: 'long' })
+      return this.formatDateDDMMYYYY(day)
     },
     
     formatTime(dateStr) {
@@ -627,6 +614,8 @@ export default {
       if (this.schedule) {
         this.newRun.date = this.schedule.date_start
       }
+      this.gameSearch = ''
+      this.showGameDropdown = false
       this.addError = null
       this.showAddModal = true
     },
@@ -801,34 +790,21 @@ export default {
     },
     
     // === Поиск игры ===
-    searchGames() {
-      if (this.searchDebounceTimer) {
-        clearTimeout(this.searchDebounceTimer)
-      }
-      
-      if (this.gameSearchQuery.length < 2) {
-        this.gameSearchResults = []
-        return
-      }
-      
-      this.searchDebounceTimer = setTimeout(async () => {
-        this.gameSearchLoading = true
-        try {
-          const query = this.gameSearchQuery.toLowerCase()
-          this.gameSearchResults = this.games.filter(g => 
-            g.name.toLowerCase().includes(query)
-          ).slice(0, 10)
-        } finally {
-          this.gameSearchLoading = false
-        }
-      }, 300)
+    selectGameForNewRun(game) {
+      this.newRun.game_id = game.id
+      this.gameSearch = game.name
+      this.showGameDropdown = false
     },
     
-    selectGame(game) {
-      this.newRun.game_id = game.id
-      this.showGameSearch = false
-      this.gameSearchQuery = ''
-      this.gameSearchResults = []
+    onGameInputBlur() {
+      // Задержка для обработки клика по элементу списка
+      setTimeout(() => {
+        this.showGameDropdown = false
+        // Если поиск не соответствует выбранной игре, восстанавливаем
+        if (this.newRun.game_id && this.gameSearch !== this.selectedGameName) {
+          this.gameSearch = this.selectedGameName
+        }
+      }, 200)
     }
   }
 }
@@ -1426,56 +1402,59 @@ export default {
   color: #ff6b6b;
 }
 
-/* ========== Поиск игры ========== */
-.game-search-modal {
-  max-width: 500px;
+/* ========== Поиск с выпадающим списком ========== */
+.searchable-select {
+  position: relative;
 }
 
-.search-input-wrapper {
-  margin-bottom: 16px;
-}
-
-.search-input {
-  width: 100%;
-}
-
-.search-loading {
-  text-align: center;
-  color: #888;
-  padding: 20px;
-}
-
-.search-results {
+.dropdown-list {
+  position: absolute;
+  top: 100%;
+  left: 0;
+  right: 0;
   max-height: 300px;
   overflow-y: auto;
+  background: #0a0a0a;
+  border: 2px solid #ff6b35;
+  border-top: none;
+  border-radius: 0 0 8px 8px;
+  z-index: 100;
+  box-shadow: 0 10px 30px rgba(0, 0, 0, 0.5);
 }
 
-.search-result-item {
+.dropdown-item {
   padding: 12px 16px;
-  border-bottom: 1px solid #ff6b3522;
   cursor: pointer;
   transition: background 0.2s;
+  border-bottom: 1px solid #ff6b3522;
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
 }
 
-.search-result-item:hover {
-  background: rgba(255, 107, 53, 0.1);
+.dropdown-item:last-child {
+  border-bottom: none;
 }
 
-.result-name {
+.dropdown-item:hover,
+.dropdown-item.selected {
+  background: rgba(255, 107, 53, 0.15);
+}
+
+.dropdown-item-name {
   font-weight: 600;
   color: #e0e0e0;
-  margin-bottom: 4px;
 }
 
-.result-info {
+.dropdown-item-info {
   font-size: 0.85rem;
   color: #888;
 }
 
-.search-empty {
+.dropdown-empty {
+  padding: 20px;
   text-align: center;
   color: #666;
-  padding: 40px;
 }
 
 /* ========== Адаптив ========== */

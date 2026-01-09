@@ -368,25 +368,22 @@ export default {
       }
     },
     
+    formatDateDDMMYYYY(date) {
+      const d = new Date(date)
+      const day = String(d.getDate()).padStart(2, '0')
+      const month = String(d.getMonth() + 1).padStart(2, '0')
+      const year = d.getFullYear()
+      return `${day}/${month}/${year}`
+    },
+    
     formatDates(start, end) {
-      const startDate = new Date(start)
-      const endDate = new Date(end)
-      const startDay = startDate.getDate()
-      const endDay = endDate.getDate()
-      const month = startDate.toLocaleDateString('ru-RU', { month: 'long' })
-      const year = startDate.getFullYear()
-      
-      if (startDate.getMonth() === endDate.getMonth() && startDate.getFullYear() === endDate.getFullYear()) {
-        return `${startDay}–${endDay} ${month} ${year}`
-      }
-      const startFormatted = startDate.toLocaleDateString('ru-RU', { day: '2-digit', month: 'long', year: 'numeric' })
-      const endFormatted = endDate.toLocaleDateString('ru-RU', { day: '2-digit', month: 'long', year: 'numeric' })
-      return `${startFormatted} — ${endFormatted}`
+      return `${this.formatDateDDMMYYYY(start)} — ${this.formatDateDDMMYYYY(end)}`
     },
     
     formatDayOption(day) {
       const date = new Date(day)
-      return date.toLocaleDateString('ru-RU', { weekday: 'short', day: 'numeric', month: 'short' })
+      const weekday = date.toLocaleDateString('ru-RU', { weekday: 'short' })
+      return `${weekday}, ${this.formatDateDDMMYYYY(day)}`
     },
     
     formatDayName(day) {
@@ -395,8 +392,7 @@ export default {
     },
     
     formatDayDate(day) {
-      const date = new Date(day)
-      return date.toLocaleDateString('ru-RU', { day: 'numeric', month: 'long' })
+      return this.formatDateDDMMYYYY(day)
     },
     
     formatTime(dateStr) {
@@ -414,15 +410,17 @@ export default {
     
     formatFullDate(dateStr) {
       // Для локальной даты используем простой парсинг
+      let date
       if (dateStr && !dateStr.endsWith('Z') && !dateStr.includes('+')) {
         const parts = dateStr.split('T')
         if (parts.length >= 1) {
-          const date = new Date(parts[0] + 'T12:00:00')
-          return date.toLocaleDateString('ru-RU', { weekday: 'long', day: 'numeric', month: 'long' })
+          date = new Date(parts[0] + 'T12:00:00')
         }
+      } else {
+        date = new Date(dateStr)
       }
-      const date = new Date(dateStr)
-      return date.toLocaleDateString('ru-RU', { weekday: 'long', day: 'numeric', month: 'long' })
+      const weekday = date.toLocaleDateString('ru-RU', { weekday: 'long' })
+      return `${weekday}, ${this.formatDateDDMMYYYY(date)}`
     },
     
     // Получить локальную дату прогона

@@ -87,6 +87,7 @@
               <th>Время</th>
               <th>Игра</th>
               <th>Город</th>
+              <th>Площадка</th>
               <th>Конвент</th>
               <th>Статус</th>
             </tr>
@@ -111,6 +112,10 @@
                 </span>
               </td>
               <td class="city-cell">{{ run.city }}</td>
+              <td class="venue-cell">
+                <span v-if="run.venue_name">{{ run.venue_name }}</span>
+                <span v-else class="no-data">—</span>
+              </td>
               <td class="convention-cell">
                 <span v-if="run.convention_name" class="convention-badge">
                   {{ run.convention_name }}
@@ -259,6 +264,14 @@
           </div>
         </div>
         <div class="modal-city">📍 {{ selectedRun.city }}</div>
+        
+        <div class="modal-section" v-if="selectedRun.venue_name || (selectedRun.rooms && selectedRun.rooms.length > 0)">
+          <h3>Площадка</h3>
+          <p v-if="selectedRun.venue_name" class="venue-name">🏢 {{ selectedRun.venue_name }}</p>
+          <p v-if="selectedRun.rooms && selectedRun.rooms.length > 0" class="rooms-list">
+            🚪 {{ selectedRun.rooms.map(r => r.name + (r.blackbox ? ' [blackbox]' : '')).join(', ') }}
+          </p>
+        </div>
         
         <div class="modal-section" v-if="selectedRun.convention_name">
           <h3>Конвент</h3>
@@ -755,6 +768,45 @@
             />
           </div>
           
+          <div v-if="newRun.city_id && newRun.city_id !== 'new'" class="form-group">
+            <label for="run-venue">Площадка</label>
+            <select 
+              id="run-venue"
+              v-model="newRun.venue_id"
+              @change="onNewRunVenueChange"
+              class="form-input"
+            >
+              <option :value="null">Не указана</option>
+              <option 
+                v-for="venue in newRunVenues" 
+                :key="venue.id" 
+                :value="venue.id"
+              >
+                {{ venue.name }}
+              </option>
+            </select>
+          </div>
+          
+          <div v-if="newRun.venue_id && newRunRooms.length > 0" class="form-group">
+            <label for="run-rooms">Помещения</label>
+            <select 
+              id="run-rooms"
+              v-model="newRun.room_ids"
+              class="form-input"
+              multiple
+              size="3"
+            >
+              <option 
+                v-for="room in newRunRooms" 
+                :key="room.id" 
+                :value="room.id"
+              >
+                {{ room.name }}{{ room.blackbox ? ' [blackbox]' : '' }}
+              </option>
+            </select>
+            <span class="form-hint">Зажмите Ctrl для выбора нескольких</span>
+          </div>
+          
           <div class="form-row">
             <div class="form-group half">
               <label for="run-date">Дата *</label>
@@ -883,6 +935,45 @@
             <input type="hidden" :value="editRun.city_id" required />
           </div>
           
+          <div v-if="editRun.city_id" class="form-group">
+            <label for="edit-run-venue">Площадка</label>
+            <select 
+              id="edit-run-venue"
+              v-model="editRun.venue_id"
+              @change="onEditRunVenueChange"
+              class="form-input"
+            >
+              <option :value="null">Не указана</option>
+              <option 
+                v-for="venue in editRunVenues" 
+                :key="venue.id" 
+                :value="venue.id"
+              >
+                {{ venue.name }}
+              </option>
+            </select>
+          </div>
+          
+          <div v-if="editRun.venue_id && editRunRooms.length > 0" class="form-group">
+            <label for="edit-run-rooms">Помещения</label>
+            <select 
+              id="edit-run-rooms"
+              v-model="editRun.room_ids"
+              class="form-input"
+              multiple
+              size="3"
+            >
+              <option 
+                v-for="room in editRunRooms" 
+                :key="room.id" 
+                :value="room.id"
+              >
+                {{ room.name }}{{ room.blackbox ? ' [blackbox]' : '' }}
+              </option>
+            </select>
+            <span class="form-hint">Зажмите Ctrl для выбора нескольких</span>
+          </div>
+          
           <div class="form-row">
             <div class="form-group half">
               <label for="edit-run-date">Дата *</label>
@@ -997,9 +1088,14 @@ export default {
         city_timezone: 'Europe/Moscow',
         newCityName: '',
         convention_event_id: null,
+        venue_id: null,
+        room_ids: [],
         date: '',
         time: ''
       },
+      // Площадки и помещения для добавления прогона
+      newRunVenues: [],
+      newRunRooms: [],
       // Для редактирования прогона
       isEditingRun: false,
       editRunLoading: false,
@@ -1010,9 +1106,14 @@ export default {
         city_id: null,
         city_timezone: 'Europe/Moscow',
         convention_event_id: null,
+        venue_id: null,
+        room_ids: [],
         date: '',
         time: ''
       },
+      // Площадки и помещения для редактирования прогона
+      editRunVenues: [],
+      editRunRooms: [],
       // Для searchable select
       gameSearch: '',
       citySearch: '',
@@ -1394,8 +1495,8 @@ export default {
           throw new Error('Ошибка загрузки данных')
         }
         const conventionsData = await response.json()
-        // Прямая сортировка по дате начала (от ранних к поздним)
-        this.conventions = conventionsData.sort((a, b) => new Date(a.date_start) - new Date(b.date_start))
+        // Обратная сортировка по дате начала (от недавних к давним)
+        this.conventions = conventionsData.sort((a, b) => new Date(b.date_start) - new Date(a.date_start))
       } catch (err) {
         this.conventionsError = err.message
       } finally {
@@ -1566,6 +1667,54 @@ export default {
         console.error('Ошибка загрузки городов:', err)
       }
     },
+    async fetchVenuesByCity(cityId, target = 'newRun') {
+      if (!cityId || cityId === 'new') {
+        if (target === 'newRun') {
+          this.newRunVenues = []
+          this.newRunRooms = []
+        } else {
+          this.editRunVenues = []
+          this.editRunRooms = []
+        }
+        return
+      }
+      try {
+        const response = await fetch(`/api/venues/?city=${cityId}`)
+        if (response.ok) {
+          const venues = await response.json()
+          if (target === 'newRun') {
+            this.newRunVenues = venues
+          } else {
+            this.editRunVenues = venues
+          }
+        }
+      } catch (err) {
+        console.error('Ошибка загрузки площадок:', err)
+      }
+    },
+    async fetchRoomsByVenue(venueId, target = 'newRun') {
+      if (!venueId) {
+        if (target === 'newRun') {
+          this.newRunRooms = []
+        } else {
+          this.editRunRooms = []
+        }
+        return
+      }
+      try {
+        const response = await fetch(`/api/rooms/?venue=${venueId}`)
+        if (response.ok) {
+          const rooms = await response.json()
+          if (target === 'newRun') {
+            this.newRunRooms = rooms
+          } else {
+            this.editRunRooms = rooms
+          }
+        }
+      } catch (err) {
+        console.error('Ошибка загрузки помещений:', err)
+      }
+    },
     async fetchConventionEvents() {
       try {
         const response = await fetch('/api/convention-events/?time=upcoming')
@@ -1583,6 +1732,8 @@ export default {
         city_timezone: 'Europe/Moscow',
         newCityName: '',
         convention_event_id: null,
+        venue_id: null,
+        room_ids: [],
         date: '',
         time: ''
       }
@@ -1590,6 +1741,8 @@ export default {
       this.citySearch = ''
       this.showGameDropdown = false
       this.showCityDropdown = false
+      this.newRunVenues = []
+      this.newRunRooms = []
       this.addRunError = null
       this.showAddRunModal = true
     },
@@ -1608,11 +1761,29 @@ export default {
       const regionName = city.region && city.region.name ? city.region.name : ''
       this.citySearch = regionName ? `${city.name} (${regionName})` : city.name
       this.showCityDropdown = false
+      // Сбрасываем площадку и помещения, загружаем площадки для города
+      this.newRun.venue_id = null
+      this.newRun.room_ids = []
+      this.newRunRooms = []
+      this.fetchVenuesByCity(city.id, 'newRun')
     },
     selectNewCity() {
       this.newRun.city_id = 'new'
       this.citySearch = ''
       this.showCityDropdown = false
+      this.newRun.venue_id = null
+      this.newRun.room_ids = []
+      this.newRunVenues = []
+      this.newRunRooms = []
+    },
+    onNewRunVenueChange() {
+      // При изменении площадки загружаем помещения
+      this.newRun.room_ids = []
+      if (this.newRun.venue_id) {
+        this.fetchRoomsByVenue(this.newRun.venue_id, 'newRun')
+      } else {
+        this.newRunRooms = []
+      }
     },
     onGameInputFocus() {
       this.showGameDropdown = true
@@ -1651,11 +1822,20 @@ export default {
           this.citySearch = regionName 
             ? `${event.city.name} (${regionName})` 
             : event.city.name
+          // Загружаем площадки для города конвента
+          this.newRun.venue_id = null
+          this.newRun.room_ids = []
+          this.newRunRooms = []
+          this.fetchVenuesByCity(event.city.id, 'newRun')
         }
       } else {
         this.newRun.city_id = null
         this.newRun.city_timezone = 'Europe/Moscow'
         this.citySearch = ''
+        this.newRun.venue_id = null
+        this.newRun.room_ids = []
+        this.newRunVenues = []
+        this.newRunRooms = []
       }
     },
     async submitRun() {
@@ -1713,6 +1893,11 @@ export default {
         // Привязка к конвенту опциональна
         if (this.newRun.convention_event_id) {
           runData.convention_event_id = this.newRun.convention_event_id
+        }
+        
+        // Помещения опциональны
+        if (this.newRun.room_ids && this.newRun.room_ids.length > 0) {
+          runData.room_ids = this.newRun.room_ids
         }
         
         const response = await fetch('/api/runs/', {
@@ -1885,18 +2070,39 @@ export default {
       // Находим city_id по названию
       const city = this.allCities.find(c => c.name === this.selectedRun.city)
       
+      // Получаем venue_id и room_ids из существующих помещений
+      const existingRooms = this.selectedRun.rooms || []
+      const existingRoomIds = existingRooms.map(r => r.id)
+      // Площадка берётся из первого помещения (если есть)
+      let venueId = null
+      if (existingRooms.length > 0 && existingRooms[0].venue_id) {
+        venueId = existingRooms[0].venue_id
+      }
+      
       this.editRun = {
         id: this.selectedRun.id,
         game_id: this.selectedRun.game.id,
         city_id: city ? city.id : null,
         city_timezone: timezone,
         convention_event_id: this.selectedRun.convention_event || null,
+        venue_id: venueId,
+        room_ids: existingRoomIds,
         date: dateStr,
         time: timeStr
       }
       
       this.editGameSearch = this.selectedRun.game.name
       this.editCitySearch = city ? (city.region?.name ? `${city.name} (${city.region.name})` : city.name) : this.selectedRun.city
+      
+      // Загружаем площадки для города
+      if (city) {
+        this.fetchVenuesByCity(city.id, 'editRun').then(() => {
+          // После загрузки площадок загружаем помещения
+          if (venueId) {
+            this.fetchRoomsByVenue(venueId, 'editRun')
+          }
+        })
+      }
       this.editRunError = null
       this.isEditingRun = true
     },
@@ -1915,6 +2121,20 @@ export default {
       const regionName = city.region && city.region.name ? city.region.name : ''
       this.editCitySearch = regionName ? `${city.name} (${regionName})` : city.name
       this.showEditCityDropdown = false
+      // Сбрасываем площадку и помещения, загружаем площадки для города
+      this.editRun.venue_id = null
+      this.editRun.room_ids = []
+      this.editRunRooms = []
+      this.fetchVenuesByCity(city.id, 'editRun')
+    },
+    onEditRunVenueChange() {
+      // При изменении площадки загружаем помещения
+      this.editRun.room_ids = []
+      if (this.editRun.venue_id) {
+        this.fetchRoomsByVenue(this.editRun.venue_id, 'editRun')
+      } else {
+        this.editRunRooms = []
+      }
     },
     onEditGameInputBlur() {
       setTimeout(() => {
@@ -1942,6 +2162,11 @@ export default {
           this.editCitySearch = regionName 
             ? `${event.city.name} (${regionName})` 
             : event.city.name
+          // Загружаем площадки для города конвента
+          this.editRun.venue_id = null
+          this.editRun.room_ids = []
+          this.editRunRooms = []
+          this.fetchVenuesByCity(event.city.id, 'editRun')
         }
       }
     },
@@ -1973,7 +2198,8 @@ export default {
           game_id: this.editRun.game_id,
           city_id: this.editRun.city_id,
           date: dateTime,
-          convention_event_id: this.editRun.convention_event_id || null
+          convention_event_id: this.editRun.convention_event_id || null,
+          room_ids: this.editRun.room_ids || []
         }
         
         const response = await fetch(`/api/runs/${this.editRun.id}/`, {
@@ -2516,6 +2742,22 @@ export default {
 
 .city-cell {
   color: #aaa;
+}
+
+.venue-cell {
+  color: #888;
+  font-size: 0.9rem;
+}
+
+.venue-name {
+  color: #00ccff;
+  margin: 0;
+}
+
+.rooms-list {
+  color: #888;
+  font-size: 0.9rem;
+  margin: 4px 0 0 0;
 }
 
 .convention-cell {

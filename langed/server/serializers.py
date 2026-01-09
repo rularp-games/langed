@@ -51,9 +51,11 @@ class RoomSerializer(serializers.ModelSerializer):
 
 class RoomBriefSerializer(serializers.ModelSerializer):
     """Краткий сериализатор помещения"""
+    venue_id = serializers.IntegerField(source='venue.id', read_only=True)
+    
     class Meta:
         model = Room
-        fields = ['id', 'name', 'blackbox']
+        fields = ['id', 'name', 'blackbox', 'venue_id']
 
 
 class VenueSerializer(serializers.ModelSerializer):
@@ -474,6 +476,7 @@ class RunSerializer(serializers.ModelSerializer):
         many=True,
         required=False
     )
+    venue_name = serializers.SerializerMethodField()
     convention_event = serializers.PrimaryKeyRelatedField(read_only=True)
     convention_event_id = serializers.PrimaryKeyRelatedField(
         queryset=ConventionEvent.objects.all(),
@@ -498,7 +501,7 @@ class RunSerializer(serializers.ModelSerializer):
         fields = [
             'id', 'game', 'game_id', 'masters', 'date', 'duration',
             'city', 'city_id', 'city_timezone',
-            'rooms', 'room_ids',
+            'rooms', 'room_ids', 'venue_name',
             'convention_event', 'convention_event_id', 'convention_name',
             'max_players', 'registration_open',
             'registrations', 'registered_count', 'available_slots', 'is_full',
@@ -510,6 +513,19 @@ class RunSerializer(serializers.ModelSerializer):
     def get_convention_name(self, obj):
         if obj.convention_event:
             return obj.convention_event.convention.name
+        return None
+    
+    def get_venue_name(self, obj):
+        """Возвращает название площадки (из помещений прогона)"""
+        rooms = obj.rooms.all()
+        if not rooms:
+            return None
+        # Собираем уникальные названия площадок
+        venue_names = set(room.venue.name for room in rooms if room.venue)
+        if len(venue_names) == 1:
+            return venue_names.pop()
+        elif len(venue_names) > 1:
+            return ', '.join(sorted(venue_names))
         return None
     
     def get_can_edit(self, obj):
