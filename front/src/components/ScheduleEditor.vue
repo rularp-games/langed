@@ -128,217 +128,29 @@
       </div>
     </template>
 
-    <!-- Модальное окно добавления прогона -->
-    <div v-if="showAddModal" class="modal-overlay" @click.self="closeAddModal">
-      <div class="modal-content add-run-modal">
-        <button class="modal-close" @click="closeAddModal">×</button>
-        
-        <h2>Добавить прогон</h2>
-        
-        <form @submit.prevent="submitAddRun" class="add-form">
-          <div class="form-group searchable-select">
-            <label>Игра *</label>
-            <input 
-              v-model="gameSearch"
-              type="text"
-              class="form-input"
-              placeholder="Введите название игры..."
-              autocomplete="off"
-              @focus="showGameDropdown = true"
-              @blur="onGameInputBlur"
-              @keydown.enter.prevent
-            />
-            <div v-if="showGameDropdown" class="dropdown-list">
-              <div 
-                v-for="game in filteredGamesList" 
-                :key="game.id" 
-                class="dropdown-item"
-                :class="{ selected: newRun.game_id === game.id }"
-                @mousedown.prevent="selectGameForNewRun(game)"
-              >
-                <span class="dropdown-item-name">{{ game.name }}</span>
-                <span class="dropdown-item-info">{{ game.players_min }}–{{ game.players_max }} игроков</span>
-              </div>
-              <div v-if="filteredGamesList.length === 0" class="dropdown-empty">
-                Игры не найдены
-              </div>
-            </div>
-            <input type="hidden" :value="newRun.game_id" required />
-          </div>
-          
-          <div class="form-row">
-            <div class="form-group half">
-              <label>Дата *</label>
-              <input 
-                v-model="newRun.date" 
-                type="date" 
-                required
-                class="form-input"
-                :min="schedule.date_start"
-                :max="schedule.date_end"
-              />
-            </div>
-            
-            <div class="form-group half">
-              <label>Время *</label>
-              <input 
-                v-model="newRun.time" 
-                type="time" 
-                required
-                class="form-input"
-              />
-            </div>
-          </div>
-          
-          <div class="form-row">
-            <div class="form-group half">
-              <label>Длительность (мин) *</label>
-              <input 
-                v-model.number="newRun.duration" 
-                type="number" 
-                required
-                min="30"
-                max="720"
-                class="form-input"
-              />
-            </div>
-            
-            <div class="form-group half">
-              <label>Макс. игроков</label>
-              <input 
-                v-model.number="newRun.max_players" 
-                type="number" 
-                min="1"
-                class="form-input"
-                placeholder="Из игры"
-              />
-            </div>
-          </div>
-          
-          <div class="form-group">
-            <label>Помещения</label>
-            <select v-model="newRun.room_ids" class="form-input" multiple size="4">
-              <option v-for="room in availableRooms" :key="room.id" :value="room.id">
-                {{ room.name }}{{ room.blackbox ? ' [blackbox]' : '' }}
-              </option>
-            </select>
-            <span class="form-hint">Зажмите Ctrl для выбора нескольких</span>
-          </div>
-          
-          <div class="form-group">
-            <label class="checkbox-label">
-              <input type="checkbox" v-model="newRun.registration_open" />
-              <span>Регистрация открыта</span>
-            </label>
-          </div>
-          
-          <div v-if="addError" class="form-error">{{ addError }}</div>
-          
-          <div class="form-actions">
-            <button type="button" @click="closeAddModal" class="btn btn-secondary">Отмена</button>
-            <button type="submit" class="btn btn-primary" :disabled="addLoading">
-              {{ addLoading ? 'Добавление...' : 'Добавить' }}
-            </button>
-          </div>
-        </form>
-      </div>
-    </div>
-
-    <!-- Модальное окно редактирования прогона -->
-    <div v-if="showEditModal" class="modal-overlay" @click.self="closeEditModal">
-      <div class="modal-content edit-run-modal">
-        <button class="modal-close" @click="closeEditModal">×</button>
-        
-        <h2>Редактировать прогон</h2>
-        
-        <form @submit.prevent="submitEditRun" class="edit-form">
-          <div class="form-group">
-            <label>Игра</label>
-            <input 
-              type="text" 
-              class="form-input" 
-              :value="editRun.game_name" 
-              disabled 
-            />
-          </div>
-          
-          <div class="form-row">
-            <div class="form-group half">
-              <label>Дата *</label>
-              <input 
-                v-model="editRun.date" 
-                type="date" 
-                required
-                class="form-input"
-                :min="schedule.date_start"
-                :max="schedule.date_end"
-              />
-            </div>
-            
-            <div class="form-group half">
-              <label>Время *</label>
-              <input 
-                v-model="editRun.time" 
-                type="time" 
-                required
-                class="form-input"
-              />
-            </div>
-          </div>
-          
-          <div class="form-row">
-            <div class="form-group half">
-              <label>Длительность (мин) *</label>
-              <input 
-                v-model.number="editRun.duration" 
-                type="number" 
-                required
-                min="30"
-                max="720"
-                class="form-input"
-              />
-            </div>
-            
-            <div class="form-group half">
-              <label>Макс. игроков</label>
-              <input 
-                v-model.number="editRun.max_players" 
-                type="number" 
-                min="1"
-                class="form-input"
-                placeholder="Из игры"
-              />
-            </div>
-          </div>
-          
-          <div class="form-group">
-            <label>Помещения</label>
-            <select v-model="editRun.room_ids" class="form-input" multiple size="4">
-              <option v-for="room in availableRooms" :key="room.id" :value="room.id">
-                {{ room.name }}{{ room.blackbox ? ' [blackbox]' : '' }}
-              </option>
-            </select>
-            <span class="form-hint">Зажмите Ctrl для выбора нескольких</span>
-          </div>
-          
-          <div class="form-group">
-            <label class="checkbox-label">
-              <input type="checkbox" v-model="editRun.registration_open" />
-              <span>Регистрация открыта</span>
-            </label>
-          </div>
-          
-          <div v-if="editError" class="form-error">{{ editError }}</div>
-          
-          <div class="form-actions">
-            <button type="button" @click="closeEditModal" class="btn btn-secondary">Отмена</button>
-            <button type="submit" class="btn btn-primary" :disabled="editLoading">
-              {{ editLoading ? 'Сохранение...' : 'Сохранить' }}
-            </button>
-          </div>
-        </form>
-      </div>
-    </div>
+    <!-- Модальное окно добавления/редактирования прогона -->
+    <RunEditor
+      v-if="showRunEditor"
+      :mode="runEditorMode"
+      :run="runEditorRun"
+      :convention-event-id="parseInt(eventId)"
+      :lock-convention="true"
+      :lock-game="runEditorMode === 'edit'"
+      :convention-name="schedule ? schedule.convention_name : ''"
+      :games="games"
+      :cities="[]"
+      :convention-events="[]"
+      :available-rooms="availableRooms"
+      :date-constraints="{ min: schedule ? schedule.date_start : '', max: schedule ? schedule.date_end : '' }"
+      :allow-new-city="false"
+      :csrf-token="csrfToken"
+      :default-city="schedule ? { id: schedule.city_id, name: schedule.city_name, timezone: schedule.city_timezone } : null"
+      :default-timezone="schedule ? schedule.city_timezone : 'Europe/Moscow'"
+      :default-date="schedule ? schedule.date_start : ''"
+      @save="handleRunSave"
+      @cancel="closeRunEditor"
+      @error="handleRunError"
+    />
 
     <!-- Модальное окно подтверждения удаления -->
     <div v-if="showDeleteConfirm" class="modal-overlay" @click.self="cancelDelete">
@@ -367,8 +179,13 @@
 </template>
 
 <script>
+import RunEditor from './RunEditor.vue'
+
 export default {
   name: 'ScheduleEditor',
+  components: {
+    RunEditor
+  },
   props: {
     eventId: {
       type: [String, Number],
@@ -385,47 +202,22 @@ export default {
       games: [],
       rooms: [],
       
-      // Добавление прогона
-      showAddModal: false,
-      addLoading: false,
-      addError: null,
-      newRun: this.getEmptyRun(),
-      
-      // Редактирование прогона
-      showEditModal: false,
-      editLoading: false,
-      editError: null,
-      editRun: {},
+      // Единый редактор прогона
+      showRunEditor: false,
+      runEditorMode: 'add',
+      runEditorRun: null,
+      runEditorLoading: false,
       
       // Удаление
       showDeleteConfirm: false,
       deleteTarget: null,
-      deleteLoading: false,
-      
-      // Поиск игры
-      gameSearch: '',
-      showGameDropdown: false
+      deleteLoading: false
     }
   },
   computed: {
     csrfToken() {
       const match = document.cookie.match(/csrftoken=([^;]+)/)
       return match ? match[1] : ''
-    },
-    sortedGames() {
-      return this.games.slice().sort((a, b) => a.name.localeCompare(b.name, 'ru'))
-    },
-    filteredGamesList() {
-      if (!this.gameSearch) {
-        return this.sortedGames
-      }
-      const query = this.gameSearch.toLowerCase()
-      return this.sortedGames.filter(g => g.name.toLowerCase().includes(query))
-    },
-    selectedGameName() {
-      if (!this.newRun.game_id) return ''
-      const game = this.games.find(g => g.id === this.newRun.game_id)
-      return game ? game.name : ''
     },
     availableRooms() {
       // Если у конвента указана площадка, показываем только её помещения
@@ -485,17 +277,6 @@ export default {
     }
   },
   methods: {
-    getEmptyRun() {
-      return {
-        game_id: null,
-        date: '',
-        time: '12:00',
-        duration: 180,
-        room_ids: [],
-        max_players: null,
-        registration_open: true
-      }
-    },
     
     async fetchSchedule() {
       this.loading = true
@@ -607,143 +388,92 @@ export default {
       })
     },
     
-    // === Добавление прогона ===
+    // === Добавление/Редактирование прогона через RunEditor ===
     openAddRunModal() {
-      this.newRun = this.getEmptyRun()
-      // Устанавливаем первый день конвента по умолчанию
-      if (this.schedule) {
-        this.newRun.date = this.schedule.date_start
-      }
-      this.gameSearch = ''
-      this.showGameDropdown = false
-      this.addError = null
-      this.showAddModal = true
+      this.runEditorMode = 'add'
+      this.runEditorRun = null
+      this.showRunEditor = true
     },
     
-    closeAddModal() {
-      this.showAddModal = false
-      this.addError = null
-    },
-    
-    async submitAddRun() {
-      this.addLoading = true
-      this.addError = null
-      
-      try {
-        // Формируем дату-время
-        const dateTime = `${this.newRun.date}T${this.newRun.time}:00`
-        
-        const data = {
-          game_id: this.newRun.game_id,
-          date: dateTime,
-          duration: this.newRun.duration,
-          room_ids: this.newRun.room_ids || [],
-          max_players: this.newRun.max_players || null,
-          registration_open: this.newRun.registration_open
-        }
-        
-        const response = await fetch(`/api/convention-events/${this.eventId}/add_run/`, {
-          method: 'POST',
-          headers: {
-            'Content-Type': 'application/json',
-            'X-CSRFToken': this.csrfToken
-          },
-          body: JSON.stringify(data)
-        })
-        
-        if (!response.ok) {
-          const errData = await response.json()
-          throw new Error(errData.error || errData.detail || 'Ошибка при добавлении прогона')
-        }
-        
-        // Обновляем расписание
-        await this.fetchSchedule()
-        this.$emit('updated')
-        this.closeAddModal()
-      } catch (err) {
-        this.addError = err.message
-      } finally {
-        this.addLoading = false
-      }
-    },
-    
-    // === Редактирование прогона ===
     openEditRunModal(run) {
-      // Используем локальную дату (date_local) если доступна
-      const localDateStr = run.date_local || run.date
-      let runDate = ''
-      let runTime = '12:00'
-      
-      if (localDateStr) {
-        // date_local имеет формат YYYY-MM-DDTHH:MM:SS (без таймзоны)
-        const parts = localDateStr.split('T')
-        if (parts.length >= 1) {
-          runDate = parts[0]
-        }
-        if (parts.length >= 2) {
-          runTime = parts[1].slice(0, 5)
-        }
-      }
-      
-      this.editRun = {
-        id: run.id,
-        game_name: run.game_name,
-        date: runDate,
-        time: runTime,
-        duration: run.duration,
-        room_ids: run.rooms ? run.rooms.map(r => r.id) : [],
-        max_players: run.max_players,
-        registration_open: run.registration_open
-      }
-      this.editError = null
-      this.showEditModal = true
+      this.runEditorMode = 'edit'
+      this.runEditorRun = run
+      this.showRunEditor = true
     },
     
-    closeEditModal() {
-      this.showEditModal = false
-      this.editError = null
+    closeRunEditor() {
+      this.showRunEditor = false
+      this.runEditorRun = null
     },
     
-    async submitEditRun() {
-      this.editLoading = true
-      this.editError = null
+    async handleRunSave(runData) {
+      this.runEditorLoading = true
       
       try {
-        // Формируем дату-время
-        const dateTime = `${this.editRun.date}T${this.editRun.time}:00`
-        
-        const data = {
-          run_id: this.editRun.id,
-          date: dateTime,
-          duration: this.editRun.duration,
-          room_ids: this.editRun.room_ids || [],
-          max_players: this.editRun.max_players || null,
-          registration_open: this.editRun.registration_open
-        }
-        
-        const response = await fetch(`/api/convention-events/${this.eventId}/update_run/`, {
-          method: 'PATCH',
-          headers: {
-            'Content-Type': 'application/json',
-            'X-CSRFToken': this.csrfToken
-          },
-          body: JSON.stringify(data)
-        })
-        
-        if (!response.ok) {
-          const errData = await response.json()
-          throw new Error(errData.error || errData.detail || 'Ошибка при сохранении прогона')
+        if (this.runEditorMode === 'add') {
+          // Добавление нового прогона
+          const data = {
+            game_id: runData.game_id,
+            date: runData.date,
+            duration: runData.duration,
+            room_ids: runData.room_ids || [],
+            max_players: runData.max_players || null,
+            registration_open: runData.registration_open
+          }
+          
+          const response = await fetch(`/api/convention-events/${this.eventId}/add_run/`, {
+            method: 'POST',
+            headers: {
+              'Content-Type': 'application/json',
+              'X-CSRFToken': this.csrfToken
+            },
+            body: JSON.stringify(data)
+          })
+          
+          if (!response.ok) {
+            const errData = await response.json()
+            throw new Error(errData.error || errData.detail || 'Ошибка при добавлении прогона')
+          }
+        } else {
+          // Редактирование прогона
+          const data = {
+            run_id: runData.id,
+            date: runData.date,
+            duration: runData.duration,
+            room_ids: runData.room_ids || [],
+            max_players: runData.max_players || null,
+            registration_open: runData.registration_open
+          }
+          
+          const response = await fetch(`/api/convention-events/${this.eventId}/update_run/`, {
+            method: 'PATCH',
+            headers: {
+              'Content-Type': 'application/json',
+              'X-CSRFToken': this.csrfToken
+            },
+            body: JSON.stringify(data)
+          })
+          
+          if (!response.ok) {
+            const errData = await response.json()
+            throw new Error(errData.error || errData.detail || 'Ошибка при сохранении прогона')
+          }
         }
         
         // Обновляем расписание
         await this.fetchSchedule()
         this.$emit('updated')
-        this.closeEditModal()
+        this.closeRunEditor()
       } catch (err) {
-        this.editError = err.message
+        // Ошибка будет показана в компоненте RunEditor
+        console.error('Ошибка сохранения прогона:', err.message)
       } finally {
-        this.editLoading = false
+        this.runEditorLoading = false
       }
+    },
+    
+    handleRunError(errorMessage) {
+      console.error('RunEditor error:', errorMessage)
     },
     
     // === Удаление прогона ===
@@ -789,23 +519,6 @@ export default {
       }
     },
     
-    // === Поиск игры ===
-    selectGameForNewRun(game) {
-      this.newRun.game_id = game.id
-      this.gameSearch = game.name
-      this.showGameDropdown = false
-    },
-    
-    onGameInputBlur() {
-      // Задержка для обработки клика по элементу списка
-      setTimeout(() => {
-        this.showGameDropdown = false
-        // Если поиск не соответствует выбранной игре, восстанавливаем
-        if (this.newRun.game_id && this.gameSearch !== this.selectedGameName) {
-          this.gameSearch = this.selectedGameName
-        }
-      }, 200)
-    }
   }
 }
 </script>
@@ -1166,7 +879,7 @@ export default {
   border-color: #ff4444;
 }
 
-/* ========== Модальные окна ========== */
+/* ========== Модальные окна (для удаления) ========== */
 .modal-overlay {
   position: fixed;
   top: 0;
@@ -1216,97 +929,6 @@ export default {
   font-size: 1.5rem;
   margin-bottom: 24px;
   padding-right: 40px;
-}
-
-/* ========== Формы ========== */
-.add-form,
-.edit-form {
-  display: flex;
-  flex-direction: column;
-  gap: 20px;
-}
-
-.form-group {
-  display: flex;
-  flex-direction: column;
-  gap: 8px;
-}
-
-.form-group label {
-  color: #ff6b35;
-  font-size: 0.9rem;
-  text-transform: uppercase;
-  letter-spacing: 0.05em;
-}
-
-.form-input {
-  padding: 12px 16px;
-  background: rgba(10, 10, 10, 0.6);
-  border: 2px solid #ff6b3544;
-  border-radius: 8px;
-  color: #e0e0e0;
-  font-size: 1rem;
-  transition: border-color 0.3s, box-shadow 0.3s;
-}
-
-.form-input::placeholder {
-  color: #555;
-}
-
-.form-input:focus {
-  outline: none;
-  border-color: #ff6b35;
-  box-shadow: 0 0 15px rgba(255, 107, 53, 0.15);
-}
-
-.form-input:disabled {
-  opacity: 0.6;
-  cursor: not-allowed;
-}
-
-.form-row {
-  display: flex;
-  gap: 20px;
-}
-
-.form-group.half {
-  flex: 1;
-}
-
-.checkbox-label {
-  display: flex;
-  align-items: center;
-  gap: 10px;
-  cursor: pointer;
-  color: #ccc;
-}
-
-.checkbox-label input[type="checkbox"] {
-  width: 18px;
-  height: 18px;
-  cursor: pointer;
-}
-
-.btn-link {
-  background: none;
-  border: none;
-  color: #00ccff;
-  cursor: pointer;
-  font-size: 0.9rem;
-  padding: 4px 0;
-  text-align: left;
-}
-
-.btn-link:hover {
-  text-decoration: underline;
-}
-
-.form-error {
-  background: rgba(255, 68, 68, 0.15);
-  border: 1px solid #ff4444;
-  border-radius: 8px;
-  padding: 12px 16px;
-  color: #ff6b6b;
 }
 
 .form-actions {
@@ -1402,60 +1024,6 @@ export default {
   color: #ff6b6b;
 }
 
-/* ========== Поиск с выпадающим списком ========== */
-.searchable-select {
-  position: relative;
-}
-
-.dropdown-list {
-  position: absolute;
-  top: 100%;
-  left: 0;
-  right: 0;
-  max-height: 300px;
-  overflow-y: auto;
-  background: #0a0a0a;
-  border: 2px solid #ff6b35;
-  border-top: none;
-  border-radius: 0 0 8px 8px;
-  z-index: 100;
-  box-shadow: 0 10px 30px rgba(0, 0, 0, 0.5);
-}
-
-.dropdown-item {
-  padding: 12px 16px;
-  cursor: pointer;
-  transition: background 0.2s;
-  border-bottom: 1px solid #ff6b3522;
-  display: flex;
-  flex-direction: column;
-  gap: 4px;
-}
-
-.dropdown-item:last-child {
-  border-bottom: none;
-}
-
-.dropdown-item:hover,
-.dropdown-item.selected {
-  background: rgba(255, 107, 53, 0.15);
-}
-
-.dropdown-item-name {
-  font-weight: 600;
-  color: #e0e0e0;
-}
-
-.dropdown-item-info {
-  font-size: 0.85rem;
-  color: #888;
-}
-
-.dropdown-empty {
-  padding: 20px;
-  text-align: center;
-  color: #666;
-}
 
 /* ========== Адаптив ========== */
 @media (max-width: 768px) {

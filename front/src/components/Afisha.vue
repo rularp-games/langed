@@ -659,357 +659,24 @@
       </div>
     </div>
 
-    <!-- Модальное окно добавления прогона -->
-    <div v-if="showAddRunModal" class="modal-overlay" @click.self="closeAddRunModal">
-      <div class="modal-content add-run-modal">
-        <button class="modal-close" @click="closeAddRunModal">×</button>
-        
-        <h2>Добавить прогон</h2>
-        
-        <form @submit.prevent="submitRun" class="add-form">
-          <div class="form-group searchable-select">
-            <label for="run-game">Игра *</label>
-            <input 
-              id="run-game"
-              v-model="gameSearch"
-              type="text"
-              class="form-input"
-              placeholder="Введите название игры..."
-              autocomplete="off"
-              @focus="onGameInputFocus"
-              @blur="onGameInputBlur"
-              @keydown.enter.prevent
-            />
-            <div v-if="showGameDropdown" class="dropdown-list">
-              <div 
-                v-for="game in filteredGamesList" 
-                :key="game.id" 
-                class="dropdown-item"
-                :class="{ selected: newRun.game_id === game.id }"
-                @mousedown.prevent="selectGame(game)"
-              >
-                {{ game.name }}
-              </div>
-              <div v-if="filteredGamesList.length === 0" class="dropdown-empty">
-                Игры не найдены
-              </div>
-            </div>
-            <input type="hidden" :value="newRun.game_id" required />
-          </div>
-          
-          <div class="form-group">
-            <label for="run-convention">Проведение конвента (опционально)</label>
-            <select 
-              id="run-convention"
-              v-model="newRun.convention_event_id"
-              @change="onConventionEventChange"
-              class="form-input"
-            >
-              <option :value="null">Без конвента (отдельный прогон)</option>
-              <option 
-                v-for="event in conventionEvents" 
-                :key="event.id" 
-                :value="event.id"
-              >
-                {{ event.convention_name }} — {{ event.city_name || (event.city && event.city.name) }} ({{ formatConventionDates(event.date_start, event.date_end) }})
-              </option>
-            </select>
-          </div>
-          
-          <div class="form-group searchable-select">
-            <label for="run-city">Город *</label>
-            <input 
-              id="run-city"
-              v-model="citySearch"
-              type="text"
-              class="form-input"
-              placeholder="Введите название города..."
-              autocomplete="off"
-              :disabled="newRun.convention_event_id !== null"
-              @focus="onCityInputFocus"
-              @blur="onCityInputBlur"
-              @keydown.enter.prevent
-            />
-            <div v-if="showCityDropdown && newRun.convention_event_id === null" class="dropdown-list">
-              <div 
-                v-for="city in filteredCitiesList" 
-                :key="city.id" 
-                class="dropdown-item"
-                :class="{ selected: newRun.city_id === city.id }"
-                @mousedown.prevent="selectCity(city)"
-              >
-                {{ city.name }}{{ city.region && city.region.name ? ` (${city.region.name})` : '' }}
-              </div>
-              <div 
-                class="dropdown-item dropdown-item-new"
-                @mousedown.prevent="selectNewCity"
-              >
-                + Создать новый город
-              </div>
-              <div v-if="filteredCitiesList.length === 0 && citySearch" class="dropdown-empty">
-                Города не найдены
-              </div>
-            </div>
-            <p v-if="newRun.convention_event_id" class="form-hint">
-              Город определяется проведением конвента
-            </p>
-            <input type="hidden" :value="newRun.city_id" required />
-          </div>
-          
-          <div v-if="newRun.city_id === 'new' && !newRun.convention_event_id" class="form-group">
-            <label for="new-city-name">Название нового города *</label>
-            <input 
-              id="new-city-name"
-              v-model="newRun.newCityName" 
-              type="text" 
-              required
-              class="form-input"
-              placeholder="Введите название города"
-            />
-          </div>
-          
-          <div v-if="newRun.city_id && newRun.city_id !== 'new'" class="form-group">
-            <label for="run-venue">Площадка</label>
-            <select 
-              id="run-venue"
-              v-model="newRun.venue_id"
-              @change="onNewRunVenueChange"
-              class="form-input"
-            >
-              <option :value="null">Не указана</option>
-              <option 
-                v-for="venue in newRunVenues" 
-                :key="venue.id" 
-                :value="venue.id"
-              >
-                {{ venue.name }}
-              </option>
-            </select>
-          </div>
-          
-          <div v-if="newRun.venue_id && newRunRooms.length > 0" class="form-group">
-            <label for="run-rooms">Помещения</label>
-            <select 
-              id="run-rooms"
-              v-model="newRun.room_ids"
-              class="form-input"
-              multiple
-              size="3"
-            >
-              <option 
-                v-for="room in newRunRooms" 
-                :key="room.id" 
-                :value="room.id"
-              >
-                {{ room.name }}{{ room.blackbox ? ' [blackbox]' : '' }}
-              </option>
-            </select>
-            <span class="form-hint">Зажмите Ctrl для выбора нескольких</span>
-          </div>
-          
-          <div class="form-row">
-            <div class="form-group half">
-              <label for="run-date">Дата *</label>
-              <input 
-                id="run-date"
-                v-model="newRun.date" 
-                type="date" 
-                required
-                class="form-input"
-              />
-            </div>
-            
-            <div class="form-group half">
-              <label for="run-time">Время * <span class="timezone-label">{{ getTimezoneAbbr(newRun.city_timezone) }}</span></label>
-              <input 
-                id="run-time"
-                v-model="newRun.time" 
-                type="time" 
-                required
-                class="form-input"
-              />
-            </div>
-          </div>
-          
-          <div v-if="addRunError" class="form-error">{{ addRunError }}</div>
-          
-          <div class="form-actions">
-            <button type="button" @click="closeAddRunModal" class="btn btn-secondary">Отмена</button>
-            <button type="submit" class="btn btn-primary" :disabled="addRunLoading">
-              <span v-if="addRunLoading">Сохранение...</span>
-              <span v-else>Добавить</span>
-            </button>
-          </div>
-        </form>
-      </div>
-    </div>
-
-    <!-- Модальное окно редактирования прогона -->
-    <div v-if="isEditingRun" class="modal-overlay" @click.self="cancelEditingRun">
-      <div class="modal-content add-run-modal">
-        <button class="modal-close" @click="cancelEditingRun">×</button>
-        
-        <h2>Редактировать прогон</h2>
-        
-        <form @submit.prevent="submitEditRun" class="add-form">
-          <div class="form-group searchable-select">
-            <label for="edit-run-game">Игра *</label>
-            <input 
-              id="edit-run-game"
-              v-model="editGameSearch"
-              type="text"
-              class="form-input"
-              placeholder="Введите название игры..."
-              autocomplete="off"
-              @focus="showEditGameDropdown = true"
-              @blur="onEditGameInputBlur"
-              @keydown.enter.prevent
-            />
-            <div v-if="showEditGameDropdown" class="dropdown-list">
-              <div 
-                v-for="game in filteredEditGamesList" 
-                :key="game.id" 
-                class="dropdown-item"
-                :class="{ selected: editRun.game_id === game.id }"
-                @mousedown.prevent="selectEditGame(game)"
-              >
-                {{ game.name }}
-              </div>
-              <div v-if="filteredEditGamesList.length === 0" class="dropdown-empty">
-                Игры не найдены
-              </div>
-            </div>
-            <input type="hidden" :value="editRun.game_id" required />
-          </div>
-          
-          <div class="form-group">
-            <label for="edit-run-convention">Проведение конвента (опционально)</label>
-            <select 
-              id="edit-run-convention"
-              v-model="editRun.convention_event_id"
-              @change="onEditConventionEventChange"
-              class="form-input"
-            >
-              <option :value="null">Без конвента (отдельный прогон)</option>
-              <option 
-                v-for="event in allConventionEvents" 
-                :key="event.id" 
-                :value="event.id"
-              >
-                {{ event.convention_name }} — {{ event.city_name || (event.city && event.city.name) }} ({{ formatConventionDates(event.date_start, event.date_end) }})
-              </option>
-            </select>
-          </div>
-          
-          <div class="form-group searchable-select">
-            <label for="edit-run-city">Город *</label>
-            <input 
-              id="edit-run-city"
-              v-model="editCitySearch"
-              type="text"
-              class="form-input"
-              placeholder="Введите название города..."
-              autocomplete="off"
-              :disabled="editRun.convention_event_id !== null"
-              @focus="showEditCityDropdown = true"
-              @blur="onEditCityInputBlur"
-              @keydown.enter.prevent
-            />
-            <div v-if="showEditCityDropdown && editRun.convention_event_id === null" class="dropdown-list">
-              <div 
-                v-for="city in filteredEditCitiesList" 
-                :key="city.id" 
-                class="dropdown-item"
-                :class="{ selected: editRun.city_id === city.id }"
-                @mousedown.prevent="selectEditCity(city)"
-              >
-                {{ city.name }}{{ city.region && city.region.name ? ` (${city.region.name})` : '' }}
-              </div>
-              <div v-if="filteredEditCitiesList.length === 0 && editCitySearch" class="dropdown-empty">
-                Города не найдены
-              </div>
-            </div>
-            <p v-if="editRun.convention_event_id" class="form-hint">
-              Город определяется проведением конвента
-            </p>
-            <input type="hidden" :value="editRun.city_id" required />
-          </div>
-          
-          <div v-if="editRun.city_id" class="form-group">
-            <label for="edit-run-venue">Площадка</label>
-            <select 
-              id="edit-run-venue"
-              v-model="editRun.venue_id"
-              @change="onEditRunVenueChange"
-              class="form-input"
-            >
-              <option :value="null">Не указана</option>
-              <option 
-                v-for="venue in editRunVenues" 
-                :key="venue.id" 
-                :value="venue.id"
-              >
-                {{ venue.name }}
-              </option>
-            </select>
-          </div>
-          
-          <div v-if="editRun.venue_id && editRunRooms.length > 0" class="form-group">
-            <label for="edit-run-rooms">Помещения</label>
-            <select 
-              id="edit-run-rooms"
-              v-model="editRun.room_ids"
-              class="form-input"
-              multiple
-              size="3"
-            >
-              <option 
-                v-for="room in editRunRooms" 
-                :key="room.id" 
-                :value="room.id"
-              >
-                {{ room.name }}{{ room.blackbox ? ' [blackbox]' : '' }}
-              </option>
-            </select>
-            <span class="form-hint">Зажмите Ctrl для выбора нескольких</span>
-          </div>
-          
-          <div class="form-row">
-            <div class="form-group half">
-              <label for="edit-run-date">Дата *</label>
-              <input 
-                id="edit-run-date"
-                v-model="editRun.date" 
-                type="date" 
-                required
-                class="form-input"
-              />
-            </div>
-            
-            <div class="form-group half">
-              <label for="edit-run-time">Время * <span class="timezone-label">{{ getTimezoneAbbr(editRun.city_timezone) }}</span></label>
-              <input 
-                id="edit-run-time"
-                v-model="editRun.time" 
-                type="time" 
-                required
-                class="form-input"
-              />
-            </div>
-          </div>
-          
-          <div v-if="editRunError" class="form-error">{{ editRunError }}</div>
-          
-          <div class="form-actions">
-            <button type="button" @click="cancelEditingRun" class="btn btn-secondary">Отмена</button>
-            <button type="submit" class="btn btn-primary" :disabled="editRunLoading">
-              <span v-if="editRunLoading">Сохранение...</span>
-              <span v-else>Сохранить</span>
-            </button>
-          </div>
-        </form>
-      </div>
-    </div>
+    <!-- Модальное окно добавления/редактирования прогона -->
+    <RunEditor
+      v-if="showRunEditor"
+      :mode="runEditorMode"
+      :run="runEditorRun"
+      :convention-event-id="runEditorRun ? runEditorRun.convention_event : null"
+      :lock-convention="false"
+      :lock-game="false"
+      :games="games"
+      :cities="allCities"
+      :convention-events="runEditorMode === 'add' ? conventionEvents : allConventionEvents"
+      :allow-new-city="true"
+      :csrf-token="csrfToken"
+      @save="handleRunEditorSave"
+      @cancel="closeRunEditor"
+      @error="handleRunEditorError"
+      @city-created="onCityCreated"
+    />
 
     <!-- Модальное окно подтверждения удаления -->
     <div v-if="showDeleteConfirm" class="modal-overlay" @click.self="cancelDelete">
@@ -1041,8 +708,13 @@
 </template>
 
 <script>
+import RunEditor from './RunEditor.vue'
+
 export default {
   name: 'AfishaPage',
+  components: {
+    RunEditor
+  },
   inject: ['getUser'],
   props: {
     runId: {
@@ -1075,50 +747,15 @@ export default {
       conventionsError: null,
       selectedConvention: null,
       eventLinkCopied: false,
-      // Для добавления прогона
-      showAddRunModal: false,
-      addRunLoading: false,
-      addRunError: null,
+      // Данные для формы прогона
       games: [],
       allCities: [],
       conventionEvents: [],
-      newRun: {
-        game_id: null,
-        city_id: null,
-        city_timezone: 'Europe/Moscow',
-        newCityName: '',
-        convention_event_id: null,
-        venue_id: null,
-        room_ids: [],
-        date: '',
-        time: ''
-      },
-      // Площадки и помещения для добавления прогона
-      newRunVenues: [],
-      newRunRooms: [],
-      // Для редактирования прогона
-      isEditingRun: false,
-      editRunLoading: false,
-      editRunError: null,
-      editRun: {
-        id: null,
-        game_id: null,
-        city_id: null,
-        city_timezone: 'Europe/Moscow',
-        convention_event_id: null,
-        venue_id: null,
-        room_ids: [],
-        date: '',
-        time: ''
-      },
-      // Площадки и помещения для редактирования прогона
-      editRunVenues: [],
-      editRunRooms: [],
-      // Для searchable select
-      gameSearch: '',
-      citySearch: '',
-      showGameDropdown: false,
-      showCityDropdown: false,
+      // Единый редактор прогона
+      showRunEditor: false,
+      runEditorMode: 'add',
+      runEditorRun: null,
+      runEditorLoading: false,
       // Для добавления проведения конвента
       showAddEventModal: false,
       addEventLoading: false,
@@ -1133,11 +770,7 @@ export default {
       },
       eventCitySearch: '',
       showEventCityDropdown: false,
-      // Для редактирования прогона - выпадающие списки
-      editGameSearch: '',
-      editCitySearch: '',
-      showEditGameDropdown: false,
-      showEditCityDropdown: false,
+      // Для редактирования прогона - все проведения конвентов
       allConventionEvents: [],
       // Удаление
       showDeleteConfirm: false,
@@ -1192,39 +825,8 @@ export default {
         return 0
       })
     },
-    filteredGamesList() {
-      if (!this.gameSearch) {
-        return this.sortedGames
-      }
-      const query = this.gameSearch.toLowerCase()
-      return this.sortedGames.filter(g => g.name.toLowerCase().includes(query))
-    },
     sortedCities() {
       return this.allCities.slice().sort((a, b) => a.name.localeCompare(b.name, 'ru'))
-    },
-    filteredCitiesList() {
-      if (!this.citySearch) {
-        return this.sortedCities
-      }
-      const query = this.citySearch.toLowerCase()
-      return this.sortedCities.filter(c => {
-        const regionName = c.region && c.region.name ? c.region.name : ''
-        return c.name.toLowerCase().includes(query) || 
-          regionName.toLowerCase().includes(query)
-      })
-    },
-    selectedGameName() {
-      if (!this.newRun.game_id) return ''
-      const game = this.games.find(g => g.id === this.newRun.game_id)
-      return game ? game.name : ''
-    },
-    selectedCityName() {
-      if (!this.newRun.city_id) return ''
-      if (this.newRun.city_id === 'new') return ''
-      const city = this.allCities.find(c => c.id === this.newRun.city_id)
-      if (!city) return ''
-      const regionName = city.region && city.region.name ? city.region.name : ''
-      return regionName ? `${city.name} (${regionName})` : city.name
     },
     filteredEventCitiesList() {
       if (!this.eventCitySearch) {
@@ -1241,37 +843,6 @@ export default {
       if (!this.newEvent.city_id) return ''
       if (this.newEvent.city_id === 'new') return ''
       const city = this.allCities.find(c => c.id === this.newEvent.city_id)
-      if (!city) return ''
-      const regionName = city.region && city.region.name ? city.region.name : ''
-      return regionName ? `${city.name} (${regionName})` : city.name
-    },
-    // Для редактирования прогона
-    filteredEditGamesList() {
-      if (!this.editGameSearch) {
-        return this.sortedGames
-      }
-      const query = this.editGameSearch.toLowerCase()
-      return this.sortedGames.filter(g => g.name.toLowerCase().includes(query))
-    },
-    filteredEditCitiesList() {
-      if (!this.editCitySearch) {
-        return this.sortedCities
-      }
-      const query = this.editCitySearch.toLowerCase()
-      return this.sortedCities.filter(c => {
-        const regionName = c.region && c.region.name ? c.region.name : ''
-        return c.name.toLowerCase().includes(query) || 
-          regionName.toLowerCase().includes(query)
-      })
-    },
-    selectedEditGameName() {
-      if (!this.editRun.game_id) return ''
-      const game = this.games.find(g => g.id === this.editRun.game_id)
-      return game ? game.name : ''
-    },
-    selectedEditCityName() {
-      if (!this.editRun.city_id) return ''
-      const city = this.allCities.find(c => c.id === this.editRun.city_id)
       if (!city) return ''
       const regionName = city.region && city.region.name ? city.region.name : ''
       return regionName ? `${city.name} (${regionName})` : city.name
@@ -1667,54 +1238,6 @@ export default {
         console.error('Ошибка загрузки городов:', err)
       }
     },
-    async fetchVenuesByCity(cityId, target = 'newRun') {
-      if (!cityId || cityId === 'new') {
-        if (target === 'newRun') {
-          this.newRunVenues = []
-          this.newRunRooms = []
-        } else {
-          this.editRunVenues = []
-          this.editRunRooms = []
-        }
-        return
-      }
-      try {
-        const response = await fetch(`/api/venues/?city=${cityId}`)
-        if (response.ok) {
-          const venues = await response.json()
-          if (target === 'newRun') {
-            this.newRunVenues = venues
-          } else {
-            this.editRunVenues = venues
-          }
-        }
-      } catch (err) {
-        console.error('Ошибка загрузки площадок:', err)
-      }
-    },
-    async fetchRoomsByVenue(venueId, target = 'newRun') {
-      if (!venueId) {
-        if (target === 'newRun') {
-          this.newRunRooms = []
-        } else {
-          this.editRunRooms = []
-        }
-        return
-      }
-      try {
-        const response = await fetch(`/api/rooms/?venue=${venueId}`)
-        if (response.ok) {
-          const rooms = await response.json()
-          if (target === 'newRun') {
-            this.newRunRooms = rooms
-          } else {
-            this.editRunRooms = rooms
-          }
-        }
-      } catch (err) {
-        console.error('Ошибка загрузки помещений:', err)
-      }
-    },
     async fetchConventionEvents() {
       try {
         const response = await fetch('/api/convention-events/?time=upcoming')
@@ -1725,207 +1248,92 @@ export default {
         console.error('Ошибка загрузки проведений конвентов:', err)
       }
     },
+    // === Добавление/Редактирование прогона через RunEditor ===
     openAddRunModal() {
-      this.newRun = {
-        game_id: null,
-        city_id: null,
-        city_timezone: 'Europe/Moscow',
-        newCityName: '',
-        convention_event_id: null,
-        venue_id: null,
-        room_ids: [],
-        date: '',
-        time: ''
-      }
-      this.gameSearch = ''
-      this.citySearch = ''
-      this.showGameDropdown = false
-      this.showCityDropdown = false
-      this.newRunVenues = []
-      this.newRunRooms = []
-      this.addRunError = null
-      this.showAddRunModal = true
+      this.runEditorMode = 'add'
+      this.runEditorRun = null
+      this.showRunEditor = true
     },
-    closeAddRunModal() {
-      this.showAddRunModal = false
-      this.addRunError = null
+    
+    startEditingRun() {
+      if (!this.selectedRun) return
+      this.runEditorMode = 'edit'
+      this.runEditorRun = this.selectedRun
+      this.showRunEditor = true
     },
-    selectGame(game) {
-      this.newRun.game_id = game.id
-      this.gameSearch = game.name
-      this.showGameDropdown = false
+    
+    closeRunEditor() {
+      this.showRunEditor = false
+      this.runEditorRun = null
     },
-    selectCity(city) {
-      this.newRun.city_id = city.id
-      this.newRun.city_timezone = city.timezone || 'Europe/Moscow'
-      const regionName = city.region && city.region.name ? city.region.name : ''
-      this.citySearch = regionName ? `${city.name} (${regionName})` : city.name
-      this.showCityDropdown = false
-      // Сбрасываем площадку и помещения, загружаем площадки для города
-      this.newRun.venue_id = null
-      this.newRun.room_ids = []
-      this.newRunRooms = []
-      this.fetchVenuesByCity(city.id, 'newRun')
+    
+    onCityCreated(newCity) {
+      // Добавляем созданный город в список
+      this.allCities.push(newCity)
     },
-    selectNewCity() {
-      this.newRun.city_id = 'new'
-      this.citySearch = ''
-      this.showCityDropdown = false
-      this.newRun.venue_id = null
-      this.newRun.room_ids = []
-      this.newRunVenues = []
-      this.newRunRooms = []
-    },
-    onNewRunVenueChange() {
-      // При изменении площадки загружаем помещения
-      this.newRun.room_ids = []
-      if (this.newRun.venue_id) {
-        this.fetchRoomsByVenue(this.newRun.venue_id, 'newRun')
-      } else {
-        this.newRunRooms = []
-      }
-    },
-    onGameInputFocus() {
-      this.showGameDropdown = true
-    },
-    onCityInputFocus() {
-      if (this.newRun.convention_event_id === null) {
-        this.showCityDropdown = true
-      }
-    },
-    onGameInputBlur() {
-      // Задержка для обработки клика по элементу списка
-      setTimeout(() => {
-        this.showGameDropdown = false
-        // Если поиск не соответствует выбранной игре, очищаем
-        if (this.newRun.game_id && this.gameSearch !== this.selectedGameName) {
-          this.gameSearch = this.selectedGameName
-        }
-      }, 200)
-    },
-    onCityInputBlur() {
-      setTimeout(() => {
-        this.showCityDropdown = false
-        if (this.newRun.city_id && this.newRun.city_id !== 'new' && this.citySearch !== this.selectedCityName) {
-          this.citySearch = this.selectedCityName
-        }
-      }, 200)
-    },
-    onConventionEventChange() {
-      // Если выбрано проведение конвента, автоматически устанавливаем город
-      if (this.newRun.convention_event_id) {
-        const event = this.conventionEvents.find(e => e.id === this.newRun.convention_event_id)
-        if (event && event.city) {
-          this.newRun.city_id = event.city.id
-          this.newRun.city_timezone = event.city.timezone || 'Europe/Moscow'
-          const regionName = event.city.region && event.city.region.name ? event.city.region.name : ''
-          this.citySearch = regionName 
-            ? `${event.city.name} (${regionName})` 
-            : event.city.name
-          // Загружаем площадки для города конвента
-          this.newRun.venue_id = null
-          this.newRun.room_ids = []
-          this.newRunRooms = []
-          this.fetchVenuesByCity(event.city.id, 'newRun')
-        }
-      } else {
-        this.newRun.city_id = null
-        this.newRun.city_timezone = 'Europe/Moscow'
-        this.citySearch = ''
-        this.newRun.venue_id = null
-        this.newRun.room_ids = []
-        this.newRunVenues = []
-        this.newRunRooms = []
-      }
-    },
-    async submitRun() {
-      this.addRunLoading = true
-      this.addRunError = null
+    
+    async handleRunEditorSave(runData) {
+      this.runEditorLoading = true
       
       try {
-        let cityId = this.newRun.city_id
-        
-        // Если выбрано создание нового города
-        if (cityId === 'new' && this.newRun.newCityName.trim()) {
-          const cityResponse = await fetch('/api/cities/', {
+        if (this.runEditorMode === 'add') {
+          // Добавление нового прогона
+          const response = await fetch('/api/runs/', {
             method: 'POST',
             headers: {
               'Content-Type': 'application/json',
               'X-CSRFToken': this.csrfToken
             },
-            body: JSON.stringify({ name: this.newRun.newCityName.trim() })
+            body: JSON.stringify(runData)
           })
           
-          if (!cityResponse.ok) {
-            throw new Error('Ошибка при создании города')
+          if (!response.ok) {
+            if (response.status === 401 || response.status === 403) {
+              throw new Error('Необходима авторизация для добавления прогона')
+            }
+            const data = await response.json()
+            throw new Error(data.detail || data.non_field_errors?.[0] || 'Ошибка при сохранении')
           }
           
-          const newCity = await cityResponse.json()
-          cityId = newCity.id
-          this.allCities.push(newCity)
-        }
-        
-        if (!cityId || cityId === 'new') {
-          throw new Error('Выберите или создайте город')
-        }
-        
-        if (!this.newRun.game_id) {
-          throw new Error('Выберите игру из списка. Если игры нет в списке, сначала создайте её в разделе "Игры"')
-        }
-        
-        if (!this.newRun.date || !this.newRun.time) {
-          throw new Error('Укажите дату и время')
-        }
-        
-        // Конвертируем время с учётом таймзоны города
-        const dateTime = this.convertToTimezone(
-          this.newRun.date, 
-          this.newRun.time, 
-          this.newRun.city_timezone
-        )
-        
-        const runData = {
-          game_id: this.newRun.game_id,
-          city_id: cityId,
-          date: dateTime
-        }
-        
-        // Привязка к конвенту опциональна
-        if (this.newRun.convention_event_id) {
-          runData.convention_event_id = this.newRun.convention_event_id
-        }
-        
-        // Помещения опциональны
-        if (this.newRun.room_ids && this.newRun.room_ids.length > 0) {
-          runData.room_ids = this.newRun.room_ids
-        }
-        
-        const response = await fetch('/api/runs/', {
-          method: 'POST',
-          headers: {
-            'Content-Type': 'application/json',
-            'X-CSRFToken': this.csrfToken
-          },
-          body: JSON.stringify(runData)
-        })
-        
-        if (!response.ok) {
-          if (response.status === 401 || response.status === 403) {
-            throw new Error('Необходима авторизация для добавления прогона')
+          // Обновляем списки
+          await this.fetchRuns()
+          await this.fetchCities()
+        } else {
+          // Редактирование прогона
+          const response = await fetch(`/api/runs/${runData.id}/`, {
+            method: 'PATCH',
+            headers: {
+              'Content-Type': 'application/json',
+              'X-CSRFToken': this.csrfToken
+            },
+            body: JSON.stringify(runData)
+          })
+          
+          if (!response.ok) {
+            if (response.status === 401 || response.status === 403) {
+              throw new Error('Нет прав для редактирования этого прогона')
+            }
+            const data = await response.json()
+            throw new Error(data.detail || data.non_field_errors?.[0] || 'Ошибка при сохранении')
           }
-          const data = await response.json()
-          throw new Error(data.detail || data.non_field_errors?.[0] || 'Ошибка при сохранении')
+          
+          const updatedRun = await response.json()
+          
+          // Обновляем список и выбранный прогон
+          await this.fetchRuns()
+          this.selectedRun = updatedRun
         }
         
-        // Обновляем список
-        await this.fetchRuns()
-        await this.fetchCities()
-        this.closeAddRunModal()
+        this.closeRunEditor()
       } catch (err) {
-        this.addRunError = err.message
+        console.error('Ошибка сохранения прогона:', err.message)
       } finally {
-        this.addRunLoading = false
+        this.runEditorLoading = false
       }
+    },
+    
+    handleRunEditorError(errorMessage) {
+      console.error('RunEditor error:', errorMessage)
     },
     
     // === Добавление проведения конвента ===
@@ -2050,185 +1458,6 @@ export default {
         }
       } catch (err) {
         console.error('Ошибка загрузки всех проведений конвентов:', err)
-      }
-    },
-    startEditingRun() {
-      if (!this.selectedRun) return
-      
-      // Парсим дату и время из прогона
-      const runDate = new Date(this.selectedRun.date)
-      const timezone = this.selectedRun.city_timezone || 'Europe/Moscow'
-      
-      // Получаем дату и время в таймзоне города
-      const dateStr = runDate.toLocaleDateString('sv-SE', { timeZone: timezone })
-      const timeStr = runDate.toLocaleTimeString('en-GB', { 
-        timeZone: timezone, 
-        hour: '2-digit', 
-        minute: '2-digit' 
-      })
-      
-      // Находим city_id по названию
-      const city = this.allCities.find(c => c.name === this.selectedRun.city)
-      
-      // Получаем venue_id и room_ids из существующих помещений
-      const existingRooms = this.selectedRun.rooms || []
-      const existingRoomIds = existingRooms.map(r => r.id)
-      // Площадка берётся из первого помещения (если есть)
-      let venueId = null
-      if (existingRooms.length > 0 && existingRooms[0].venue_id) {
-        venueId = existingRooms[0].venue_id
-      }
-      
-      this.editRun = {
-        id: this.selectedRun.id,
-        game_id: this.selectedRun.game.id,
-        city_id: city ? city.id : null,
-        city_timezone: timezone,
-        convention_event_id: this.selectedRun.convention_event || null,
-        venue_id: venueId,
-        room_ids: existingRoomIds,
-        date: dateStr,
-        time: timeStr
-      }
-      
-      this.editGameSearch = this.selectedRun.game.name
-      this.editCitySearch = city ? (city.region?.name ? `${city.name} (${city.region.name})` : city.name) : this.selectedRun.city
-      
-      // Загружаем площадки для города
-      if (city) {
-        this.fetchVenuesByCity(city.id, 'editRun').then(() => {
-          // После загрузки площадок загружаем помещения
-          if (venueId) {
-            this.fetchRoomsByVenue(venueId, 'editRun')
-          }
-        })
-      }
-      this.editRunError = null
-      this.isEditingRun = true
-    },
-    cancelEditingRun() {
-      this.isEditingRun = false
-      this.editRunError = null
-    },
-    selectEditGame(game) {
-      this.editRun.game_id = game.id
-      this.editGameSearch = game.name
-      this.showEditGameDropdown = false
-    },
-    selectEditCity(city) {
-      this.editRun.city_id = city.id
-      this.editRun.city_timezone = city.timezone || 'Europe/Moscow'
-      const regionName = city.region && city.region.name ? city.region.name : ''
-      this.editCitySearch = regionName ? `${city.name} (${regionName})` : city.name
-      this.showEditCityDropdown = false
-      // Сбрасываем площадку и помещения, загружаем площадки для города
-      this.editRun.venue_id = null
-      this.editRun.room_ids = []
-      this.editRunRooms = []
-      this.fetchVenuesByCity(city.id, 'editRun')
-    },
-    onEditRunVenueChange() {
-      // При изменении площадки загружаем помещения
-      this.editRun.room_ids = []
-      if (this.editRun.venue_id) {
-        this.fetchRoomsByVenue(this.editRun.venue_id, 'editRun')
-      } else {
-        this.editRunRooms = []
-      }
-    },
-    onEditGameInputBlur() {
-      setTimeout(() => {
-        this.showEditGameDropdown = false
-        if (this.editRun.game_id && this.editGameSearch !== this.selectedEditGameName) {
-          this.editGameSearch = this.selectedEditGameName
-        }
-      }, 200)
-    },
-    onEditCityInputBlur() {
-      setTimeout(() => {
-        this.showEditCityDropdown = false
-        if (this.editRun.city_id && this.editCitySearch !== this.selectedEditCityName) {
-          this.editCitySearch = this.selectedEditCityName
-        }
-      }, 200)
-    },
-    onEditConventionEventChange() {
-      if (this.editRun.convention_event_id) {
-        const event = this.allConventionEvents.find(e => e.id === this.editRun.convention_event_id)
-        if (event && event.city) {
-          this.editRun.city_id = event.city.id
-          this.editRun.city_timezone = event.city.timezone || 'Europe/Moscow'
-          const regionName = event.city.region && event.city.region.name ? event.city.region.name : ''
-          this.editCitySearch = regionName 
-            ? `${event.city.name} (${regionName})` 
-            : event.city.name
-          // Загружаем площадки для города конвента
-          this.editRun.venue_id = null
-          this.editRun.room_ids = []
-          this.editRunRooms = []
-          this.fetchVenuesByCity(event.city.id, 'editRun')
-        }
-      }
-    },
-    async submitEditRun() {
-      this.editRunLoading = true
-      this.editRunError = null
-      
-      try {
-        if (!this.editRun.game_id) {
-          throw new Error('Выберите игру')
-        }
-        
-        if (!this.editRun.city_id) {
-          throw new Error('Выберите город')
-        }
-        
-        if (!this.editRun.date || !this.editRun.time) {
-          throw new Error('Укажите дату и время')
-        }
-        
-        // Конвертируем время с учётом таймзоны города
-        const dateTime = this.convertToTimezone(
-          this.editRun.date, 
-          this.editRun.time, 
-          this.editRun.city_timezone
-        )
-        
-        const runData = {
-          game_id: this.editRun.game_id,
-          city_id: this.editRun.city_id,
-          date: dateTime,
-          convention_event_id: this.editRun.convention_event_id || null,
-          room_ids: this.editRun.room_ids || []
-        }
-        
-        const response = await fetch(`/api/runs/${this.editRun.id}/`, {
-          method: 'PATCH',
-          headers: {
-            'Content-Type': 'application/json',
-            'X-CSRFToken': this.csrfToken
-          },
-          body: JSON.stringify(runData)
-        })
-        
-        if (!response.ok) {
-          if (response.status === 401 || response.status === 403) {
-            throw new Error('Нет прав для редактирования этого прогона')
-          }
-          const data = await response.json()
-          throw new Error(data.detail || data.non_field_errors?.[0] || 'Ошибка при сохранении')
-        }
-        
-        const updatedRun = await response.json()
-        
-        // Обновляем список и выбранный прогон
-        await this.fetchRuns()
-        this.selectedRun = updatedRun
-        this.isEditingRun = false
-      } catch (err) {
-        this.editRunError = err.message
-      } finally {
-        this.editRunLoading = false
       }
     },
     
