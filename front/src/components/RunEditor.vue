@@ -181,20 +181,35 @@
         <div class="form-row">
           <div class="form-group half">
             <label>Дата * <span class="format-hint">(дд/мм/гггг)</span></label>
-            <input 
-              :value="formattedDate"
-              @input="handleDateInput"
-              @blur="validateDate"
-              type="text" 
-              required
-              class="form-input date-input"
-              placeholder="дд/мм/гггг"
-              maxlength="10"
-            />
-            <input 
-              type="hidden" 
-              :value="formData.date"
-            />
+            <div class="date-picker-wrapper">
+              <input 
+                :value="formattedDate"
+                @input="handleDateInput"
+                @blur="validateDate"
+                type="text" 
+                required
+                class="form-input date-input"
+                placeholder="дд/мм/гггг"
+                maxlength="10"
+              />
+              <input 
+                ref="datePickerInput"
+                type="date"
+                class="date-picker-native"
+                :value="formData.date"
+                :min="dateConstraints.min"
+                :max="dateConstraints.max"
+                @change="handleDatePickerChange"
+              />
+              <button 
+                type="button" 
+                class="date-picker-btn"
+                @click="openDatePicker"
+                title="Открыть календарь"
+              >
+                📅
+              </button>
+            </div>
           </div>
           
           <div class="form-group half">
@@ -769,6 +784,21 @@ export default {
       }
     },
     
+    openDatePicker() {
+      // Открываем нативный date picker
+      if (this.$refs.datePickerInput) {
+        this.$refs.datePickerInput.showPicker()
+      }
+    },
+    
+    handleDatePickerChange(event) {
+      const value = event.target.value
+      if (value) {
+        this.formData.date = value
+        this.validateDate()
+      }
+    },
+    
     handleTimeInput(event) {
       let value = event.target.value
       // Оставляем только цифры и двоеточие
@@ -1196,6 +1226,46 @@ export default {
   color: #666;
   font-weight: normal;
   text-transform: none;
+}
+
+.date-picker-wrapper {
+  position: relative;
+  display: flex;
+  align-items: center;
+}
+
+.date-picker-wrapper .date-input {
+  flex: 1;
+  padding-right: 44px;
+}
+
+.date-picker-native {
+  position: absolute;
+  right: 40px;
+  top: 0;
+  width: 0;
+  height: 0;
+  opacity: 0;
+  pointer-events: none;
+}
+
+.date-picker-btn {
+  position: absolute;
+  right: 8px;
+  top: 50%;
+  transform: translateY(-50%);
+  background: none;
+  border: none;
+  font-size: 1.2rem;
+  cursor: pointer;
+  padding: 4px;
+  line-height: 1;
+  opacity: 0.7;
+  transition: opacity 0.2s;
+}
+
+.date-picker-btn:hover {
+  opacity: 1;
 }
 
 .date-input,

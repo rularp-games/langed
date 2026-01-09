@@ -487,6 +487,7 @@ class RunSerializer(serializers.ModelSerializer):
     )
     convention_name = serializers.SerializerMethodField()
     can_edit = serializers.SerializerMethodField()
+    date_local = serializers.SerializerMethodField()
     
     # Поля регистрации
     registrations = RegistrationBriefSerializer(many=True, read_only=True)
@@ -499,7 +500,7 @@ class RunSerializer(serializers.ModelSerializer):
     class Meta:
         model = Run
         fields = [
-            'id', 'game', 'game_id', 'masters', 'date', 'duration',
+            'id', 'game', 'game_id', 'masters', 'date', 'date_local', 'duration',
             'city', 'city_id', 'city_timezone',
             'rooms', 'room_ids', 'venue_name',
             'convention_event', 'convention_event_id', 'convention_name',
@@ -509,6 +510,18 @@ class RunSerializer(serializers.ModelSerializer):
             'can_edit', 'created_at', 'updated_at'
         ]
         read_only_fields = ['id', 'masters', 'created_at', 'updated_at', 'can_edit']
+    
+    def get_date_local(self, obj):
+        """Возвращает дату и время в локальной таймзоне города"""
+        import pytz
+        if obj.date and obj.city and obj.city.timezone:
+            try:
+                tz = pytz.timezone(obj.city.timezone)
+                local_dt = obj.date.astimezone(tz)
+                return local_dt.strftime('%Y-%m-%dT%H:%M:%S')
+            except Exception:
+                pass
+        return obj.date.isoformat() if obj.date else None
     
     def get_convention_name(self, obj):
         if obj.convention_event:
