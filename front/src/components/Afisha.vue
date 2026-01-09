@@ -100,9 +100,9 @@
               @click="openRunModal(run)"
               class="clickable-row"
             >
-              <td class="date-cell">{{ formatDate(run.date, run.city_timezone) }}</td>
+              <td class="date-cell">{{ formatDateLocal(run.date_local || run.date) }}</td>
               <td class="time-cell">
-                {{ formatTime(run.date, run.city_timezone) }}
+                {{ formatTimeLocal(run.date_local || run.date) }}
                 <span class="timezone-hint">{{ getTimezoneAbbr(run.city_timezone) }}</span>
               </td>
               <td class="name-cell">
@@ -234,8 +234,8 @@
       <div class="modal-content run-modal">
         <button class="modal-close" @click="closeRunModal">×</button>
         <div class="modal-run-date">
-          {{ formatDate(selectedRun.date, selectedRun.city_timezone) }}
-          <span class="modal-run-time">{{ formatTime(selectedRun.date, selectedRun.city_timezone) }}</span>
+          {{ formatDateLocal(selectedRun.date_local || selectedRun.date) }}
+          <span class="modal-run-time">{{ formatTimeLocal(selectedRun.date_local || selectedRun.date) }}</span>
           <span class="timezone-hint">{{ getTimezoneAbbr(selectedRun.city_timezone) }}</span>
         </div>
         <div class="modal-header-row">
@@ -1080,6 +1080,46 @@ export default {
     },
     
     // === Форматирование ===
+    formatDateLocal(dateStr) {
+      // dateStr может быть date_local (без таймзоны) или date (ISO с Z)
+      // Для date_local парсим напрямую, чтобы избежать преобразования браузером
+      if (dateStr && !dateStr.endsWith('Z') && !dateStr.includes('+')) {
+        // Локальная дата без таймзоны - парсим напрямую
+        const parts = dateStr.split('T')
+        if (parts.length >= 1) {
+          // Создаём дату с полуднем, чтобы избежать проблем со смещением часовых поясов
+          const date = new Date(parts[0] + 'T12:00:00')
+          const options = {
+            day: '2-digit',
+            month: 'long',
+            year: 'numeric'
+          }
+          return date.toLocaleDateString('ru-RU', options)
+        }
+      }
+      // Fallback для даты с таймзоной
+      const date = new Date(dateStr)
+      const options = {
+        day: '2-digit',
+        month: 'long',
+        year: 'numeric'
+      }
+      return date.toLocaleDateString('ru-RU', options)
+    },
+    formatTimeLocal(dateStr) {
+      // dateStr может быть date_local (без таймзоны) или date (ISO с Z)
+      // Для date_local парсим напрямую
+      if (dateStr && !dateStr.endsWith('Z') && !dateStr.includes('+')) {
+        // Локальная дата без таймзоны - извлекаем время напрямую
+        const parts = dateStr.split('T')
+        if (parts.length === 2) {
+          return parts[1].slice(0, 5) // Возвращаем HH:MM
+        }
+      }
+      // Fallback для даты с таймзоной
+      const date = new Date(dateStr)
+      return date.toLocaleTimeString('ru-RU', { hour: '2-digit', minute: '2-digit' })
+    },
     formatDate(dateStr, timezone) {
       const date = new Date(dateStr)
       const tz = timezone || 'Europe/Moscow'
@@ -1156,7 +1196,12 @@ export default {
       return `${this.formatDate(startStr)} — ${this.formatDate(endStr)}`
     },
     isPast(dateStr) {
-      return new Date(dateStr) < new Date()
+      // Если дата без таймзоны, добавляем Z чтобы парсить как UTC
+      let date = dateStr
+      if (date && !date.endsWith('Z') && !date.includes('+')) {
+        date = date + 'Z'
+      }
+      return new Date(date) < new Date()
     },
     isConventionPast(dateEndStr) {
       const endDate = new Date(dateEndStr)
