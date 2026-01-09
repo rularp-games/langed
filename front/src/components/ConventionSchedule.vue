@@ -524,7 +524,7 @@ export default {
       return (timeRange.endHour - timeRange.startHour) * this.hourHeight
     },
     
-    getRoomsForDay(day) {
+    getRoomsForDay(_day) {
       // Возвращаем все помещения из всех дней (чтобы столбцы были одинаковыми)
       // Помещения уже отсортированы по алфавиту в allRooms
       return this.allRooms
