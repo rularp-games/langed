@@ -144,7 +144,7 @@
       :date-constraints="{ min: schedule ? schedule.date_start : '', max: schedule ? schedule.date_end : '' }"
       :allow-new-city="false"
       :csrf-token="csrfToken"
-      :default-city="schedule ? { id: schedule.city_id, name: schedule.city_name, timezone: schedule.city_timezone } : null"
+      :default-city="schedule && schedule.city ? { id: schedule.city.id, name: schedule.city.name, timezone: schedule.city.timezone || schedule.city_timezone, region: schedule.city.region } : null"
       :default-timezone="schedule ? schedule.city_timezone : 'Europe/Moscow'"
       :default-date="schedule ? schedule.date_start : ''"
       @save="handleRunSave"
