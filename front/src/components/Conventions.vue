@@ -40,39 +40,45 @@
     </div>
 
     <!-- Список конвентов -->
-    <div v-else class="conventions-list">
+    <div v-else class="conventions-grid">
       <div 
         v-for="convention in filteredConventions" 
         :key="convention.id" 
         class="convention-card"
         @click="openConvention(convention)"
       >
-        <div class="convention-header">
+        <div class="convention-info">
           <h2 class="convention-title">{{ convention.name }}</h2>
-          <span class="events-count">
-            {{ convention.events_count }} {{ pluralizeEvents(convention.events_count) }}
-          </span>
-        </div>
-        <div v-if="convention.organizers && convention.organizers.length > 0" class="convention-organizers">
-          <span class="organizers-icon">👤</span>
-          <span class="organizers-names">{{ convention.organizers.map(o => o.display_name).join(', ') }}</span>
-        </div>
-        <p v-if="convention.description" class="convention-description">
-          {{ truncateText(convention.description, 150) }}
-        </p>
-        <p v-else class="no-description">Описание отсутствует</p>
-        <div v-if="convention.links && convention.links.length > 0" class="convention-links-preview">
-          <a 
-            v-for="link in convention.links.slice(0, 4)" 
-            :key="link.id"
-            :href="link.url"
-            target="_blank"
-            rel="noopener noreferrer"
-            class="link-preview-item"
-            :title="link.display_title"
-            @click.stop
-          >{{ getLinkIcon(link.link_type) }}</a>
-          <span v-if="convention.links.length > 4" class="links-more">+{{ convention.links.length - 4 }}</span>
+          <div v-if="convention.organizers && convention.organizers.length > 0" class="convention-organizers">
+            <span class="organizers-icon">👤</span>
+            <span class="organizers-names">{{ convention.organizers.map(o => o.display_name).join(', ') }}</span>
+          </div>
+          <p v-if="convention.description" class="convention-description">
+            {{ truncateText(convention.description, 100) }}
+          </p>
+          <div class="convention-stats">
+            <div class="stat">
+              <span class="stat-label">Проведений</span>
+              <span class="stat-value">{{ convention.events_count }}</span>
+            </div>
+            <div v-if="convention.links && convention.links.length > 0" class="stat">
+              <span class="stat-label">Ссылки</span>
+              <span class="stat-value">{{ convention.links.length }}</span>
+            </div>
+          </div>
+          <div v-if="convention.links && convention.links.length > 0" class="convention-links-preview">
+            <a 
+              v-for="link in convention.links.slice(0, 4)" 
+              :key="link.id"
+              :href="link.url"
+              target="_blank"
+              rel="noopener noreferrer"
+              class="link-preview-item"
+              :title="link.display_title"
+              @click.stop
+            >{{ getLinkIcon(link.link_type) }}</a>
+            <span v-if="convention.links.length > 4" class="links-more">+{{ convention.links.length - 4 }}</span>
+          </div>
         </div>
       </div>
     </div>
@@ -322,69 +328,25 @@
       </div>
     </div>
 
-    <!-- Модальное окно добавления конвента -->
-    <div v-if="showAddModal && isAuthenticated" class="modal-overlay" @click.self="closeAddModal">
+    <!-- Модальное окно добавления/редактирования конвента через ConventionEditor -->
+    <ConventionEditor
+      v-if="showConventionEditor && isAuthenticated"
+      :mode="conventionEditorMode"
+      :convention="conventionEditorConvention"
+      :csrf-token="csrfToken"
+      @save="handleConventionSave"
+      @cancel="closeConventionEditor"
+      @error="handleConventionError"
+    />
+
+    <!-- Модальное окно импорта CSV конвентов -->
+    <div v-if="showCsvImportModal && isAuthenticated" class="modal-overlay" @click.self="closeCsvImportModal">
       <div class="modal-content add-convention-modal">
-        <button class="modal-close" @click="closeAddModal">×</button>
+        <button class="modal-close" @click="closeCsvImportModal">×</button>
         
-        <h2>Добавить конвент</h2>
+        <h2>Импорт конвентов из CSV</h2>
         
-        <!-- Переключатель режима -->
-        <div class="mode-switcher">
-          <button 
-            type="button" 
-            :class="['mode-btn', { active: addMode === 'single' }]"
-            @click="addMode = 'single'"
-          >
-            Один конвент
-          </button>
-          <button 
-            type="button" 
-            :class="['mode-btn', { active: addMode === 'csv' }]"
-            @click="addMode = 'csv'"
-          >
-            Импорт из CSV
-          </button>
-        </div>
-        
-        <!-- Форма одного конвента -->
-        <form v-if="addMode === 'single'" @submit.prevent="submitConvention" class="add-form">
-          <div class="form-group">
-            <label for="conv-name">Название *</label>
-            <input 
-              id="conv-name"
-              v-model="newConvention.name" 
-              type="text" 
-              required
-              class="form-input"
-              placeholder="Введите название конвента"
-            />
-          </div>
-          
-          <div class="form-group">
-            <label for="conv-description">Описание</label>
-            <textarea 
-              id="conv-description"
-              v-model="newConvention.description"
-              class="form-input form-textarea"
-              placeholder="Описание конвента"
-              rows="3"
-            ></textarea>
-          </div>
-          
-          <div v-if="addError" class="form-error">{{ addError }}</div>
-          
-          <div class="form-actions">
-            <button type="button" @click="closeAddModal" class="btn btn-secondary">Отмена</button>
-            <button type="submit" class="btn btn-primary" :disabled="addLoading">
-              <span v-if="addLoading">Сохранение...</span>
-              <span v-else>Добавить</span>
-            </button>
-          </div>
-        </form>
-        
-        <!-- Форма импорта CSV -->
-        <div v-else class="csv-import-form">
+        <div class="csv-import-form">
           <div class="csv-upload">
             <label class="csv-dropzone" for="csv-file" :class="{ 'has-file': csvFile }">
               <span class="csv-icon">📄</span>
@@ -424,7 +386,7 @@
           </div>
           
           <div class="form-actions">
-            <button type="button" @click="closeAddModal" class="btn btn-secondary">Закрыть</button>
+            <button type="button" @click="closeCsvImportModal" class="btn btn-secondary">Закрыть</button>
             <button 
               type="button" 
               @click="submitCsv" 
@@ -439,219 +401,22 @@
       </div>
     </div>
 
-    <!-- Модальное окно добавления проведения конвента -->
-    <div v-if="showAddEventModal && isAuthenticated" class="modal-overlay" @click.self="closeAddEventModal">
-      <div class="modal-content add-event-modal">
-        <button class="modal-close" @click="closeAddEventModal">×</button>
-        
-        <h2>Добавить проведение конвента</h2>
-        
-        <form @submit.prevent="submitEvent" class="add-form">
-          <div class="form-group">
-            <label for="event-convention">Конвент *</label>
-            <select 
-              id="event-convention"
-              v-model="newEvent.convention_id" 
-              required
-              class="form-input"
-            >
-              <option :value="null" disabled>Выберите конвент</option>
-              <option 
-                v-for="conv in conventions" 
-                :key="conv.id" 
-                :value="conv.id"
-              >
-                {{ conv.name }}
-              </option>
-            </select>
-          </div>
-          
-          <div class="form-group">
-            <label for="event-city">Город *</label>
-            <select 
-              id="event-city"
-              v-model="newEvent.city_id" 
-              required
-              class="form-input"
-            >
-              <option :value="null" disabled>Выберите город</option>
-              <option 
-                v-for="city in cities" 
-                :key="city.id" 
-                :value="city.id"
-              >
-                {{ city.name }}{{ city.region && city.region.name ? ` (${city.region.name})` : '' }}
-              </option>
-              <option value="new">+ Создать новый город</option>
-            </select>
-          </div>
-          
-          <div v-if="newEvent.city_id === 'new'" class="form-group">
-            <label for="new-city-name">Название нового города *</label>
-            <input 
-              id="new-city-name"
-              v-model="newEvent.newCityName" 
-              type="text" 
-              required
-              class="form-input"
-              placeholder="Введите название города"
-            />
-          </div>
-          
-          <div class="form-row">
-            <div class="form-group half">
-              <label for="event-date-start">Дата начала *</label>
-              <input 
-                id="event-date-start"
-                v-model="newEvent.date_start" 
-                type="date" 
-                required
-                class="form-input"
-              />
-            </div>
-            
-            <div class="form-group half">
-              <label for="event-date-end">Дата окончания *</label>
-              <input 
-                id="event-date-end"
-                v-model="newEvent.date_end" 
-                type="date" 
-                required
-                class="form-input"
-              />
-            </div>
-          </div>
-          
-          <div v-if="addEventError" class="form-error">{{ addEventError }}</div>
-          
-          <div class="form-actions">
-            <button type="button" @click="closeAddEventModal" class="btn btn-secondary">Отмена</button>
-            <button type="submit" class="btn btn-primary" :disabled="addEventLoading">
-              <span v-if="addEventLoading">Сохранение...</span>
-              <span v-else>Добавить</span>
-            </button>
-          </div>
-        </form>
-      </div>
-    </div>
-
-    <!-- Модальное окно редактирования проведения конвента -->
-    <div v-if="showEditEventModal && isAuthenticated" class="modal-overlay" @click.self="closeEditEventModal">
-      <div class="modal-content add-event-modal">
-        <button class="modal-close" @click="closeEditEventModal">×</button>
-        
-        <h2>Редактировать проведение</h2>
-        
-        <form @submit.prevent="submitEditEvent" class="add-form">
-          <div class="form-group">
-            <label>Конвент</label>
-            <input 
-              type="text"
-              class="form-input"
-              :value="getConventionName(editEvent.convention_id)"
-              disabled
-            />
-          </div>
-          
-          <div class="form-group">
-            <label for="edit-event-city">Город *</label>
-            <select 
-              id="edit-event-city"
-              v-model="editEvent.city_id" 
-              required
-              class="form-input"
-            >
-              <option :value="null" disabled>Выберите город</option>
-              <option 
-                v-for="city in cities" 
-                :key="city.id" 
-                :value="city.id"
-              >
-                {{ city.name }}{{ city.region && city.region.name ? ` (${city.region.name})` : '' }}
-              </option>
-            </select>
-          </div>
-          
-          <div class="form-row">
-            <div class="form-group half">
-              <label for="edit-event-date-start">Дата начала *</label>
-              <input 
-                id="edit-event-date-start"
-                v-model="editEvent.date_start" 
-                type="date" 
-                required
-                class="form-input"
-              />
-            </div>
-            
-            <div class="form-group half">
-              <label for="edit-event-date-end">Дата окончания *</label>
-              <input 
-                id="edit-event-date-end"
-                v-model="editEvent.date_end" 
-                type="date" 
-                required
-                class="form-input"
-              />
-            </div>
-          </div>
-          
-          <div v-if="editEventError" class="form-error">{{ editEventError }}</div>
-          
-          <div class="form-actions">
-            <button type="button" @click="closeEditEventModal" class="btn btn-secondary">Отмена</button>
-            <button type="submit" class="btn btn-primary" :disabled="editEventLoading">
-              <span v-if="editEventLoading">Сохранение...</span>
-              <span v-else>Сохранить</span>
-            </button>
-          </div>
-        </form>
-      </div>
-    </div>
-
-    <!-- Модальное окно редактирования конвента -->
-    <div v-if="isEditingConvention && isAuthenticated" class="modal-overlay" @click.self="cancelEditingConvention">
-      <div class="modal-content add-convention-modal">
-        <button class="modal-close" @click="cancelEditingConvention">×</button>
-        
-        <h2>Редактировать конвент</h2>
-        
-        <form @submit.prevent="submitEditConvention" class="add-form">
-          <div class="form-group">
-            <label for="edit-conv-name">Название *</label>
-            <input 
-              id="edit-conv-name"
-              v-model="editConvention.name" 
-              type="text" 
-              required
-              class="form-input"
-              placeholder="Введите название конвента"
-            />
-          </div>
-          
-          <div class="form-group">
-            <label for="edit-conv-description">Описание</label>
-            <textarea 
-              id="edit-conv-description"
-              v-model="editConvention.description"
-              class="form-input form-textarea"
-              placeholder="Описание конвента"
-              rows="3"
-            ></textarea>
-          </div>
-          
-          <div v-if="editConventionError" class="form-error">{{ editConventionError }}</div>
-          
-          <div class="form-actions">
-            <button type="button" @click="cancelEditingConvention" class="btn btn-secondary">Отмена</button>
-            <button type="submit" class="btn btn-primary" :disabled="editConventionLoading">
-              <span v-if="editConventionLoading">Сохранение...</span>
-              <span v-else>Сохранить</span>
-            </button>
-          </div>
-        </form>
-      </div>
-    </div>
+    <!-- Модальное окно добавления/редактирования проведения конвента через ConventionEventEditor -->
+    <ConventionEventEditor
+      v-if="showConventionEventEditor && isAuthenticated"
+      :mode="conventionEventEditorMode"
+      :convention-event="conventionEventEditorData"
+      :convention-id="conventionEventEditorConventionId"
+      :convention-name="conventionEventEditorConventionName"
+      :lock-convention="conventionEventEditorMode === 'edit'"
+      :conventions="conventions"
+      :cities="cities"
+      :csrf-token="csrfToken"
+      @save="handleConventionEventSave"
+      @cancel="closeConventionEventEditor"
+      @error="handleConventionEventError"
+      @city-created="handleCityCreated"
+    />
 
     <!-- Модальное окно подтверждения удаления -->
     <div v-if="showDeleteConfirm" class="modal-overlay" @click.self="cancelDelete">
@@ -683,8 +448,15 @@
 </template>
 
 <script>
+import ConventionEditor from './ConventionEditor.vue'
+import ConventionEventEditor from './ConventionEventEditor.vue'
+
 export default {
   name: 'ConventionsPage',
+  components: {
+    ConventionEditor,
+    ConventionEventEditor
+  },
   inject: ['getUser'],
   props: {
     conventionId: {
@@ -704,47 +476,26 @@ export default {
       searchQuery: '',
       selectedConvention: null,
       conventionEvents: [],
-      showAddModal: false,
-      addMode: 'single',
+      // CSV импорт
       addLoading: false,
       addError: null,
-      newConvention: { name: '', description: '' },
       csvFile: null,
       csvResult: null,
-      // Для добавления проведения конвента
-      showAddEventModal: false,
-      addEventLoading: false,
-      addEventError: null,
+      showCsvImportModal: false,
+      // ConventionEditor
+      showConventionEditor: false,
+      conventionEditorMode: 'add',
+      conventionEditorConvention: null,
+      // Для проведений конвентов
       cities: [],
-      newEvent: {
-        convention_id: null,
-        city_id: null,
-        newCityName: '',
-        date_start: '',
-        date_end: ''
-      },
       linkCopied: false,
       eventLinkCopied: false,
-      // Редактирование проведения конвента
-      showEditEventModal: false,
-      editEventLoading: false,
-      editEventError: null,
-      editEvent: {
-        id: null,
-        convention_id: null,
-        city_id: null,
-        date_start: '',
-        date_end: ''
-      },
-      // Редактирование конвента
-      isEditingConvention: false,
-      editConventionLoading: false,
-      editConventionError: null,
-      editConvention: {
-        id: null,
-        name: '',
-        description: ''
-      },
+      // Редактирование проведения конвента через ConventionEventEditor
+      showConventionEventEditor: false,
+      conventionEventEditorMode: 'add',
+      conventionEventEditorData: null,
+      conventionEventEditorConventionId: null,
+      conventionEventEditorConventionName: '',
       // Удаление
       showDeleteConfirm: false,
       deleteTarget: null,
@@ -1004,15 +755,75 @@ export default {
       return icons[linkType] || '🔗'
     },
     openAddModal() {
-      this.newConvention = { name: '', description: '' }
-      this.addMode = 'single'
-      this.addError = null
+      this.conventionEditorMode = 'add'
+      this.conventionEditorConvention = null
+      this.showConventionEditor = true
+    },
+    closeConventionEditor() {
+      this.showConventionEditor = false
+      this.conventionEditorConvention = null
+    },
+    async handleConventionSave(conventionData) {
+      try {
+        let response
+        if (this.conventionEditorMode === 'add') {
+          response = await fetch('/api/conventions/', {
+            method: 'POST',
+            headers: {
+              'Content-Type': 'application/json',
+              'X-CSRFToken': this.csrfToken
+            },
+            body: JSON.stringify(conventionData)
+          })
+        } else {
+          response = await fetch(`/api/conventions/${conventionData.id}/`, {
+            method: 'PATCH',
+            headers: {
+              'Content-Type': 'application/json',
+              'X-CSRFToken': this.csrfToken
+            },
+            body: JSON.stringify(conventionData)
+          })
+        }
+        
+        if (!response.ok) {
+          if (response.status === 401 || response.status === 403) {
+            throw new Error('Необходима авторизация для сохранения конвента')
+          }
+          const data = await response.json()
+          throw new Error(data.detail || data.name?.[0] || 'Ошибка при сохранении')
+        }
+        
+        const savedConvention = await response.json()
+        
+        if (this.conventionEditorMode === 'add') {
+          this.conventions.unshift(savedConvention)
+        } else {
+          const index = this.conventions.findIndex(c => c.id === savedConvention.id)
+          if (index !== -1) {
+            this.conventions.splice(index, 1, savedConvention)
+          }
+          if (this.selectedConvention && this.selectedConvention.id === savedConvention.id) {
+            this.selectedConvention = savedConvention
+          }
+        }
+        
+        this.closeConventionEditor()
+      } catch (err) {
+        alert(err.message)
+      }
+    },
+    handleConventionError(error) {
+      console.error('Convention error:', error)
+    },
+    openCsvImportModal() {
       this.csvFile = null
       this.csvResult = null
-      this.showAddModal = true
+      this.addError = null
+      this.showCsvImportModal = true
     },
-    closeAddModal() {
-      this.showAddModal = false
+    closeCsvImportModal() {
+      this.showCsvImportModal = false
       this.addError = null
       this.csvFile = null
       this.csvResult = null
@@ -1029,37 +840,6 @@ export default {
       this.csvResult = null
       const input = document.getElementById('csv-file')
       if (input) input.value = ''
-    },
-    async submitConvention() {
-      this.addLoading = true
-      this.addError = null
-      
-      try {
-        const response = await fetch('/api/conventions/', {
-          method: 'POST',
-          headers: {
-            'Content-Type': 'application/json',
-            'X-CSRFToken': this.csrfToken
-          },
-          body: JSON.stringify(this.newConvention)
-        })
-        
-        if (!response.ok) {
-          if (response.status === 401 || response.status === 403) {
-            throw new Error('Необходима авторизация для добавления конвента')
-          }
-          const data = await response.json()
-          throw new Error(data.detail || data.name?.[0] || 'Ошибка при сохранении')
-        }
-        
-        const createdConvention = await response.json()
-        this.conventions.unshift(createdConvention)
-        this.closeAddModal()
-      } catch (err) {
-        this.addError = err.message
-      } finally {
-        this.addLoading = false
-      }
     },
     async submitCsv() {
       if (!this.csvFile) return
@@ -1116,71 +896,60 @@ export default {
         console.error('Ошибка загрузки городов:', err)
       }
     },
+    // === Проведения конвентов через ConventionEventEditor ===
+    getConventionName(conventionId) {
+      const convention = this.conventions.find(c => c.id === conventionId)
+      return convention ? convention.name : ''
+    },
     openAddEventModal(convention = null) {
-      this.newEvent = {
-        convention_id: convention ? convention.id : null,
-        city_id: null,
-        newCityName: '',
-        date_start: '',
-        date_end: ''
-      }
-      this.addEventError = null
-      this.showAddEventModal = true
+      this.conventionEventEditorMode = 'add'
+      this.conventionEventEditorData = null
+      this.conventionEventEditorConventionId = convention ? convention.id : null
+      this.conventionEventEditorConventionName = convention ? convention.name : ''
+      this.showConventionEventEditor = true
     },
-    closeAddEventModal() {
-      this.showAddEventModal = false
-      this.addEventError = null
+    startEditingEvent(event) {
+      this.conventionEventEditorMode = 'edit'
+      this.conventionEventEditorData = event
+      this.conventionEventEditorConventionId = event.convention
+      this.conventionEventEditorConventionName = this.getConventionName(event.convention)
+      this.showConventionEventEditor = true
     },
-    async submitEvent() {
-      this.addEventLoading = true
-      this.addEventError = null
-      
+    closeConventionEventEditor() {
+      this.showConventionEventEditor = false
+      this.conventionEventEditorData = null
+    },
+    handleCityCreated(newCity) {
+      this.cities.push(newCity)
+    },
+    async handleConventionEventSave(eventData) {
       try {
-        let cityId = this.newEvent.city_id
-        
-        // Если выбрано создание нового города
-        if (cityId === 'new' && this.newEvent.newCityName.trim()) {
-          const cityResponse = await fetch('/api/cities/', {
+        let response
+        if (this.conventionEventEditorMode === 'add') {
+          response = await fetch('/api/convention-events/', {
             method: 'POST',
             headers: {
               'Content-Type': 'application/json',
               'X-CSRFToken': this.csrfToken
             },
-            body: JSON.stringify({ name: this.newEvent.newCityName.trim() })
+            body: JSON.stringify(eventData)
           })
-          
-          if (!cityResponse.ok) {
-            throw new Error('Ошибка при создании города')
-          }
-          
-          const newCity = await cityResponse.json()
-          cityId = newCity.id
-          this.cities.push(newCity)
+        } else {
+          response = await fetch(`/api/convention-events/${eventData.id}/`, {
+            method: 'PATCH',
+            headers: {
+              'Content-Type': 'application/json',
+              'X-CSRFToken': this.csrfToken
+            },
+            body: JSON.stringify(eventData)
+          })
         }
-        
-        if (!cityId || cityId === 'new') {
-          throw new Error('Выберите или создайте город')
-        }
-        
-        const eventData = {
-          convention_id: this.newEvent.convention_id,
-          city_id: cityId,
-          date_start: this.newEvent.date_start,
-          date_end: this.newEvent.date_end
-        }
-        
-        const response = await fetch('/api/convention-events/', {
-          method: 'POST',
-          headers: {
-            'Content-Type': 'application/json',
-            'X-CSRFToken': this.csrfToken
-          },
-          body: JSON.stringify(eventData)
-        })
         
         if (!response.ok) {
           if (response.status === 401 || response.status === 403) {
-            throw new Error('Необходима авторизация для добавления проведения')
+            throw new Error(this.conventionEventEditorMode === 'add' 
+              ? 'Необходима авторизация для добавления проведения' 
+              : 'Нет прав для редактирования этого проведения')
           }
           const data = await response.json()
           throw new Error(data.detail || data.non_field_errors?.[0] || 'Ошибка при сохранении')
@@ -1191,134 +960,22 @@ export default {
         if (this.selectedConvention) {
           await this.openConvention(this.selectedConvention)
         }
-        this.closeAddEventModal()
+        this.closeConventionEventEditor()
       } catch (err) {
-        this.addEventError = err.message
-      } finally {
-        this.addEventLoading = false
+        alert(err.message)
       }
+    },
+    handleConventionEventError(error) {
+      console.error('Convention event error:', error)
     },
     
-    // === Редактирование проведения конвента ===
-    getConventionName(conventionId) {
-      const convention = this.conventions.find(c => c.id === conventionId)
-      return convention ? convention.name : ''
-    },
-    startEditingEvent(event) {
-      this.editEvent = {
-        id: event.id,
-        convention_id: event.convention,
-        city_id: event.city ? event.city.id : null,
-        date_start: event.date_start,
-        date_end: event.date_end
-      }
-      this.editEventError = null
-      this.showEditEventModal = true
-    },
-    closeEditEventModal() {
-      this.showEditEventModal = false
-      this.editEventError = null
-    },
-    async submitEditEvent() {
-      this.editEventLoading = true
-      this.editEventError = null
-      
-      try {
-        if (!this.editEvent.city_id) {
-          throw new Error('Выберите город')
-        }
-        
-        const eventData = {
-          city_id: this.editEvent.city_id,
-          date_start: this.editEvent.date_start,
-          date_end: this.editEvent.date_end
-        }
-        
-        const response = await fetch(`/api/convention-events/${this.editEvent.id}/`, {
-          method: 'PATCH',
-          headers: {
-            'Content-Type': 'application/json',
-            'X-CSRFToken': this.csrfToken
-          },
-          body: JSON.stringify(eventData)
-        })
-        
-        if (!response.ok) {
-          if (response.status === 401 || response.status === 403) {
-            throw new Error('Нет прав для редактирования этого проведения')
-          }
-          const data = await response.json()
-          throw new Error(data.detail || data.non_field_errors?.[0] || 'Ошибка при сохранении')
-        }
-        
-        // Обновляем список
-        await this.fetchConventions()
-        if (this.selectedConvention) {
-          await this.openConvention(this.selectedConvention)
-        }
-        this.closeEditEventModal()
-      } catch (err) {
-        this.editEventError = err.message
-      } finally {
-        this.editEventLoading = false
-      }
-    },
-    
-    // === Редактирование конвента ===
+    // === Редактирование конвента (через ConventionEditor) ===
     startEditingConvention() {
       if (!this.selectedConvention) return
       
-      this.editConvention = {
-        id: this.selectedConvention.id,
-        name: this.selectedConvention.name,
-        description: this.selectedConvention.description || ''
-      }
-      this.editConventionError = null
-      this.isEditingConvention = true
-    },
-    cancelEditingConvention() {
-      this.isEditingConvention = false
-      this.editConventionError = null
-    },
-    async submitEditConvention() {
-      this.editConventionLoading = true
-      this.editConventionError = null
-      
-      try {
-        const response = await fetch(`/api/conventions/${this.editConvention.id}/`, {
-          method: 'PATCH',
-          headers: {
-            'Content-Type': 'application/json',
-            'X-CSRFToken': this.csrfToken
-          },
-          body: JSON.stringify({
-            name: this.editConvention.name,
-            description: this.editConvention.description
-          })
-        })
-        
-        if (!response.ok) {
-          if (response.status === 401 || response.status === 403) {
-            throw new Error('Нет прав для редактирования этого конвента')
-          }
-          const data = await response.json()
-          throw new Error(data.detail || data.name?.[0] || 'Ошибка при сохранении')
-        }
-        
-        const updatedConvention = await response.json()
-        
-        // Обновляем список
-        const index = this.conventions.findIndex(c => c.id === updatedConvention.id)
-        if (index !== -1) {
-          this.conventions.splice(index, 1, updatedConvention)
-        }
-        this.selectedConvention = updatedConvention
-        this.isEditingConvention = false
-      } catch (err) {
-        this.editConventionError = err.message
-      } finally {
-        this.editConventionLoading = false
-      }
+      this.conventionEditorMode = 'edit'
+      this.conventionEditorConvention = this.selectedConvention
+      this.showConventionEditor = true
     },
     
     // === Удаление ===
@@ -1689,24 +1346,25 @@ export default {
   font-size: 1.2rem;
 }
 
-/* ========== Список конвентов ========== */
-.conventions-list {
-  max-width: 900px;
+/* ========== Сетка конвентов ========== */
+.conventions-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(320px, 1fr));
+  gap: 24px;
+  max-width: 1400px;
   margin: 0 auto;
-  display: flex;
-  flex-direction: column;
-  gap: 20px;
 }
 
 .convention-card {
   background: linear-gradient(145deg, #1a1a2e, #16213e);
   border: 1px solid #ff6b3533;
   border-radius: 12px;
-  padding: 24px;
   cursor: pointer;
   transition: all 0.3s ease;
   position: relative;
   overflow: hidden;
+  display: flex;
+  flex-direction: column;
 }
 
 .convention-card::before {
@@ -1718,6 +1376,8 @@ export default {
   height: 100%;
   background: linear-gradient(90deg, transparent, rgba(255, 107, 53, 0.1), transparent);
   transition: left 0.5s;
+  z-index: 1;
+  pointer-events: none;
 }
 
 .convention-card:hover::before {
@@ -1725,45 +1385,52 @@ export default {
 }
 
 .convention-card:hover {
-  transform: translateY(-3px);
+  transform: translateY(-5px);
   border-color: #ff6b35;
   box-shadow: 0 10px 40px rgba(255, 107, 53, 0.2);
 }
 
-.convention-header {
-  display: flex;
-  justify-content: space-between;
-  align-items: center;
-  margin-bottom: 12px;
+.convention-info {
+  padding: 24px;
 }
 
 .convention-title {
   font-family: 'Orbitron', 'Courier New', monospace;
   font-size: 1.4rem;
-  color: #e0e0e0;
-  margin: 0;
-}
-
-.events-count {
-  color: #00ccff;
-  font-family: 'Courier New', monospace;
-  font-size: 0.9rem;
-  padding: 4px 12px;
-  background: rgba(0, 204, 255, 0.1);
-  border-radius: 20px;
-  border: 1px solid rgba(0, 204, 255, 0.3);
+  color: #ff6b35;
+  margin-bottom: 20px;
+  padding-bottom: 12px;
+  border-bottom: 1px solid #ff6b3533;
 }
 
 .convention-description {
   color: #aaa;
   line-height: 1.6;
-  margin: 0;
+  margin: 0 0 16px 0;
+  font-size: 0.9rem;
 }
 
-.no-description {
-  color: #555;
-  font-style: italic;
-  margin: 0;
+.convention-stats {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+
+.stat {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+}
+
+.stat-label {
+  color: #888;
+  font-size: 0.9rem;
+}
+
+.stat-value {
+  color: #00ccff;
+  font-family: 'Courier New', monospace;
+  font-weight: bold;
 }
 
 /* Организаторы в карточке конвента */
@@ -1771,16 +1438,18 @@ export default {
   display: flex;
   align-items: center;
   gap: 8px;
-  margin-bottom: 10px;
+  margin-bottom: 16px;
+  padding-bottom: 12px;
+  border-bottom: 1px solid #ff6b3522;
 }
 
 .organizers-icon {
-  font-size: 0.9rem;
+  font-size: 1rem;
   opacity: 0.8;
 }
 
 .convention-organizers .organizers-names {
-  color: #00ccff;
+  color: #aaa;
   font-size: 0.9rem;
 }
 
@@ -1814,21 +1483,21 @@ export default {
   display: flex;
   align-items: center;
   gap: 8px;
-  margin-top: 12px;
-  padding-top: 12px;
-  border-top: 1px solid #ff6b3522;
+  margin-top: 16px;
+  padding-top: 16px;
+  border-top: 1px solid #ff6b3533;
 }
 
 .link-preview-item {
   display: flex;
   align-items: center;
   justify-content: center;
-  width: 32px;
-  height: 32px;
+  width: 36px;
+  height: 36px;
   background: rgba(0, 0, 0, 0.3);
   border: 1px solid #ff6b3533;
-  border-radius: 6px;
-  font-size: 1rem;
+  border-radius: 8px;
+  font-size: 1.1rem;
   text-decoration: none;
   transition: all 0.2s ease;
 }
@@ -1842,6 +1511,7 @@ export default {
 .links-more {
   color: #888;
   font-size: 0.85rem;
+  margin-left: 4px;
 }
 
 /* ========== Модальное окно ========== */
@@ -2751,10 +2421,8 @@ export default {
     justify-content: center;
   }
   
-  .convention-header {
-    flex-direction: column;
-    align-items: flex-start;
-    gap: 8px;
+  .conventions-grid {
+    grid-template-columns: 1fr;
   }
   
   .convention-title {
