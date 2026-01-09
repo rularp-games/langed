@@ -127,9 +127,19 @@
         </div>
 
         <!-- Площадка -->
-        <div v-if="formData.city_id && formData.city_id !== 'new' && !lockConvention" class="form-group">
+        <div v-if="formData.city_id && formData.city_id !== 'new'" class="form-group">
           <label>Площадка</label>
+          <!-- Режим только для чтения (когда игра на конвенте) -->
+          <input 
+            v-if="isVenueReadonly"
+            type="text"
+            class="form-input"
+            :value="selectedVenueName || 'Не указана'"
+            disabled
+          />
+          <!-- Режим выбора -->
           <select 
+            v-else
             v-model="formData.venue_id"
             @change="onVenueChange"
             class="form-input"
@@ -143,6 +153,9 @@
               {{ venue.name }}
             </option>
           </select>
+          <p v-if="isVenueReadonly" class="form-hint">
+            Площадка определяется проведением конвента
+          </p>
         </div>
         
         <!-- Помещения -->
@@ -329,6 +342,11 @@ export default {
       type: Array,
       default: () => []
     },
+    // Площадка конвента (для режима lockConvention)
+    conventionVenue: {
+      type: Object,
+      default: null
+    },
     // Ограничения по датам
     dateConstraints: {
       type: Object,
@@ -445,6 +463,29 @@ export default {
       const selectedRooms = this.roomsList.filter(r => this.formData.room_ids.includes(r.id))
       return selectedRooms.map(r => r.name).join(', ')
     },
+    isVenueReadonly() {
+      // Площадка только для чтения, если игра проводится на конвенте
+      return this.lockConvention || (this.formData.convention_event_id && this.hasConventionVenue)
+    },
+    hasConventionVenue() {
+      // Проверяем, есть ли у выбранного конвента площадка
+      if (this.conventionVenue) return true
+      if (this.formData.convention_event_id) {
+        const event = this.conventionEvents.find(e => e.id === this.formData.convention_event_id)
+        return event && event.venue && event.venue.id
+      }
+      return false
+    },
+    selectedVenueName() {
+      if (!this.formData.venue_id) return null
+      const venue = this.venuesList.find(v => v.id === this.formData.venue_id)
+      if (venue) return venue.name
+      // Проверяем conventionVenue
+      if (this.conventionVenue && this.conventionVenue.id === this.formData.venue_id) {
+        return this.conventionVenue.name
+      }
+      return null
+    },
     // Форматированная дата для отображения (дд/мм/гггг)
     formattedDate: {
       get() {
@@ -513,6 +554,18 @@ export default {
       handler(newVal) {
         if (this.lockConvention && newVal && newVal.length > 0) {
           this.roomsList = newVal
+        }
+      }
+    },
+    conventionVenue: {
+      immediate: true,
+      handler(newVal) {
+        if (newVal && this.lockConvention) {
+          this.formData.venue_id = newVal.id
+          // Добавляем площадку в venuesList для отображения имени
+          if (!this.venuesList.find(v => v.id === newVal.id)) {
+            this.venuesList = [{ id: newVal.id, name: newVal.name }]
+          }
         }
       }
     }
@@ -588,12 +641,19 @@ export default {
       this.citySearch = cityName || this.selectedCityName || run.city || ''
       
       // Загружаем площадки и помещения
-      if (cityId && !this.lockConvention) {
-        this.fetchVenuesByCity(cityId).then(() => {
-          if (venueId) {
-            this.fetchRoomsByVenue(venueId)
-          }
-        })
+      if (cityId) {
+        if (this.lockConvention && this.conventionVenue) {
+          // Для конвента используем площадку конвента
+          this.formData.venue_id = this.conventionVenue.id
+          this.venuesList = [{ id: this.conventionVenue.id, name: this.conventionVenue.name }]
+          // roomsList уже заполнен из availableRooms через watcher
+        } else {
+          this.fetchVenuesByCity(cityId).then(() => {
+            if (venueId) {
+              this.fetchRoomsByVenue(venueId)
+            }
+          })
+        }
       }
     },
     
@@ -672,11 +732,22 @@ export default {
           this.formData.city_timezone = event.city.timezone || 'Europe/Moscow'
           const regionName = event.city.region && event.city.region.name ? event.city.region.name : ''
           this.citySearch = regionName ? `${event.city.name} (${regionName})` : event.city.name
-          // Загружаем площадки
-          this.formData.venue_id = null
+          
+          // Сбрасываем помещения
           this.formData.room_ids = []
           this.roomsList = []
-          this.fetchVenuesByCity(event.city.id)
+          
+          // Если у конвента указана площадка - устанавливаем её
+          if (event.venue && event.venue.id) {
+            this.formData.venue_id = event.venue.id
+            this.venuesList = [{ id: event.venue.id, name: event.venue.name }]
+            // Загружаем помещения площадки конвента
+            this.fetchRoomsByVenue(event.venue.id)
+          } else {
+            // Загружаем площадки города
+            this.formData.venue_id = null
+            this.fetchVenuesByCity(event.city.id)
+          }
         }
       } else {
         this.formData.city_id = null

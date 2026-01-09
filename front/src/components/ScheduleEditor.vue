@@ -141,6 +141,7 @@
       :cities="[]"
       :convention-events="[]"
       :available-rooms="availableRooms"
+      :convention-venue="schedule && schedule.venue ? { id: schedule.venue.id, name: schedule.venue.name } : null"
       :date-constraints="{ min: schedule ? schedule.date_start : '', max: schedule ? schedule.date_end : '' }"
       :allow-new-city="false"
       :csrf-token="csrfToken"
