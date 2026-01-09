@@ -5,6 +5,15 @@ from .models import Game, Run, Convention, ConventionEvent, City, ConventionLink
 User = get_user_model()
 
 
+class NaiveDateTimeField(serializers.DateTimeField):
+    """
+    DateTimeField, который не добавляет таймзону автоматически.
+    Позволяет обработать таймзону вручную в validate методе сериализатора.
+    """
+    def default_timezone(self):
+        return None
+
+
 class UserBriefSerializer(serializers.ModelSerializer):
     """Краткий сериализатор пользователя"""
     display_name = serializers.SerializerMethodField()
@@ -196,6 +205,8 @@ class ScheduleRunSerializer(serializers.ModelSerializer):
     )
     city_timezone = serializers.CharField(source='city.timezone', read_only=True)
     date_local = serializers.SerializerMethodField()
+    # Используем NaiveDateTimeField чтобы DRF не добавлял UTC автоматически
+    date = NaiveDateTimeField()
     registered_count = serializers.SerializerMethodField()
     available_slots = serializers.SerializerMethodField()
     is_full = serializers.SerializerMethodField()
@@ -488,6 +499,8 @@ class RunSerializer(serializers.ModelSerializer):
     convention_name = serializers.SerializerMethodField()
     can_edit = serializers.SerializerMethodField()
     date_local = serializers.SerializerMethodField()
+    # Используем NaiveDateTimeField чтобы DRF не добавлял UTC автоматически
+    date = NaiveDateTimeField()
     
     # Поля регистрации
     registrations = RegistrationBriefSerializer(many=True, read_only=True)
