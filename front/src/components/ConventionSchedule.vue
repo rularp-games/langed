@@ -333,19 +333,34 @@ export default {
     },
     // timelineHours теперь вычисляется динамически в getTimelineHoursForDay
     allRooms() {
-      // Собираем все уникальные помещения из прогонов
+      // Собираем все уникальные помещения из прогонов и сортируем по алфавиту
       if (!this.schedule || !this.schedule.runs) return []
       const roomsMap = new Map()
+      let hasNoRoom = false
+      
       this.schedule.runs.forEach(run => {
-        if (run.rooms) {
+        if (run.rooms && run.rooms.length > 0) {
           run.rooms.forEach(room => {
             if (!roomsMap.has(room.id)) {
               roomsMap.set(room.id, room)
             }
           })
+        } else {
+          hasNoRoom = true
         }
       })
-      return Array.from(roomsMap.values())
+      
+      // Сортируем по имени
+      const rooms = Array.from(roomsMap.values()).sort((a, b) => 
+        (a.name || '').localeCompare(b.name || '', 'ru')
+      )
+      
+      // "Без помещения" добавляем в конец
+      if (hasNoRoom) {
+        rooms.push({ id: null, name: 'Без помещения' })
+      }
+      
+      return rooms
     }
   },
   mounted() {
@@ -510,28 +525,9 @@ export default {
     },
     
     getRoomsForDay(day) {
-      const runs = this.getRunsForDay(day)
-      const roomIds = new Set()
-      const rooms = []
-      
-      runs.forEach(run => {
-        if (run.rooms && run.rooms.length > 0) {
-          run.rooms.forEach(room => {
-            if (!roomIds.has(room.id)) {
-              roomIds.add(room.id)
-              rooms.push(room)
-            }
-          })
-        } else {
-          // Прогон без помещений
-          if (!roomIds.has(null)) {
-            roomIds.add(null)
-            rooms.push({ id: null, name: 'Без помещения' })
-          }
-        }
-      })
-      
-      return rooms
+      // Возвращаем все помещения из всех дней (чтобы столбцы были одинаковыми)
+      // Помещения уже отсортированы по алфавиту в allRooms
+      return this.allRooms
     },
     
     getRunsForDay(day) {

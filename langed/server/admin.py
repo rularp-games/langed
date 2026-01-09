@@ -1,9 +1,21 @@
 from django.contrib import admin
+from django.contrib.auth.admin import UserAdmin as BaseUserAdmin
+from django.contrib.auth import get_user_model
 from django import forms
 from django.contrib import messages
 from django.utils import timezone
 from datetime import time
-from .models import Game, City, Region, Convention, ConventionEvent, Run, ConventionLink, Venue, Room
+from .models import Game, City, Region, Convention, ConventionEvent, Run, ConventionLink, Venue, Room, Registration
+
+User = get_user_model()
+
+# Перерегистрируем UserAdmin с поддержкой autocomplete
+admin.site.unregister(User)
+
+
+@admin.register(User)
+class UserAdmin(BaseUserAdmin):
+    search_fields = ('username', 'first_name', 'last_name', 'email')
 
 
 class ConventionEventForm(forms.ModelForm):
@@ -213,20 +225,31 @@ class RoomAdmin(admin.ModelAdmin):
     autocomplete_fields = ('venue',)
 
 
+class RegistrationInline(admin.TabularInline):
+    model = Registration
+    extra = 1
+    fields = ('user', 'is_technician', 'role_preference', 'status', 'comment')
+    autocomplete_fields = ('user',)
+    
+    def get_queryset(self, request):
+        return super().get_queryset(request).select_related('user')
+
+
 @admin.register(Run)
 class RunAdmin(admin.ModelAdmin):
-    list_display = ('game', 'get_masters', 'city', 'get_rooms', 'date', 'convention_event', 'created_at')
+    list_display = ('game', 'get_masters', 'city', 'get_rooms', 'date', 'convention_event', 'get_players_count', 'get_technicians_count', 'created_at')
     list_filter = ('city', 'rooms__venue', 'convention_event', 'date')
     search_fields = ('game__name', 'city__name', 'rooms__name', 'rooms__venue__name', 'convention_event__convention__name', 'masters__username', 'masters__first_name', 'masters__last_name')
     date_hierarchy = 'date'
     autocomplete_fields = ('game', 'city', 'convention_event')
     filter_horizontal = ('masters', 'rooms')
+    inlines = [RegistrationInline]
     fieldsets = (
         ('Основная информация', {
             'fields': ('game', 'masters', 'city', 'rooms', 'convention_event')
         }),
-        ('Дата', {
-            'fields': ('date',)
+        ('Дата и настройки', {
+            'fields': ('date', 'duration', 'max_players', 'registration_open')
         }),
     )
     
@@ -237,3 +260,32 @@ class RunAdmin(admin.ModelAdmin):
     def get_rooms(self, obj):
         return ', '.join([r.name for r in obj.rooms.all()])
     get_rooms.short_description = 'Помещения'
+    
+    def get_players_count(self, obj):
+        return obj.registrations.filter(is_technician=False, status__in=['confirmed', 'pending']).count()
+    get_players_count.short_description = 'Игроков'
+    
+    def get_technicians_count(self, obj):
+        return obj.registrations.filter(is_technician=True, status__in=['confirmed', 'pending']).count()
+    get_technicians_count.short_description = 'Игротехников'
+
+
+@admin.register(Registration)
+class RegistrationAdmin(admin.ModelAdmin):
+    list_display = ('user', 'run', 'is_technician', 'role_preference', 'status', 'created_at')
+    list_filter = ('is_technician', 'status', 'role_preference', 'run__city', 'run__convention_event')
+    search_fields = ('user__username', 'user__first_name', 'user__last_name', 'run__game__name', 'comment')
+    ordering = ('-created_at',)
+    autocomplete_fields = ('user', 'run')
+    date_hierarchy = 'created_at'
+    fieldsets = (
+        ('Основная информация', {
+            'fields': ('run', 'user', 'is_technician')
+        }),
+        ('Настройки роли', {
+            'fields': ('role_preference', 'status')
+        }),
+        ('Дополнительно', {
+            'fields': ('comment',)
+        }),
+    )
