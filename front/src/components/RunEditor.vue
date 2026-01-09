@@ -146,46 +146,68 @@
         </div>
         
         <!-- Помещения -->
-        <div v-if="roomsList.length > 0" class="form-group">
+        <div v-if="roomsList.length > 0" class="form-group searchable-select">
           <label>Помещения</label>
-          <select 
-            v-model="formData.room_ids"
-            class="form-input"
-            multiple
-            :size="Math.min(roomsList.length, 4)"
+          <div 
+            class="form-input rooms-select"
+            @click="toggleRoomsDropdown"
           >
-            <option 
+            <span v-if="formData.room_ids.length === 0" class="rooms-placeholder">
+              Выберите помещения...
+            </span>
+            <span v-else class="rooms-selected">
+              {{ selectedRoomsText }}
+            </span>
+            <span class="rooms-arrow">▼</span>
+          </div>
+          <div v-if="showRoomsDropdown" class="dropdown-list rooms-dropdown">
+            <div 
               v-for="room in roomsList" 
               :key="room.id" 
-              :value="room.id"
+              class="dropdown-item rooms-item"
+              :class="{ selected: formData.room_ids.includes(room.id) }"
+              @mousedown.prevent="toggleRoom(room.id)"
             >
-              {{ room.name }}{{ room.blackbox ? ' [blackbox]' : '' }}
-            </option>
-          </select>
-          <span class="form-hint">Зажмите Ctrl для выбора нескольких</span>
+              <span class="room-checkbox">{{ formData.room_ids.includes(room.id) ? '☑' : '☐' }}</span>
+              <span class="dropdown-item-name">{{ room.name }}{{ room.blackbox ? ' [blackbox]' : '' }}</span>
+            </div>
+            <div v-if="roomsList.length === 0" class="dropdown-empty">
+              Помещения не найдены
+            </div>
+          </div>
         </div>
         
         <!-- Дата и время -->
         <div class="form-row">
           <div class="form-group half">
-            <label>Дата *</label>
+            <label>Дата * <span class="format-hint">(дд/мм/гггг)</span></label>
             <input 
-              v-model="formData.date" 
-              type="date" 
+              :value="formattedDate"
+              @input="handleDateInput"
+              @blur="validateDate"
+              type="text" 
               required
-              class="form-input"
-              :min="dateConstraints.min"
-              :max="dateConstraints.max"
+              class="form-input date-input"
+              placeholder="дд/мм/гггг"
+              maxlength="10"
+            />
+            <input 
+              type="hidden" 
+              :value="formData.date"
             />
           </div>
           
           <div class="form-group half">
-            <label>Время * <span v-if="timezoneLabel" class="timezone-label">{{ timezoneLabel }}</span></label>
+            <label>Время * <span v-if="timezoneLabel" class="timezone-label">({{ timezoneLabel }})</span></label>
             <input 
               v-model="formData.time" 
-              type="time" 
+              type="text" 
               required
-              class="form-input"
+              class="form-input time-input"
+              placeholder="чч:мм"
+              maxlength="5"
+              @input="handleTimeInput"
+              @blur="validateTime"
             />
           </div>
         </div>
@@ -324,6 +346,12 @@ export default {
     }
   },
   emits: ['save', 'cancel', 'error'],
+  mounted() {
+    document.addEventListener('click', this.handleDocumentClick)
+  },
+  beforeUnmount() {
+    document.removeEventListener('click', this.handleDocumentClick)
+  },
   data() {
     return {
       formData: {
@@ -346,6 +374,7 @@ export default {
       citySearch: '',
       showGameDropdown: false,
       showCityDropdown: false,
+      showRoomsDropdown: false,
       venuesList: [],
       roomsList: []
     }
@@ -395,6 +424,29 @@ export default {
     },
     timezoneLabel() {
       return this.getTimezoneAbbr(this.formData.city_timezone)
+    },
+    selectedRoomsText() {
+      if (this.formData.room_ids.length === 0) return ''
+      const selectedRooms = this.roomsList.filter(r => this.formData.room_ids.includes(r.id))
+      return selectedRooms.map(r => r.name).join(', ')
+    },
+    // Форматированная дата для отображения (дд/мм/гггг)
+    formattedDate: {
+      get() {
+        if (!this.formData.date) return ''
+        const parts = this.formData.date.split('-')
+        if (parts.length === 3) {
+          return `${parts[2]}/${parts[1]}/${parts[0]}`
+        }
+        return this.formData.date
+      },
+      set(val) {
+        // Парсим дд/мм/гггг в yyyy-mm-dd
+        const parts = val.replace(/[^\d\/]/g, '').split('/')
+        if (parts.length === 3 && parts[0].length === 2 && parts[1].length === 2 && parts[2].length === 4) {
+          this.formData.date = `${parts[2]}-${parts[1]}-${parts[0]}`
+        }
+      }
     }
   },
   watch: {
@@ -569,6 +621,26 @@ export default {
       }, 200)
     },
     
+    toggleRoomsDropdown() {
+      this.showRoomsDropdown = !this.showRoomsDropdown
+    },
+    
+    toggleRoom(roomId) {
+      const index = this.formData.room_ids.indexOf(roomId)
+      if (index === -1) {
+        this.formData.room_ids.push(roomId)
+      } else {
+        this.formData.room_ids.splice(index, 1)
+      }
+    },
+    
+    handleDocumentClick(event) {
+      // Закрываем dropdown помещений при клике вне его
+      if (this.showRoomsDropdown && !event.target.closest('.rooms-dropdown') && !event.target.closest('.rooms-select')) {
+        this.showRoomsDropdown = false
+      }
+    },
+    
     onConventionEventChange() {
       if (this.formData.convention_event_id) {
         const event = this.conventionEvents.find(e => e.id === this.formData.convention_event_id)
@@ -654,6 +726,84 @@ export default {
         return `${day}/${month}/${year}`
       }
       return `${formatDate(start)} — ${formatDate(end)}`
+    },
+    
+    handleDateInput(event) {
+      let value = event.target.value
+      // Оставляем только цифры и слэши
+      value = value.replace(/[^\d\/]/g, '')
+      
+      // Автоматически добавляем слэши
+      if (value.length === 2 && !value.includes('/')) {
+        value += '/'
+      } else if (value.length === 5 && value.split('/').length === 2) {
+        value += '/'
+      }
+      
+      // Ограничиваем длину
+      if (value.length > 10) {
+        value = value.slice(0, 10)
+      }
+      
+      event.target.value = value
+      
+      // Парсим дд/мм/гггг в yyyy-mm-dd
+      const parts = value.split('/')
+      if (parts.length === 3 && parts[0].length === 2 && parts[1].length === 2 && parts[2].length === 4) {
+        const day = parts[0]
+        const month = parts[1]
+        const year = parts[2]
+        this.formData.date = `${year}-${month}-${day}`
+      }
+    },
+    
+    validateDate() {
+      if (!this.formData.date) return
+      
+      // Проверяем ограничения по дате
+      if (this.dateConstraints.min && this.formData.date < this.dateConstraints.min) {
+        this.formData.date = this.dateConstraints.min
+      }
+      if (this.dateConstraints.max && this.formData.date > this.dateConstraints.max) {
+        this.formData.date = this.dateConstraints.max
+      }
+    },
+    
+    handleTimeInput(event) {
+      let value = event.target.value
+      // Оставляем только цифры и двоеточие
+      value = value.replace(/[^\d:]/g, '')
+      
+      // Автоматически добавляем двоеточие после двух цифр
+      if (value.length === 2 && !value.includes(':')) {
+        value += ':'
+      }
+      
+      // Ограничиваем длину
+      if (value.length > 5) {
+        value = value.slice(0, 5)
+      }
+      
+      event.target.value = value
+      this.formData.time = value
+    },
+    
+    validateTime() {
+      if (!this.formData.time) return
+      
+      const parts = this.formData.time.split(':')
+      if (parts.length === 2) {
+        let hours = parseInt(parts[0], 10) || 0
+        let minutes = parseInt(parts[1], 10) || 0
+        
+        // Ограничиваем значения
+        if (hours > 23) hours = 23
+        if (hours < 0) hours = 0
+        if (minutes > 59) minutes = 59
+        if (minutes < 0) minutes = 0
+        
+        this.formData.time = `${String(hours).padStart(2, '0')}:${String(minutes).padStart(2, '0')}`
+      }
     },
     
     // eslint-disable-next-line no-unused-vars
@@ -995,6 +1145,69 @@ export default {
   padding: 20px;
   text-align: center;
   color: #666;
+}
+
+/* Rooms dropdown */
+.rooms-select {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  cursor: pointer;
+  user-select: none;
+}
+
+.rooms-placeholder {
+  color: #555;
+}
+
+.rooms-selected {
+  color: #e0e0e0;
+  flex: 1;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.rooms-arrow {
+  color: #ff6b35;
+  font-size: 0.8rem;
+  margin-left: 8px;
+  transition: transform 0.2s;
+}
+
+.rooms-dropdown {
+  border-top: 2px solid #ff6b35;
+}
+
+.rooms-item {
+  flex-direction: row;
+  align-items: center;
+  gap: 10px;
+}
+
+.room-checkbox {
+  font-size: 1.1rem;
+  color: #ff6b35;
+}
+
+/* Date and Time inputs */
+.format-hint {
+  font-size: 0.75rem;
+  color: #666;
+  font-weight: normal;
+  text-transform: none;
+}
+
+.date-input,
+.time-input {
+  font-family: 'Courier New', monospace;
+  letter-spacing: 0.05em;
+}
+
+.date-input::placeholder,
+.time-input::placeholder {
+  letter-spacing: normal;
+  font-family: inherit;
 }
 
 /* Scrollbar */
