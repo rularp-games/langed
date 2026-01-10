@@ -73,9 +73,9 @@
       </div>
 
       <!-- Список прогонов -->
-      <div v-if="filteredRuns.length === 0" class="empty-schedule">
-        <p v-if="schedule.runs.length === 0">Расписание пока пусто. Добавьте первый прогон!</p>
-        <p v-else>Нет прогонов на выбранный день</p>
+      <div v-if="filteredRuns.length === 0 && filteredCommonEvents.length === 0" class="empty-schedule">
+        <p v-if="schedule.runs.length === 0 && (!schedule.common_events || schedule.common_events.length === 0)">Расписание пока пусто. Добавьте первый прогон!</p>
+        <p v-else>Нет событий на выбранный день</p>
       </div>
 
       <div v-else class="runs-editor">
@@ -480,6 +480,24 @@ export default {
       
       // Сортируем по локальной дате
       return runs.sort((a, b) => {
+        const dateA = a.date_local || a.date
+        const dateB = b.date_local || b.date
+        return dateA.localeCompare(dateB)
+      })
+    },
+    filteredCommonEvents() {
+      if (!this.schedule || !this.schedule.common_events) return []
+      let events = this.schedule.common_events
+      
+      if (this.selectedDay) {
+        events = events.filter(event => {
+          const dateStr = event.date_local || event.date
+          return dateStr && dateStr.startsWith(this.selectedDay)
+        })
+      }
+      
+      // Сортируем по локальной дате
+      return events.sort((a, b) => {
         const dateA = a.date_local || a.date
         const dateB = b.date_local || b.date
         return dateA.localeCompare(dateB)
