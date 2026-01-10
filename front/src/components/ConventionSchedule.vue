@@ -419,8 +419,17 @@ export default {
     },
     // timelineHours теперь вычисляется динамически в getTimelineHoursForDay
     allRooms() {
-      // Собираем все уникальные помещения из прогонов и сортируем по алфавиту
-      if (!this.schedule || !this.schedule.runs) return []
+      if (!this.schedule) return []
+      
+      // Если у конвента указана площадка с комнатами, используем их
+      if (this.schedule.venue_rooms && this.schedule.venue_rooms.length > 0) {
+        return this.schedule.venue_rooms.sort((a, b) => 
+          (a.name || '').localeCompare(b.name || '', 'ru')
+        )
+      }
+      
+      // Иначе собираем уникальные помещения из прогонов
+      if (!this.schedule.runs) return []
       const roomsMap = new Map()
       let hasNoRoom = false
       
