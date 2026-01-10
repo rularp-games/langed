@@ -67,6 +67,94 @@
         </a>
       </div>
 
+      <!-- Блок регистрации на конвент -->
+      <div v-if="schedule.registration_open || schedule.current_user_registration" class="registration-section">
+        <div class="registration-info">
+          <div class="registration-stats">
+            <span class="participants-count">
+              👥 Участники: {{ schedule.registrations_count }}{{ schedule.capacity ? ` / ${schedule.capacity}` : '' }}
+            </span>
+            <span v-if="schedule.pending_registrations_count > 0 && schedule.can_edit" class="pending-count">
+              ⏳ Ожидают: {{ schedule.pending_registrations_count }}
+            </span>
+            <span v-if="schedule.is_full" class="full-badge">Мест нет</span>
+          </div>
+          
+          <div class="registration-actions">
+            <!-- Статус регистрации текущего пользователя -->
+            <div v-if="schedule.current_user_registration" class="user-registration-status">
+              <span v-if="schedule.current_user_registration.status === 'pending'" class="status-pending">
+                ⏳ Заявка ожидает подтверждения
+              </span>
+              <span v-else-if="schedule.current_user_registration.status === 'confirmed'" class="status-confirmed">
+                ✅ Вы зарегистрированы
+              </span>
+              <span v-else-if="schedule.current_user_registration.status === 'rejected'" class="status-rejected">
+                ❌ Заявка отклонена
+              </span>
+              <button 
+                v-if="schedule.current_user_registration.status !== 'rejected'"
+                @click="unregister" 
+                class="btn-unregister"
+                :disabled="registrationLoading"
+              >
+                {{ registrationLoading ? '...' : 'Отменить' }}
+              </button>
+            </div>
+            
+            <!-- Кнопка регистрации -->
+            <button 
+              v-else-if="schedule.registration_open && !schedule.is_full && isAuthenticated"
+              @click="showRegistrationModal = true"
+              class="btn-register"
+            >
+              📝 Зарегистрироваться
+            </button>
+            
+            <!-- Сообщение для неавторизованных -->
+            <span v-else-if="schedule.registration_open && !schedule.is_full && !isAuthenticated" class="login-hint">
+              <a href="/oidc/authenticate/">Войдите</a>, чтобы зарегистрироваться
+            </span>
+          </div>
+        </div>
+        
+        <div v-if="registrationError" class="registration-error">
+          {{ registrationError }}
+        </div>
+      </div>
+
+      <!-- Модальное окно регистрации -->
+      <div v-if="showRegistrationModal" class="modal-overlay" @click.self="showRegistrationModal = false">
+        <div class="modal-content registration-modal">
+          <button class="modal-close" @click="showRegistrationModal = false">×</button>
+          
+          <h2>Регистрация на конвент</h2>
+          <p class="modal-subtitle">{{ schedule.convention_name }}</p>
+          
+          <form @submit.prevent="register">
+            <div class="form-group">
+              <label for="reg-comment">Комментарий (опционально)</label>
+              <textarea 
+                id="reg-comment"
+                v-model="registrationComment"
+                placeholder="Любая дополнительная информация..."
+                rows="3"
+                class="form-textarea"
+              ></textarea>
+            </div>
+            
+            <div class="modal-actions">
+              <button type="button" @click="showRegistrationModal = false" class="btn btn-secondary">
+                Отмена
+              </button>
+              <button type="submit" class="btn btn-primary" :disabled="registrationLoading">
+                {{ registrationLoading ? 'Отправка...' : 'Отправить заявку' }}
+              </button>
+            </div>
+          </form>
+        </div>
+      </div>
+
       <!-- Фильтры -->
       <div class="schedule-controls">
         <div class="view-switcher">
@@ -140,29 +228,43 @@
                   {{ room.name || 'Без помещения' }}
                 </div>
               </div>
-              <!-- Колонки с прогонами -->
-              <div class="timeline-rooms-columns">
+              <!-- Контейнер для колонок с прогонами и общих событий -->
+              <div class="timeline-rooms-content" :style="{ height: getTimelineHeightForDay(day) + 'px' }">
+                <!-- Общие события (на всю ширину) -->
                 <div 
-                  v-for="room in getRoomsForDay(day)" 
-                  :key="room.id || 'no-room'"
-                  class="timeline-room"
+                  v-for="commonEvent in getCommonEventsForDay(day)" 
+                  :key="'common-' + commonEvent.id"
+                  class="timeline-common-event"
+                  :style="getCommonEventStyle(commonEvent, day)"
+                  @click="openCommonEventModal(commonEvent)"
                 >
-                  <div class="room-runs" :style="{ height: getTimelineHeightForDay(day) + 'px' }">
-                    <div 
-                      v-for="run in getRunsForDayRoom(day, room.id)" 
-                      :key="run.id"
-                      class="timeline-run"
-                      :style="getRunStyle(run, day)"
-                      :class="{ 'run-full': run.is_full }"
-                      @click="openRunModal(run)"
-                    >
-                      <div class="run-time">{{ formatTime(run.date_local || run.date) }}</div>
-                      <div class="run-name">{{ run.game_name }}</div>
-                      <div class="run-info">
-                        <span class="run-slots">
-                          {{ run.registered_count }}/{{ run.effective_max_players }}
-                        </span>
-                        <span v-if="run.is_full" class="run-full-badge">МЕСТ НЕТ</span>
+                  <div class="common-event-time">{{ formatTime(commonEvent.date_local || commonEvent.date) }}</div>
+                  <div class="common-event-name">{{ commonEvent.name }}</div>
+                </div>
+                <!-- Колонки с прогонами -->
+                <div class="timeline-rooms-columns">
+                  <div 
+                    v-for="room in getRoomsForDay(day)" 
+                    :key="room.id || 'no-room'"
+                    class="timeline-room"
+                  >
+                    <div class="room-runs" :style="{ height: getTimelineHeightForDay(day) + 'px' }">
+                      <div 
+                        v-for="run in getRunsForDayRoom(day, room.id)" 
+                        :key="run.id"
+                        class="timeline-run"
+                        :style="getRunStyle(run, day)"
+                        :class="{ 'run-full': run.is_full }"
+                        @click="openRunModal(run)"
+                      >
+                        <div class="run-time">{{ formatTime(run.date_local || run.date) }}</div>
+                        <div class="run-name">{{ run.game_name }}</div>
+                        <div class="run-info">
+                          <span class="run-slots">
+                            {{ run.registered_count }}/{{ run.effective_max_players }}
+                          </span>
+                          <span v-if="run.is_full" class="run-full-badge">МЕСТ НЕТ</span>
+                        </div>
                       </div>
                     </div>
                   </div>
@@ -182,31 +284,49 @@
           </div>
           
           <div class="list-runs">
-            <div 
-              v-for="run in getRunsForDay(day)" 
-              :key="run.id"
-              class="list-run"
-              :class="{ 'run-full': run.is_full }"
-              @click="openRunModal(run)"
-            >
-              <div class="run-time-col">
-                <span class="run-time">{{ formatTime(run.date_local || run.date) }}</span>
-                <span class="run-duration">{{ formatDuration(run.duration) }}</span>
-              </div>
-              <div class="run-main-col">
-                <div class="run-name">{{ run.game_name }}</div>
-                <div class="run-rooms" v-if="run.rooms && run.rooms.length">📍 {{ run.rooms.map(r => r.name).join(', ') }}</div>
-                <div class="run-masters" v-if="run.masters && run.masters.length">
-                  👤 {{ run.masters.map(m => m.display_name).join(', ') }}
+            <!-- Общие события и прогоны, отсортированные по времени -->
+            <template v-for="item in getItemsForDaySorted(day)" :key="item.type + '-' + item.id">
+              <!-- Общее событие -->
+              <div 
+                v-if="item.type === 'common'"
+                class="list-common-event"
+                @click="openCommonEventModal(item)"
+              >
+                <div class="run-time-col">
+                  <span class="run-time common-time">{{ formatTime(item.date_local || item.date) }}</span>
+                  <span class="run-duration">{{ formatDuration(item.duration) }}</span>
+                </div>
+                <div class="run-main-col">
+                  <div class="run-name">{{ item.name }}</div>
+                  <div class="common-event-label">📢 Общее событие</div>
                 </div>
               </div>
-              <div class="run-slots-col">
-                <span class="run-slots" :class="{ 'slots-full': run.is_full }">
-                  {{ run.registered_count }}/{{ run.effective_max_players }}
-                </span>
-                <span v-if="run.is_full" class="run-full-badge">МЕСТ НЕТ</span>
+              <!-- Прогон -->
+              <div 
+                v-else
+                class="list-run"
+                :class="{ 'run-full': item.is_full }"
+                @click="openRunModal(item)"
+              >
+                <div class="run-time-col">
+                  <span class="run-time">{{ formatTime(item.date_local || item.date) }}</span>
+                  <span class="run-duration">{{ formatDuration(item.duration) }}</span>
+                </div>
+                <div class="run-main-col">
+                  <div class="run-name">{{ item.game_name }}</div>
+                  <div class="run-rooms" v-if="item.rooms && item.rooms.length">📍 {{ item.rooms.map(r => r.name).join(', ') }}</div>
+                  <div class="run-masters" v-if="item.masters && item.masters.length">
+                    👤 {{ item.masters.map(m => m.display_name).join(', ') }}
+                  </div>
+                </div>
+                <div class="run-slots-col">
+                  <span class="run-slots" :class="{ 'slots-full': item.is_full }">
+                    {{ item.registered_count }}/{{ item.effective_max_players }}
+                  </span>
+                  <span v-if="item.is_full" class="run-full-badge">МЕСТ НЕТ</span>
+                </div>
               </div>
-            </div>
+            </template>
           </div>
         </div>
       </div>
@@ -261,6 +381,33 @@
         </div>
       </div>
     </div>
+
+    <!-- Модальное окно общего события -->
+    <div v-if="selectedCommonEvent" class="modal-overlay" @click.self="closeCommonEventModal">
+      <div class="modal-content common-event-modal">
+        <button class="modal-close" @click="closeCommonEventModal">×</button>
+        
+        <div class="modal-run-date">
+          {{ formatFullDate(selectedCommonEvent.date_local || selectedCommonEvent.date) }}
+          <span class="modal-run-time">{{ formatTime(selectedCommonEvent.date_local || selectedCommonEvent.date) }}</span>
+        </div>
+        
+        <h2>{{ selectedCommonEvent.name }}</h2>
+        
+        <div class="common-event-badge">Общее событие</div>
+        
+        <div class="modal-stats">
+          <div class="modal-stat">
+            <span class="modal-stat-label">Длительность</span>
+            <span class="modal-stat-value">{{ formatDuration(selectedCommonEvent.duration) }}</span>
+          </div>
+        </div>
+        
+        <div v-if="selectedCommonEvent.description" class="common-event-description">
+          {{ selectedCommonEvent.description }}
+        </div>
+      </div>
+    </div>
   </div>
 </template>
 
@@ -283,22 +430,42 @@ export default {
       selectedDay: '',
       selectedRoom: '',
       selectedRun: null,
+      selectedCommonEvent: null,
       linkCopied: false,
       timelineStartHour: 9,
       timelineEndHour: 24,
-      hourHeight: 60
+      hourHeight: 60,
+      // Регистрация на конвент
+      isAuthenticated: false,
+      showRegistrationModal: false,
+      registrationComment: '',
+      registrationLoading: false,
+      registrationError: null
     }
   },
   computed: {
     days() {
-      if (!this.schedule || !this.schedule.runs) return []
+      if (!this.schedule) return []
       const daysSet = new Set()
-      this.schedule.runs.forEach(run => {
-        // Используем локальную дату если доступна
-        const dateStr = run.date_local || run.date
-        const day = dateStr.split('T')[0]
-        daysSet.add(day)
-      })
+      
+      // Дни из прогонов
+      if (this.schedule.runs) {
+        this.schedule.runs.forEach(run => {
+          const dateStr = run.date_local || run.date
+          const day = dateStr.split('T')[0]
+          daysSet.add(day)
+        })
+      }
+      
+      // Дни из общих событий
+      if (this.schedule.common_events) {
+        this.schedule.common_events.forEach(event => {
+          const dateStr = event.date_local || event.date
+          const day = dateStr.split('T')[0]
+          daysSet.add(day)
+        })
+      }
+      
       return Array.from(daysSet).sort()
     },
     filteredDays() {
@@ -365,6 +532,7 @@ export default {
   },
   mounted() {
     this.fetchSchedule()
+    this.checkAuth()
   },
   watch: {
     eventId() {
@@ -484,13 +652,16 @@ export default {
     
     getTimeRangeForDay(day) {
       const runs = this.getRunsForDay(day)
-      if (runs.length === 0) {
+      const commonEvents = this.getCommonEventsForDay(day)
+      
+      if (runs.length === 0 && commonEvents.length === 0) {
         return { startHour: 9, endHour: 24 }
       }
       
       let minHour = 24
       let maxHour = 0
       
+      // Обрабатываем прогоны
       runs.forEach(run => {
         const dateStr = this.getRunLocalDate(run)
         if (dateStr) {
@@ -500,6 +671,22 @@ export default {
             const startHour = parseInt(timeParts[0], 10)
             // Вычисляем час окончания, позволяя переход за полночь (> 24)
             const endHour = startHour + Math.ceil((run.duration || 60) / 60)
+            
+            minHour = Math.min(minHour, startHour)
+            maxHour = Math.max(maxHour, endHour)
+          }
+        }
+      })
+      
+      // Обрабатываем общие события
+      commonEvents.forEach(event => {
+        const dateStr = event.date_local || event.date
+        if (dateStr) {
+          const parts = dateStr.split('T')
+          if (parts.length === 2) {
+            const timeParts = parts[1].split(':')
+            const startHour = parseInt(timeParts[0], 10)
+            const endHour = startHour + Math.ceil((event.duration || 60) / 60)
             
             minHour = Math.min(minHour, startHour)
             maxHour = Math.max(maxHour, endHour)
@@ -542,6 +729,30 @@ export default {
       })
     },
     
+    getItemsForDaySorted(day) {
+      // Объединяем прогоны и общие события, сортируем по времени
+      const runs = this.getRunsForDay(day).map(run => ({
+        ...run,
+        type: 'run'
+      }))
+      
+      const commonEvents = this.getCommonEventsForDay(day).map(event => ({
+        ...event,
+        type: 'common'
+      }))
+      
+      const items = [...runs, ...commonEvents]
+      
+      // Сортируем по локальной дате
+      items.sort((a, b) => {
+        const dateA = a.date_local || a.date
+        const dateB = b.date_local || b.date
+        return dateA.localeCompare(dateB)
+      })
+      
+      return items
+    },
+    
     getRunsForDayRoom(day, roomId) {
       return this.getRunsForDay(day).filter(run => {
         if (roomId === null) {
@@ -574,12 +785,51 @@ export default {
       }
     },
     
+    getCommonEventsForDay(day) {
+      if (!this.schedule || !this.schedule.common_events) return []
+      return this.schedule.common_events.filter(event => {
+        const dateStr = event.date_local || event.date
+        return dateStr && dateStr.startsWith(day)
+      })
+    },
+    
+    getCommonEventStyle(event, day) {
+      // Используем локальную дату для правильного позиционирования
+      const dateStr = event.date_local || event.date
+      let hours = 12 // default
+      
+      if (dateStr) {
+        const parts = dateStr.split('T')
+        if (parts.length === 2) {
+          const timeParts = parts[1].split(':')
+          hours = parseInt(timeParts[0], 10) + parseInt(timeParts[1] || 0, 10) / 60
+        }
+      }
+      
+      const timeRange = this.getTimeRangeForDay(day)
+      const top = (hours - timeRange.startHour) * this.hourHeight
+      const height = (event.duration / 60) * this.hourHeight
+      
+      return {
+        top: `${top}px`,
+        height: `${Math.max(height, 30)}px`
+      }
+    },
+    
     openRunModal(run) {
       this.selectedRun = run
     },
     
     closeRunModal() {
       this.selectedRun = null
+    },
+    
+    openCommonEventModal(event) {
+      this.selectedCommonEvent = event
+    },
+    
+    closeCommonEventModal() {
+      this.selectedCommonEvent = null
     },
     
     copyLink() {
@@ -590,6 +840,89 @@ export default {
           this.linkCopied = false
         }, 2000)
       })
+    },
+    
+    // === Методы регистрации ===
+    
+    async checkAuth() {
+      try {
+        const response = await fetch('/api/me/')
+        if (response.ok) {
+          const data = await response.json()
+          this.isAuthenticated = data.is_authenticated
+        }
+      } catch (err) {
+        console.error('Ошибка проверки авторизации:', err)
+      }
+    },
+    
+    async register() {
+      this.registrationLoading = true
+      this.registrationError = null
+      
+      try {
+        const csrfToken = document.querySelector('meta[name="csrf-token"]')?.getAttribute('content') || ''
+        
+        const response = await fetch(`/api/convention-events/${this.eventId}/register/`, {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+            'X-CSRFToken': csrfToken
+          },
+          body: JSON.stringify({
+            comment: this.registrationComment
+          })
+        })
+        
+        if (!response.ok) {
+          const data = await response.json()
+          throw new Error(data.error || 'Ошибка при регистрации')
+        }
+        
+        // Закрываем модал и обновляем данные
+        this.showRegistrationModal = false
+        this.registrationComment = ''
+        await this.fetchSchedule()
+        
+      } catch (err) {
+        this.registrationError = err.message
+      } finally {
+        this.registrationLoading = false
+      }
+    },
+    
+    async unregister() {
+      if (!confirm('Вы уверены, что хотите отменить регистрацию?')) {
+        return
+      }
+      
+      this.registrationLoading = true
+      this.registrationError = null
+      
+      try {
+        const csrfToken = document.querySelector('meta[name="csrf-token"]')?.getAttribute('content') || ''
+        
+        const response = await fetch(`/api/convention-events/${this.eventId}/unregister/`, {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+            'X-CSRFToken': csrfToken
+          }
+        })
+        
+        if (!response.ok) {
+          const data = await response.json()
+          throw new Error(data.error || 'Ошибка при отмене регистрации')
+        }
+        
+        // Обновляем данные
+        await this.fetchSchedule()
+        
+      } catch (err) {
+        this.registrationError = err.message
+      } finally {
+        this.registrationLoading = false
+      }
     }
   }
 }
@@ -957,6 +1290,51 @@ export default {
   max-width: 300px;
 }
 
+.timeline-rooms-content {
+  position: relative;
+}
+
+.timeline-common-event {
+  position: absolute;
+  left: 0;
+  right: 0;
+  padding: 6px 12px;
+  background: linear-gradient(145deg, rgba(0, 204, 255, 0.2), rgba(0, 180, 220, 0.15));
+  border: 1px solid #00ccff88;
+  border-left: 3px solid #00ccff;
+  border-radius: 6px;
+  cursor: pointer;
+  z-index: 5;
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  transition: all 0.2s ease;
+  backdrop-filter: blur(4px);
+}
+
+.timeline-common-event:hover {
+  background: linear-gradient(145deg, rgba(0, 204, 255, 0.3), rgba(0, 180, 220, 0.25));
+  border-color: #00ccff;
+  box-shadow: 0 4px 20px rgba(0, 204, 255, 0.3);
+}
+
+.common-event-time {
+  font-family: 'JetBrains Mono', monospace;
+  font-size: 0.8rem;
+  color: #00ccff;
+  font-weight: bold;
+  white-space: nowrap;
+}
+
+.common-event-name {
+  font-weight: 600;
+  color: #e0e0e0;
+  font-size: 0.9rem;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
 .room-runs {
   position: relative;
   background: rgba(0, 0, 0, 0.2);
@@ -1061,6 +1439,34 @@ export default {
 
 .list-run.run-full {
   opacity: 0.6;
+}
+
+.list-common-event {
+  display: flex;
+  gap: 20px;
+  padding: 16px 20px;
+  background: linear-gradient(145deg, rgba(0, 204, 255, 0.1), rgba(0, 180, 220, 0.05));
+  border: 1px solid #00ccff55;
+  border-left: 3px solid #00ccff;
+  border-radius: 10px;
+  cursor: pointer;
+  transition: all 0.2s ease;
+}
+
+.list-common-event:hover {
+  border-color: #00ccff;
+  background: linear-gradient(145deg, rgba(0, 204, 255, 0.15), rgba(0, 180, 220, 0.1));
+  box-shadow: 0 4px 20px rgba(0, 204, 255, 0.2);
+}
+
+.common-time {
+  color: #00ccff !important;
+}
+
+.common-event-label {
+  font-size: 0.85rem;
+  color: #00ccff;
+  margin-top: 4px;
 }
 
 .run-time-col {
@@ -1276,6 +1682,33 @@ export default {
   box-shadow: 0 6px 20px rgba(255, 107, 53, 0.35);
 }
 
+/* ========== Модальное окно общего события ========== */
+.common-event-modal {
+  border-color: #00ccff;
+  box-shadow: 0 0 60px rgba(0, 204, 255, 0.3);
+}
+
+.common-event-badge {
+  display: inline-block;
+  padding: 4px 12px;
+  background: rgba(0, 204, 255, 0.2);
+  border: 1px solid #00ccff;
+  border-radius: 16px;
+  color: #00ccff;
+  font-size: 0.85rem;
+  font-weight: 600;
+  margin-bottom: 16px;
+}
+
+.common-event-description {
+  padding: 16px;
+  background: rgba(0, 0, 0, 0.3);
+  border-radius: 8px;
+  color: #aaa;
+  line-height: 1.6;
+  margin-top: 16px;
+}
+
 /* ========== Адаптив ========== */
 @media (max-width: 768px) {
   .convention-title {
@@ -1321,6 +1754,211 @@ export default {
     padding-top: 8px;
     border-top: 1px solid #ff6b3522;
   }
+  
+  .registration-section {
+    flex-direction: column;
+  }
+  
+  .registration-info {
+    flex-direction: column;
+    gap: 12px;
+  }
+  
+  .btn-register {
+    width: 100%;
+    justify-content: center;
+  }
+}
+
+/* ========== Блок регистрации на конвент ========== */
+.registration-section {
+  max-width: 1400px;
+  margin: 0 auto 24px;
+  padding: 20px 24px;
+  background: linear-gradient(145deg, rgba(0, 204, 255, 0.08), rgba(0, 150, 200, 0.05));
+  border: 1px solid #00ccff44;
+  border-radius: 12px;
+}
+
+.registration-info {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 16px;
+}
+
+.registration-stats {
+  display: flex;
+  align-items: center;
+  gap: 20px;
+  flex-wrap: wrap;
+}
+
+.participants-count {
+  font-size: 1.1rem;
+  color: #00ccff;
+  font-weight: 600;
+}
+
+.pending-count {
+  font-size: 0.95rem;
+  color: #ffaa00;
+}
+
+.full-badge {
+  padding: 4px 12px;
+  background: #ff4444;
+  color: #fff;
+  border-radius: 16px;
+  font-size: 0.85rem;
+  font-weight: 600;
+}
+
+.registration-actions {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+}
+
+.user-registration-status {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+}
+
+.status-pending {
+  color: #ffaa00;
+  font-weight: 500;
+}
+
+.status-confirmed {
+  color: #4caf50;
+  font-weight: 500;
+}
+
+.status-rejected {
+  color: #ff4444;
+  font-weight: 500;
+}
+
+.btn-register {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  padding: 12px 24px;
+  background: linear-gradient(145deg, #00ccff, #0099cc);
+  border: none;
+  border-radius: 8px;
+  color: #fff;
+  font-size: 1rem;
+  font-weight: 600;
+  cursor: pointer;
+  transition: all 0.3s ease;
+}
+
+.btn-register:hover {
+  transform: translateY(-2px);
+  box-shadow: 0 8px 25px rgba(0, 204, 255, 0.4);
+}
+
+.btn-unregister {
+  padding: 8px 16px;
+  background: transparent;
+  border: 1px solid #ff444466;
+  border-radius: 6px;
+  color: #ff6b6b;
+  font-size: 0.9rem;
+  cursor: pointer;
+  transition: all 0.2s ease;
+}
+
+.btn-unregister:hover:not(:disabled) {
+  background: rgba(255, 68, 68, 0.15);
+  border-color: #ff4444;
+}
+
+.btn-unregister:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+
+.login-hint {
+  color: #888;
+  font-size: 0.95rem;
+}
+
+.login-hint a {
+  color: #00ccff;
+  text-decoration: none;
+}
+
+.login-hint a:hover {
+  text-decoration: underline;
+}
+
+.registration-error {
+  margin-top: 12px;
+  padding: 10px 16px;
+  background: rgba(255, 68, 68, 0.15);
+  border: 1px solid #ff4444;
+  border-radius: 8px;
+  color: #ff6b6b;
+  font-size: 0.9rem;
+}
+
+/* Модальное окно регистрации */
+.registration-modal {
+  border-color: #00ccff;
+  box-shadow: 0 0 60px rgba(0, 204, 255, 0.3);
+}
+
+.registration-modal h2 {
+  color: #00ccff;
+}
+
+.modal-subtitle {
+  color: #888;
+  margin-bottom: 20px;
+}
+
+.form-group {
+  margin-bottom: 20px;
+}
+
+.form-group label {
+  display: block;
+  color: #00ccff;
+  font-size: 0.9rem;
+  margin-bottom: 8px;
+}
+
+.form-textarea {
+  width: 100%;
+  padding: 12px 16px;
+  background: rgba(10, 10, 10, 0.6);
+  border: 2px solid #00ccff44;
+  border-radius: 8px;
+  color: #e0e0e0;
+  font-size: 1rem;
+  resize: vertical;
+  font-family: inherit;
+}
+
+.form-textarea::placeholder {
+  color: #555;
+}
+
+.form-textarea:focus {
+  outline: none;
+  border-color: #00ccff;
+}
+
+.modal-actions {
+  display: flex;
+  gap: 16px;
+  justify-content: flex-end;
+  margin-top: 24px;
 }
 </style>
 

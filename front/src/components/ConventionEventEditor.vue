@@ -175,6 +175,103 @@
           </div>
         </div>
         
+        <!-- Настройки регистрации участников -->
+        <div class="registration-settings">
+          <div class="settings-header">
+            <span class="settings-icon">📝</span>
+            <span class="settings-label">Регистрация участников</span>
+          </div>
+          
+          <div class="form-row">
+            <div class="form-group half">
+              <label>
+                <input 
+                  type="checkbox" 
+                  v-model="formData.registration_open"
+                  class="form-checkbox"
+                />
+                Регистрация открыта
+              </label>
+            </div>
+            
+            <div class="form-group half">
+              <label>Лимит участников</label>
+              <input 
+                v-model.number="formData.capacity"
+                type="number"
+                min="1"
+                class="form-input"
+                placeholder="Без ограничений"
+              />
+            </div>
+          </div>
+          
+          <div v-if="mode === 'edit' && conventionEvent" class="registration-stats">
+            <span class="stat-item">
+              ✅ Подтверждено: {{ conventionEvent.registrations_count || 0 }}
+            </span>
+            <span v-if="conventionEvent.pending_registrations_count > 0" class="stat-item stat-pending">
+              ⏳ Ожидает: {{ conventionEvent.pending_registrations_count }}
+            </span>
+          </div>
+        </div>
+        
+        <!-- Секция управления регистрациями (только в режиме редактирования) -->
+        <div v-if="mode === 'edit' && conventionEvent && canEdit" class="registrations-section">
+          <div class="registrations-header">
+            <span class="registrations-icon">👥</span>
+            <span class="registrations-label">Заявки участников</span>
+            <button 
+              type="button" 
+              class="refresh-btn"
+              @click="fetchRegistrations"
+              :disabled="registrationsLoading"
+            >
+              {{ registrationsLoading ? '...' : '🔄' }}
+            </button>
+          </div>
+          
+          <div v-if="registrations.length === 0" class="no-registrations">
+            Заявок пока нет
+          </div>
+          
+          <div v-else class="registrations-list">
+            <div 
+              v-for="reg in registrations" 
+              :key="reg.id" 
+              class="registration-item"
+              :class="'status-' + reg.status"
+            >
+              <div class="reg-user">
+                <span class="reg-user-name">{{ reg.user.display_name }}</span>
+                <span class="reg-date">{{ formatRegDate(reg.created_at) }}</span>
+              </div>
+              
+              <div class="reg-status">
+                <select 
+                  :value="reg.status"
+                  @change="updateRegistrationStatus(reg.id, $event.target.value)"
+                  class="status-select"
+                  :disabled="registrationsLoading"
+                >
+                  <option value="pending">⏳ Ожидает</option>
+                  <option value="confirmed">✅ Подтверждена</option>
+                  <option value="rejected">❌ Отклонена</option>
+                  <option value="cancelled">🚫 Отменена</option>
+                </select>
+              </div>
+              
+              <div v-if="reg.comment" class="reg-comment">
+                💬 {{ reg.comment }}
+              </div>
+            </div>
+          </div>
+          
+          <div v-if="registrationsError" class="registrations-error">
+            {{ registrationsError }}
+          </div>
+        </div>
+
         <!-- Секция управления организаторами (только в режиме редактирования) -->
         <div v-if="mode === 'edit' && conventionEvent" class="organizers-section">
           <div class="organizers-header">
@@ -295,7 +392,10 @@ export default {
         newCityName: '',
         venue_id: null,
         date_start: '',
-        date_end: ''
+        date_end: '',
+        // Настройки регистрации
+        capacity: null,
+        registration_open: false
       },
       loading: false,
       error: null,
@@ -308,7 +408,11 @@ export default {
       organizers: [],
       newOrganizerUsername: '',
       organizerLoading: false,
-      organizerError: null
+      organizerError: null,
+      // Управление регистрациями
+      registrations: [],
+      registrationsLoading: false,
+      registrationsError: null
     }
   },
   computed: {
@@ -429,7 +533,10 @@ export default {
         newCityName: '',
         venue_id: event.venue_id || (event.venue && event.venue.id) || null,
         date_start: event.date_start || '',
-        date_end: event.date_end || ''
+        date_end: event.date_end || '',
+        // Настройки регистрации
+        capacity: event.capacity || null,
+        registration_open: event.registration_open || false
       }
       
       // Устанавливаем поисковые поля
@@ -453,6 +560,11 @@ export default {
       this.organizers = event.organizers || []
       this.newOrganizerUsername = ''
       this.organizerError = null
+      
+      // Загружаем регистрации если в режиме редактирования
+      if (this.mode === 'edit' && event.id) {
+        this.fetchRegistrations()
+      }
     },
     
     selectConvention(conv) {
@@ -639,7 +751,10 @@ export default {
           convention_id: this.formData.convention_id,
           city_id: cityId,
           date_start: this.formData.date_start,
-          date_end: this.formData.date_end
+          date_end: this.formData.date_end,
+          // Настройки регистрации
+          capacity: this.formData.capacity || null,
+          registration_open: this.formData.registration_open
         }
         
         if (this.formData.venue_id) {
@@ -723,6 +838,72 @@ export default {
       } finally {
         this.organizerLoading = false
       }
+    },
+    
+    // === Управление регистрациями ===
+    async fetchRegistrations() {
+      if (!this.conventionEvent) return
+      
+      this.registrationsLoading = true
+      this.registrationsError = null
+      
+      try {
+        const response = await fetch(`/api/convention-events/${this.conventionEvent.id}/registrations/`)
+        
+        if (!response.ok) {
+          throw new Error('Ошибка при загрузке регистраций')
+        }
+        
+        this.registrations = await response.json()
+      } catch (err) {
+        this.registrationsError = err.message
+      } finally {
+        this.registrationsLoading = false
+      }
+    },
+    
+    async updateRegistrationStatus(registrationId, newStatus) {
+      if (!this.conventionEvent) return
+      
+      this.registrationsLoading = true
+      this.registrationsError = null
+      
+      try {
+        const response = await fetch(`/api/convention-events/${this.conventionEvent.id}/update_registration/`, {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+            'X-CSRFToken': this.csrfToken
+          },
+          body: JSON.stringify({
+            registration_id: registrationId,
+            status: newStatus
+          })
+        })
+        
+        if (!response.ok) {
+          const data = await response.json()
+          throw new Error(data.error || 'Ошибка при обновлении статуса')
+        }
+        
+        // Обновляем список регистраций
+        await this.fetchRegistrations()
+      } catch (err) {
+        this.registrationsError = err.message
+      } finally {
+        this.registrationsLoading = false
+      }
+    },
+    
+    formatRegDate(dateStr) {
+      const date = new Date(dateStr)
+      return date.toLocaleDateString('ru-RU', {
+        day: '2-digit',
+        month: '2-digit',
+        year: 'numeric',
+        hour: '2-digit',
+        minute: '2-digit'
+      })
     }
   }
 }
@@ -1147,6 +1328,208 @@ export default {
 }
 
 .organizer-error {
+  margin-top: 8px;
+  padding: 8px 12px;
+  background: rgba(255, 68, 68, 0.15);
+  border: 1px solid #ff4444;
+  border-radius: 6px;
+  color: #ff6b6b;
+  font-size: 0.85rem;
+}
+
+/* Секция настроек регистрации */
+.registration-settings {
+  margin-top: 8px;
+  padding: 16px;
+  background: rgba(0, 204, 255, 0.08);
+  border-radius: 8px;
+  border-left: 3px solid #00ccff;
+}
+
+.settings-header {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  margin-bottom: 16px;
+}
+
+.settings-icon {
+  font-size: 1.2rem;
+}
+
+.settings-label {
+  color: #00ccff;
+  font-size: 0.95rem;
+  font-weight: 600;
+}
+
+.registration-settings .form-row {
+  margin-bottom: 0;
+}
+
+.registration-settings label {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  color: #e0e0e0;
+  cursor: pointer;
+}
+
+.form-checkbox {
+  width: 18px;
+  height: 18px;
+  accent-color: #00ccff;
+}
+
+.registration-stats {
+  display: flex;
+  gap: 16px;
+  margin-top: 12px;
+  padding-top: 12px;
+  border-top: 1px solid #00ccff33;
+}
+
+.stat-item {
+  font-size: 0.9rem;
+  color: #4caf50;
+}
+
+.stat-pending {
+  color: #ffaa00;
+}
+
+/* Секция управления регистрациями */
+.registrations-section {
+  margin-top: 8px;
+  padding: 16px;
+  background: rgba(255, 170, 0, 0.08);
+  border-radius: 8px;
+  border-left: 3px solid #ffaa00;
+}
+
+.registrations-header {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  margin-bottom: 12px;
+}
+
+.registrations-icon {
+  font-size: 1.2rem;
+}
+
+.registrations-label {
+  color: #ffaa00;
+  font-size: 0.95rem;
+  font-weight: 600;
+  flex: 1;
+}
+
+.refresh-btn {
+  padding: 4px 10px;
+  background: transparent;
+  border: 1px solid #ffaa0066;
+  border-radius: 4px;
+  color: #ffaa00;
+  cursor: pointer;
+  transition: all 0.2s ease;
+}
+
+.refresh-btn:hover:not(:disabled) {
+  background: rgba(255, 170, 0, 0.2);
+  border-color: #ffaa00;
+}
+
+.refresh-btn:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+
+.no-registrations {
+  color: #666;
+  font-size: 0.9rem;
+}
+
+.registrations-list {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.registration-item {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 12px;
+  padding: 10px 12px;
+  background: rgba(0, 0, 0, 0.2);
+  border-radius: 6px;
+  border-left: 3px solid #888;
+}
+
+.registration-item.status-pending {
+  border-left-color: #ffaa00;
+}
+
+.registration-item.status-confirmed {
+  border-left-color: #4caf50;
+}
+
+.registration-item.status-rejected {
+  border-left-color: #ff4444;
+}
+
+.registration-item.status-cancelled {
+  border-left-color: #666;
+  opacity: 0.6;
+}
+
+.reg-user {
+  flex: 1;
+  min-width: 150px;
+}
+
+.reg-user-name {
+  display: block;
+  color: #e0e0e0;
+  font-weight: 500;
+}
+
+.reg-date {
+  display: block;
+  color: #666;
+  font-size: 0.8rem;
+  margin-top: 2px;
+}
+
+.reg-status {
+  flex-shrink: 0;
+}
+
+.status-select {
+  padding: 6px 10px;
+  background: rgba(10, 10, 10, 0.6);
+  border: 1px solid #555;
+  border-radius: 4px;
+  color: #e0e0e0;
+  font-size: 0.85rem;
+  cursor: pointer;
+}
+
+.status-select:focus {
+  outline: none;
+  border-color: #ffaa00;
+}
+
+.reg-comment {
+  width: 100%;
+  padding: 8px 10px;
+  background: rgba(0, 0, 0, 0.2);
+  border-radius: 4px;
+  color: #aaa;
+  font-size: 0.85rem;
+}
+
+.registrations-error {
   margin-top: 8px;
   padding: 8px 12px;
   background: rgba(255, 68, 68, 0.15);

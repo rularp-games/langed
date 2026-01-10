@@ -10,13 +10,15 @@ from django.conf import settings
 from datetime import date
 
 from django.db.models import Prefetch
-from .models import Game, Run, Convention, ConventionEvent, City, ConventionLink, Venue, Room, Registration, Region
+from .models import Game, Run, Convention, ConventionEvent, City, ConventionLink, Venue, Room, Registration, Region, CommonEvent, ConventionEventRegistration
 from .serializers import (
     GameSerializer, RunSerializer, 
     ConventionSerializer, ConventionEventSerializer,
     CitySerializer, ConventionLinkSerializer,
     VenueSerializer, RoomSerializer, RegistrationSerializer,
-    ConventionScheduleSerializer, ScheduleRunSerializer
+    ConventionScheduleSerializer, ScheduleRunSerializer,
+    CommonEventSerializer, ConventionEventRegistrationSerializer,
+    ConventionEventRegistrationBriefSerializer
 )
 
 
@@ -321,6 +323,19 @@ class RunViewSet(viewsets.ModelViewSet):
                 status=status.HTTP_400_BAD_REQUEST
             )
         
+        # Если прогон привязан к проведению конвента, проверяем подтверждённую регистрацию
+        if run.convention_event:
+            has_confirmed_registration = ConventionEventRegistration.objects.filter(
+                convention_event=run.convention_event,
+                user=request.user,
+                status='confirmed'
+            ).exists()
+            if not has_confirmed_registration:
+                return Response(
+                    {'error': 'Для регистрации на игры конвента необходимо быть подтверждённым участником конвента'},
+                    status=status.HTTP_400_BAD_REQUEST
+                )
+        
         # Получаем данные регистрации
         role_preference = request.data.get('role_preference', 'any')
         is_technician = request.data.get('is_technician', False)
@@ -328,13 +343,14 @@ class RunViewSet(viewsets.ModelViewSet):
         
         # Определяем статус регистрации
         if is_technician:
-            # Игротехники регистрируются отдельно
-            registration_status = 'confirmed'
+            # Игротехники регистрируются отдельно, их не нужно подтверждать
+            registration_status = 'pending'
         elif run.is_full():
             # Если прогон заполнен, добавляем в лист ожидания
             registration_status = 'waitlist'
         else:
-            registration_status = 'confirmed'
+            # По умолчанию заявка ожидает подтверждения мастером
+            registration_status = 'pending'
         
         # Создаём регистрацию
         registration = Registration.objects.create(
@@ -372,7 +388,8 @@ class RunViewSet(viewsets.ModelViewSet):
         
         registration.delete()
         
-        # Если освободилось место, переводим первого из waitlist в confirmed
+        # Если освободилось место, переводим первого из waitlist в pending
+        # (мастер должен будет подтвердить его вручную)
         if was_confirmed_player:
             waitlist_registration = Registration.objects.filter(
                 run=run,
@@ -381,7 +398,7 @@ class RunViewSet(viewsets.ModelViewSet):
             ).order_by('created_at').first()
             
             if waitlist_registration:
-                waitlist_registration.status = 'confirmed'
+                waitlist_registration.status = 'pending'
                 waitlist_registration.save()
         
         return Response({
@@ -682,7 +699,8 @@ class ConventionEventViewSet(viewsets.ModelViewSet):
             'organizers',
             'convention__organizers',
             'convention__links',
-            'venue__rooms'
+            'venue__rooms',
+            'common_events'
         )
         
         # Фильтр по конвенту
@@ -902,6 +920,281 @@ class ConventionEventViewSet(viewsets.ModelViewSet):
         
         event.organizers.remove(user)
         return Response(ConventionEventSerializer(event, context={'request': request}).data)
+    
+    @action(detail=True, methods=['post'], permission_classes=[IsAuthenticated])
+    def add_common_event(self, request, pk=None):
+        """Добавить общее событие в расписание конвента"""
+        event = self.get_object()
+        
+        # Проверяем права
+        if not request.user.is_staff:
+            is_event_organizer = request.user in event.organizers.all()
+            is_convention_organizer = request.user in event.convention.organizers.all()
+            if not is_event_organizer and not is_convention_organizer:
+                return Response(
+                    {'error': 'Только организатор может добавлять события в расписание'},
+                    status=status.HTTP_403_FORBIDDEN
+                )
+        
+        # Создаём общее событие
+        serializer = CommonEventSerializer(
+            data=request.data, 
+            context={
+                'request': request,
+                'city_timezone': event.city.timezone if event.city else None
+            }
+        )
+        if not serializer.is_valid():
+            return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
+        
+        # Проверяем, что дата события попадает в даты проведения конвента
+        event_date = serializer.validated_data['date'].date()
+        if event_date < event.date_start or event_date > event.date_end:
+            return Response(
+                {'date': [f'Дата события ({event_date.strftime("%d.%m.%Y")}) должна быть в пределах дат '
+                         f'проведения конвента ({event.date_start.strftime("%d.%m.%Y")} — '
+                         f'{event.date_end.strftime("%d.%m.%Y")})']},
+                status=status.HTTP_400_BAD_REQUEST
+            )
+        
+        common_event = serializer.save(convention_event=event)
+        
+        return Response(
+            CommonEventSerializer(common_event, context={'request': request}).data,
+            status=status.HTTP_201_CREATED
+        )
+    
+    @action(detail=True, methods=['patch'], permission_classes=[IsAuthenticated])
+    def update_common_event(self, request, pk=None):
+        """Обновить общее событие в расписании конвента"""
+        event = self.get_object()
+        common_event_id = request.data.get('common_event_id')
+        
+        if not common_event_id:
+            return Response({'error': 'common_event_id обязателен'}, status=status.HTTP_400_BAD_REQUEST)
+        
+        try:
+            common_event = CommonEvent.objects.get(id=common_event_id, convention_event=event)
+        except CommonEvent.DoesNotExist:
+            return Response({'error': 'Событие не найдено'}, status=status.HTTP_404_NOT_FOUND)
+        
+        # Проверяем права
+        if not request.user.is_staff:
+            is_event_organizer = request.user in event.organizers.all()
+            is_convention_organizer = request.user in event.convention.organizers.all()
+            if not is_event_organizer and not is_convention_organizer:
+                return Response(
+                    {'error': 'Нет прав для редактирования этого события'},
+                    status=status.HTTP_403_FORBIDDEN
+                )
+        
+        # Обновляем событие
+        update_data = {k: v for k, v in request.data.items() if k != 'common_event_id'}
+        serializer = CommonEventSerializer(
+            common_event, 
+            data=update_data, 
+            partial=True, 
+            context={
+                'request': request,
+                'city_timezone': event.city.timezone if event.city else None
+            }
+        )
+        if not serializer.is_valid():
+            return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
+        
+        serializer.save()
+        return Response(serializer.data)
+    
+    @action(detail=True, methods=['delete'], permission_classes=[IsAuthenticated])
+    def remove_common_event(self, request, pk=None):
+        """Удалить общее событие из расписания конвента"""
+        event = self.get_object()
+        common_event_id = request.query_params.get('common_event_id')
+        
+        if not common_event_id:
+            return Response({'error': 'common_event_id обязателен'}, status=status.HTTP_400_BAD_REQUEST)
+        
+        try:
+            common_event = CommonEvent.objects.get(id=common_event_id, convention_event=event)
+        except CommonEvent.DoesNotExist:
+            return Response({'error': 'Событие не найдено'}, status=status.HTTP_404_NOT_FOUND)
+        
+        # Проверяем права
+        if not request.user.is_staff:
+            is_event_organizer = request.user in event.organizers.all()
+            is_convention_organizer = request.user in event.convention.organizers.all()
+            if not is_event_organizer and not is_convention_organizer:
+                return Response(
+                    {'error': 'Нет прав для удаления этого события'},
+                    status=status.HTTP_403_FORBIDDEN
+                )
+        
+        common_event.delete()
+        return Response({'message': 'Событие удалено'}, status=status.HTTP_204_NO_CONTENT)
+    
+    # === Регистрация участников на конвент ===
+    
+    @action(detail=True, methods=['post'], permission_classes=[IsAuthenticated])
+    def register(self, request, pk=None):
+        """Зарегистрироваться на конвент"""
+        event = self.get_object()
+        
+        # Проверяем, открыта ли регистрация
+        if not event.registration_open:
+            return Response(
+                {'error': 'Регистрация на этот конвент закрыта'},
+                status=status.HTTP_400_BAD_REQUEST
+            )
+        
+        # Проверяем, не зарегистрирован ли уже
+        if ConventionEventRegistration.objects.filter(
+            convention_event=event, 
+            user=request.user
+        ).exists():
+            return Response(
+                {'error': 'Вы уже зарегистрированы на этот конвент'},
+                status=status.HTTP_400_BAD_REQUEST
+            )
+        
+        # Проверяем, не заполнен ли конвент
+        if event.is_full():
+            return Response(
+                {'error': 'Все места на конвент заняты'},
+                status=status.HTTP_400_BAD_REQUEST
+            )
+        
+        # Получаем комментарий
+        comment = request.data.get('comment', '')
+        
+        # Создаём регистрацию со статусом pending (ожидает подтверждения)
+        registration = ConventionEventRegistration.objects.create(
+            convention_event=event,
+            user=request.user,
+            status='pending',
+            comment=comment
+        )
+        
+        return Response({
+            'registration': ConventionEventRegistrationSerializer(
+                registration, context={'request': request}
+            ).data,
+            'message': 'Заявка отправлена и ожидает подтверждения организатором'
+        }, status=status.HTTP_201_CREATED)
+    
+    @action(detail=True, methods=['post'], permission_classes=[IsAuthenticated])
+    def unregister(self, request, pk=None):
+        """Отменить регистрацию на конвент"""
+        event = self.get_object()
+        
+        try:
+            registration = ConventionEventRegistration.objects.get(
+                convention_event=event, 
+                user=request.user
+            )
+        except ConventionEventRegistration.DoesNotExist:
+            return Response(
+                {'error': 'Вы не зарегистрированы на этот конвент'},
+                status=status.HTTP_400_BAD_REQUEST
+            )
+        
+        # Удаляем регистрацию
+        registration.delete()
+        
+        return Response({
+            'message': 'Регистрация отменена'
+        })
+    
+    @action(detail=True, methods=['get'])
+    def registrations(self, request, pk=None):
+        """Получить список регистраций на конвент (для организаторов — полный, для остальных — только подтверждённые)"""
+        event = self.get_object()
+        
+        # Проверяем права — организаторы видят все регистрации
+        is_organizer = False
+        if request.user.is_authenticated:
+            if request.user.is_staff:
+                is_organizer = True
+            elif request.user in event.organizers.all():
+                is_organizer = True
+            elif request.user in event.convention.organizers.all():
+                is_organizer = True
+        
+        if is_organizer:
+            # Организаторы видят все регистрации
+            registrations = event.event_registrations.select_related('user').all()
+            return Response(
+                ConventionEventRegistrationSerializer(
+                    registrations, many=True, context={'request': request}
+                ).data
+            )
+        else:
+            # Остальные видят только подтверждённых участников
+            registrations = event.event_registrations.filter(
+                status='confirmed'
+            ).select_related('user')
+            return Response(
+                ConventionEventRegistrationBriefSerializer(
+                    registrations, many=True, context={'request': request}
+                ).data
+            )
+    
+    @action(detail=True, methods=['post'], permission_classes=[IsAuthenticated])
+    def update_registration(self, request, pk=None):
+        """Обновить статус регистрации (только для организаторов)"""
+        event = self.get_object()
+        
+        # Проверяем права
+        if not request.user.is_staff:
+            is_event_organizer = request.user in event.organizers.all()
+            is_convention_organizer = request.user in event.convention.organizers.all()
+            if not is_event_organizer and not is_convention_organizer:
+                return Response(
+                    {'error': 'Только организатор может изменять регистрации'},
+                    status=status.HTTP_403_FORBIDDEN
+                )
+        
+        registration_id = request.data.get('registration_id')
+        new_status = request.data.get('status')
+        admin_comment = request.data.get('admin_comment')
+        
+        if not registration_id:
+            return Response(
+                {'error': 'Укажите registration_id'},
+                status=status.HTTP_400_BAD_REQUEST
+            )
+        
+        if new_status and new_status not in ['pending', 'confirmed', 'rejected', 'cancelled']:
+            return Response(
+                {'error': 'Недопустимый статус'},
+                status=status.HTTP_400_BAD_REQUEST
+            )
+        
+        try:
+            registration = ConventionEventRegistration.objects.get(
+                id=registration_id, 
+                convention_event=event
+            )
+        except ConventionEventRegistration.DoesNotExist:
+            return Response(
+                {'error': 'Регистрация не найдена'},
+                status=status.HTTP_404_NOT_FOUND
+            )
+        
+        # Обновляем статус если передан
+        if new_status:
+            registration.status = new_status
+        
+        # Обновляем комментарий организатора если передан
+        if admin_comment is not None:
+            registration.admin_comment = admin_comment
+        
+        registration.save()
+        
+        return Response({
+            'registration': ConventionEventRegistrationSerializer(
+                registration, context={'request': request}
+            ).data
+        })
 
 
 class ConventionLinkViewSet(viewsets.ModelViewSet):

@@ -44,10 +44,16 @@
 
       <!-- Панель инструментов -->
       <div class="editor-toolbar">
-        <button @click="openAddRunModal" class="add-run-btn">
-          <span class="add-icon">+</span>
-          Добавить прогон
-        </button>
+        <div class="toolbar-left">
+          <button @click="openAddRunModal" class="add-run-btn">
+            <span class="add-icon">+</span>
+            Добавить прогон
+          </button>
+          <button @click="openAddCommonEventModal" class="add-common-event-btn">
+            <span class="add-icon">+</span>
+            Общее событие
+          </button>
+        </div>
         
         <div class="toolbar-right">
           <select v-model="selectedDay" class="control-select">
@@ -59,6 +65,9 @@
           
           <div class="runs-count">
             {{ schedule.runs.length }} {{ pluralizeRuns(schedule.runs.length) }}
+            <template v-if="schedule.common_events && schedule.common_events.length > 0">
+              + {{ schedule.common_events.length }} {{ pluralizeEvents(schedule.common_events.length) }}
+            </template>
           </div>
         </div>
       </div>
@@ -74,7 +83,49 @@
           <div class="day-header">
             <span class="day-name">{{ formatDayName(day) }}</span>
             <span class="day-date">{{ formatDayDate(day) }}</span>
-            <span class="day-runs-count">{{ getRunsForDay(day).length }} {{ pluralizeRuns(getRunsForDay(day).length) }}</span>
+            <span class="day-runs-count">
+              {{ getRunsForDay(day).length }} {{ pluralizeRuns(getRunsForDay(day).length) }}
+              <template v-if="getCommonEventsForDay(day).length > 0">
+                + {{ getCommonEventsForDay(day).length }} {{ pluralizeEvents(getCommonEventsForDay(day).length) }}
+              </template>
+            </span>
+          </div>
+          
+          <!-- Общие события -->
+          <div v-if="getCommonEventsForDay(day).length > 0" class="day-common-events">
+            <div 
+              v-for="event in getCommonEventsForDay(day)" 
+              :key="'common-' + event.id"
+              class="common-event-card"
+            >
+              <div class="run-time-block">
+                <span class="run-time common-event-time">{{ formatTime(event.date_local || event.date) }}</span>
+                <span class="run-duration">{{ formatDuration(event.duration) }}</span>
+              </div>
+              
+              <div class="run-main">
+                <div class="run-name">{{ event.name }}</div>
+                <div class="common-event-badge">📢 Общее событие</div>
+                <div v-if="event.description" class="common-event-description-short">{{ event.description }}</div>
+              </div>
+              
+              <div class="run-actions">
+                <button 
+                  @click="openEditCommonEventModal(event)"
+                  class="action-btn edit-btn"
+                  title="Редактировать"
+                >
+                  ✏️
+                </button>
+                <button 
+                  @click="confirmDeleteCommonEvent(event)"
+                  class="action-btn delete-btn"
+                  title="Удалить"
+                >
+                  🗑️
+                </button>
+              </div>
+            </div>
           </div>
           
           <div class="day-runs">
@@ -195,12 +246,93 @@
     <!-- Модальное окно подтверждения удаления -->
     <DeleteConfirmModal
       v-if="showDeleteConfirm"
-      title="Удалить прогон?"
-      :message="deleteRunMessage"
+      :title="deleteType === 'run' ? 'Удалить прогон?' : 'Удалить общее событие?'"
+      :message="deleteMessage"
       :loading="deleteLoading"
       @confirm="executeDelete"
       @cancel="cancelDelete"
     />
+
+    <!-- Модальное окно добавления/редактирования общего события -->
+    <div v-if="showCommonEventEditor" class="modal-overlay" @click.self="closeCommonEventEditor">
+      <div class="modal-content common-event-editor-modal">
+        <button class="modal-close" @click="closeCommonEventEditor">×</button>
+        
+        <h2>{{ commonEventEditorMode === 'add' ? 'Добавить общее событие' : 'Редактировать событие' }}</h2>
+        
+        <form @submit.prevent="saveCommonEvent" class="common-event-form">
+          <div class="form-group">
+            <label>Название *</label>
+            <input 
+              v-model="commonEventForm.name" 
+              type="text" 
+              class="form-input"
+              placeholder="Например: Ужин, Завтрак, Заезд..."
+              required
+            />
+          </div>
+          
+          <div class="form-row">
+            <div class="form-group">
+              <label>Дата *</label>
+              <input 
+                v-model="commonEventForm.date" 
+                type="date" 
+                class="form-input"
+                :min="schedule ? schedule.date_start : ''"
+                :max="schedule ? schedule.date_end : ''"
+                required
+              />
+            </div>
+            
+            <div class="form-group">
+              <label>Время *</label>
+              <input 
+                v-model="commonEventForm.time" 
+                type="time" 
+                class="form-input"
+                required
+              />
+            </div>
+          </div>
+          
+          <div class="form-group">
+            <label>Длительность (минут) *</label>
+            <input 
+              v-model.number="commonEventForm.duration" 
+              type="number" 
+              class="form-input"
+              min="5"
+              max="1440"
+              required
+            />
+          </div>
+          
+          <div class="form-group">
+            <label>Описание</label>
+            <textarea 
+              v-model="commonEventForm.description" 
+              class="form-textarea"
+              rows="3"
+              placeholder="Дополнительная информация о событии..."
+            ></textarea>
+          </div>
+          
+          <div v-if="commonEventError" class="form-error">
+            {{ commonEventError }}
+          </div>
+          
+          <div class="form-actions">
+            <button type="button" @click="closeCommonEventEditor" class="btn btn-secondary">
+              Отмена
+            </button>
+            <button type="submit" class="btn btn-primary" :disabled="commonEventLoading">
+              {{ commonEventLoading ? 'Сохранение...' : 'Сохранить' }}
+            </button>
+          </div>
+        </form>
+      </div>
+    </div>
 
   </div>
 </template>
@@ -245,7 +377,24 @@ export default {
       // Управление мастерами
       masterInputs: {},
       masterLoading: {},
-      masterErrors: {}
+      masterErrors: {},
+      
+      // Редактор общих событий
+      showCommonEventEditor: false,
+      commonEventEditorMode: 'add',
+      commonEventForm: {
+        id: null,
+        name: '',
+        date: '',
+        time: '',
+        duration: 60,
+        description: ''
+      },
+      commonEventLoading: false,
+      commonEventError: null,
+      
+      // Тип удаления
+      deleteType: 'run'
     }
   },
   computed: {
@@ -253,7 +402,10 @@ export default {
       const match = document.cookie.match(/csrftoken=([^;]+)/)
       return match ? match[1] : ''
     },
-    deleteRunMessage() {
+    deleteMessage() {
+      if (this.deleteType === 'common') {
+        return `Событие "${this.deleteTarget?.name}" будет удалено из расписания.`
+      }
       let message = `Прогон "${this.deleteTarget?.game_name}" будет удалён из расписания.`
       if (this.deleteTarget?.registered_count > 0) {
         message += ` Внимание: на этот прогон записано ${this.deleteTarget.registered_count} игроков!`
@@ -269,7 +421,7 @@ export default {
       return this.rooms
     },
     days() {
-      if (!this.schedule || !this.schedule.runs) return []
+      if (!this.schedule) return []
       const daysSet = new Set()
       
       // Добавляем все дни конвента
@@ -285,8 +437,10 @@ export default {
       if (this.selectedDay) {
         return [this.selectedDay]
       }
-      // Показываем только дни с прогонами
-      return this.days.filter(day => this.getRunsForDay(day).length > 0)
+      // Показываем только дни с прогонами или общими событиями
+      return this.days.filter(day => 
+        this.getRunsForDay(day).length > 0 || this.getCommonEventsForDay(day).length > 0
+      )
     },
     filteredRuns() {
       if (!this.schedule || !this.schedule.runs) return []
@@ -420,6 +574,27 @@ export default {
       if (mod10 === 1) return 'прогон'
       if (mod10 >= 2 && mod10 <= 4) return 'прогона'
       return 'прогонов'
+    },
+    
+    pluralizeEvents(count) {
+      const mod10 = count % 10
+      const mod100 = count % 100
+      if (mod100 >= 11 && mod100 <= 14) return 'событий'
+      if (mod10 === 1) return 'событие'
+      if (mod10 >= 2 && mod10 <= 4) return 'события'
+      return 'событий'
+    },
+    
+    getCommonEventsForDay(day) {
+      if (!this.schedule || !this.schedule.common_events) return []
+      return this.schedule.common_events.filter(event => {
+        const dateStr = event.date_local || event.date
+        return dateStr && dateStr.startsWith(day)
+      }).sort((a, b) => {
+        const dateA = a.date_local || a.date
+        const dateB = b.date_local || b.date
+        return dateA.localeCompare(dateB)
+      })
     },
     
     getRunsForDay(day) {
@@ -581,12 +756,14 @@ export default {
     // === Удаление прогона ===
     confirmDeleteRun(run) {
       this.deleteTarget = run
+      this.deleteType = 'run'
       this.showDeleteConfirm = true
     },
     
     cancelDelete() {
       this.showDeleteConfirm = false
       this.deleteTarget = null
+      this.deleteType = 'run'
     },
     
     async executeDelete() {
@@ -595,19 +772,26 @@ export default {
       this.deleteLoading = true
       
       try {
-        const response = await fetch(
-          `/api/convention-events/${this.eventId}/remove_run/?run_id=${this.deleteTarget.id}`,
-          {
-            method: 'DELETE',
-            headers: {
-              'X-CSRFToken': this.csrfToken
-            }
+        let url, errorMessage
+        
+        if (this.deleteType === 'common') {
+          url = `/api/convention-events/${this.eventId}/remove_common_event/?common_event_id=${this.deleteTarget.id}`
+          errorMessage = 'Ошибка при удалении события'
+        } else {
+          url = `/api/convention-events/${this.eventId}/remove_run/?run_id=${this.deleteTarget.id}`
+          errorMessage = 'Ошибка при удалении прогона'
+        }
+        
+        const response = await fetch(url, {
+          method: 'DELETE',
+          headers: {
+            'X-CSRFToken': this.csrfToken
           }
-        )
+        })
         
         if (!response.ok && response.status !== 204) {
           const errData = await response.json()
-          throw new Error(errData.error || 'Ошибка при удалении прогона')
+          throw new Error(errData.error || errorMessage)
         }
         
         // Обновляем расписание
@@ -621,6 +805,109 @@ export default {
       }
     },
     
+    // === Общие события ===
+    openAddCommonEventModal() {
+      this.commonEventEditorMode = 'add'
+      this.commonEventForm = {
+        id: null,
+        name: '',
+        date: this.schedule ? this.schedule.date_start : '',
+        time: '12:00',
+        duration: 60,
+        description: ''
+      }
+      this.commonEventError = null
+      this.showCommonEventEditor = true
+    },
+    
+    openEditCommonEventModal(event) {
+      this.commonEventEditorMode = 'edit'
+      
+      // Парсим дату и время из локальной даты
+      const dateStr = event.date_local || event.date
+      let date = ''
+      let time = '12:00'
+      if (dateStr) {
+        const parts = dateStr.split('T')
+        date = parts[0]
+        if (parts.length === 2) {
+          time = parts[1].slice(0, 5)
+        }
+      }
+      
+      this.commonEventForm = {
+        id: event.id,
+        name: event.name,
+        date: date,
+        time: time,
+        duration: event.duration,
+        description: event.description || ''
+      }
+      this.commonEventError = null
+      this.showCommonEventEditor = true
+    },
+    
+    closeCommonEventEditor() {
+      this.showCommonEventEditor = false
+      this.commonEventError = null
+    },
+    
+    async saveCommonEvent() {
+      this.commonEventLoading = true
+      this.commonEventError = null
+      
+      try {
+        const dateTime = `${this.commonEventForm.date}T${this.commonEventForm.time}:00`
+        
+        const data = {
+          name: this.commonEventForm.name,
+          date: dateTime,
+          duration: this.commonEventForm.duration,
+          description: this.commonEventForm.description
+        }
+        
+        let url, method
+        
+        if (this.commonEventEditorMode === 'add') {
+          url = `/api/convention-events/${this.eventId}/add_common_event/`
+          method = 'POST'
+        } else {
+          url = `/api/convention-events/${this.eventId}/update_common_event/`
+          method = 'PATCH'
+          data.common_event_id = this.commonEventForm.id
+        }
+        
+        const response = await fetch(url, {
+          method: method,
+          headers: {
+            'Content-Type': 'application/json',
+            'X-CSRFToken': this.csrfToken
+          },
+          body: JSON.stringify(data)
+        })
+        
+        if (!response.ok) {
+          const errData = await response.json()
+          const errorMessage = errData.date?.[0] || errData.error || errData.detail || 'Ошибка при сохранении события'
+          throw new Error(errorMessage)
+        }
+        
+        // Обновляем расписание
+        await this.fetchSchedule()
+        this.$emit('updated')
+        this.closeCommonEventEditor()
+      } catch (err) {
+        this.commonEventError = err.message
+      } finally {
+        this.commonEventLoading = false
+      }
+    },
+    
+    confirmDeleteCommonEvent(event) {
+      this.deleteTarget = event
+      this.deleteType = 'common'
+      this.showDeleteConfirm = true
+    }
   }
 }
 </script>
@@ -739,6 +1026,11 @@ export default {
   border: 1px solid #ff6b3533;
 }
 
+.toolbar-left {
+  display: flex;
+  gap: 12px;
+}
+
 .add-run-btn {
   display: flex;
   align-items: center;
@@ -757,6 +1049,26 @@ export default {
 .add-run-btn:hover {
   transform: translateY(-2px);
   box-shadow: 0 8px 25px rgba(255, 107, 53, 0.4);
+}
+
+.add-common-event-btn {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 12px 24px;
+  background: linear-gradient(145deg, #00ccff, #00a8d6);
+  border: none;
+  border-radius: 8px;
+  color: #0a0a0a;
+  font-size: 1rem;
+  font-weight: 600;
+  cursor: pointer;
+  transition: all 0.3s ease;
+}
+
+.add-common-event-btn:hover {
+  transform: translateY(-2px);
+  box-shadow: 0 8px 25px rgba(0, 204, 255, 0.4);
 }
 
 .add-icon {
@@ -836,6 +1148,51 @@ export default {
   color: #00ccff;
   font-size: 0.9rem;
   margin-left: auto;
+}
+
+.day-common-events {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  margin-bottom: 16px;
+}
+
+.common-event-card {
+  display: flex;
+  gap: 20px;
+  align-items: center;
+  padding: 16px 20px;
+  background: linear-gradient(145deg, rgba(0, 204, 255, 0.1), rgba(0, 180, 220, 0.05));
+  border: 1px solid #00ccff55;
+  border-left: 3px solid #00ccff;
+  border-radius: 10px;
+  transition: all 0.2s ease;
+}
+
+.common-event-card:hover {
+  border-color: #00ccff88;
+  background: linear-gradient(145deg, rgba(0, 204, 255, 0.15), rgba(0, 180, 220, 0.1));
+}
+
+.common-event-time {
+  color: #00ccff !important;
+}
+
+.common-event-badge {
+  display: inline-block;
+  font-size: 0.8rem;
+  color: #00ccff;
+  margin-top: 4px;
+}
+
+.common-event-description-short {
+  font-size: 0.85rem;
+  color: #888;
+  margin-top: 4px;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  max-width: 400px;
 }
 
 .day-runs {
@@ -1213,6 +1570,68 @@ export default {
   background: rgba(255, 107, 53, 0.1);
 }
 
+/* ========== Модальное окно общего события ========== */
+.common-event-editor-modal {
+  border-color: #00ccff;
+  box-shadow: 0 0 60px rgba(0, 204, 255, 0.3);
+}
+
+.common-event-form {
+  display: flex;
+  flex-direction: column;
+  gap: 20px;
+}
+
+.form-group {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.form-group label {
+  color: #00ccff;
+  font-size: 0.9rem;
+  font-weight: 600;
+}
+
+.form-input, .form-textarea {
+  padding: 12px 16px;
+  background: #0a0a0a;
+  border: 2px solid #00ccff55;
+  border-radius: 8px;
+  color: #e0e0e0;
+  font-size: 1rem;
+  transition: border-color 0.2s ease;
+}
+
+.form-input:focus, .form-textarea:focus {
+  outline: none;
+  border-color: #00ccff;
+}
+
+.form-textarea {
+  resize: vertical;
+  min-height: 80px;
+}
+
+.form-row {
+  display: flex;
+  gap: 16px;
+}
+
+.form-row .form-group {
+  flex: 1;
+}
+
+.form-error {
+  padding: 12px 16px;
+  background: rgba(255, 68, 68, 0.15);
+  border: 1px solid #ff4444;
+  border-radius: 8px;
+  color: #ff6b6b;
+  font-size: 0.9rem;
+}
+
 /* ========== Адаптив ========== */
 @media (max-width: 768px) {
   .editor-header {
@@ -1229,7 +1648,13 @@ export default {
     gap: 16px;
   }
   
-  .add-run-btn {
+  .toolbar-left {
+    flex-direction: column;
+    width: 100%;
+  }
+  
+  .add-run-btn,
+  .add-common-event-btn {
     width: 100%;
     justify-content: center;
   }
