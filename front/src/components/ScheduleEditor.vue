@@ -273,25 +273,50 @@
           </div>
           
           <div class="form-row">
-            <div class="form-group">
-              <label>Дата *</label>
-              <input 
-                v-model="commonEventForm.date" 
-                type="date" 
-                class="form-input"
-                :min="schedule ? schedule.date_start : ''"
-                :max="schedule ? schedule.date_end : ''"
-                required
-              />
+            <div class="form-group half">
+              <label>Дата * <span class="format-hint">(дд/мм/гггг)</span></label>
+              <div class="date-picker-wrapper">
+                <input 
+                  :value="formattedCommonEventDate"
+                  @input="handleCommonEventDateInput"
+                  @blur="validateCommonEventDate"
+                  type="text" 
+                  required
+                  class="form-input date-input"
+                  placeholder="дд/мм/гггг"
+                  maxlength="10"
+                />
+                <input 
+                  ref="commonEventDatePickerInput"
+                  type="date"
+                  class="date-picker-native"
+                  :value="commonEventForm.date"
+                  :min="schedule ? schedule.date_start : ''"
+                  :max="schedule ? schedule.date_end : ''"
+                  @change="handleCommonEventDatePickerChange"
+                />
+                <button 
+                  type="button" 
+                  class="date-picker-btn"
+                  @click="openCommonEventDatePicker"
+                  title="Открыть календарь"
+                >
+                  📅
+                </button>
+              </div>
             </div>
             
-            <div class="form-group">
+            <div class="form-group half">
               <label>Время *</label>
               <input 
                 v-model="commonEventForm.time" 
-                type="time" 
-                class="form-input"
+                type="text" 
                 required
+                class="form-input time-input"
+                placeholder="чч:мм"
+                maxlength="5"
+                @input="handleCommonEventTimeInput"
+                @blur="validateCommonEventTime"
               />
             </div>
           </div>
@@ -459,6 +484,15 @@ export default {
         const dateB = b.date_local || b.date
         return dateA.localeCompare(dateB)
       })
+    },
+    // Форматированная дата общего события для отображения (дд/мм/гггг)
+    formattedCommonEventDate() {
+      if (!this.commonEventForm.date) return ''
+      const parts = this.commonEventForm.date.split('-')
+      if (parts.length === 3) {
+        return `${parts[2]}/${parts[1]}/${parts[0]}`
+      }
+      return this.commonEventForm.date
     }
   },
   mounted() {
@@ -907,6 +941,101 @@ export default {
       this.deleteTarget = event
       this.deleteType = 'common'
       this.showDeleteConfirm = true
+    },
+    
+    // === Обработка даты и времени для общего события ===
+    handleCommonEventDateInput(event) {
+      let value = event.target.value
+      // Оставляем только цифры и слэши
+      value = value.replace(/[^\d/]/g, '')
+      
+      // Автоматически добавляем слэши
+      if (value.length === 2 && !value.includes('/')) {
+        value += '/'
+      } else if (value.length === 5 && value.split('/').length === 2) {
+        value += '/'
+      }
+      
+      // Ограничиваем длину
+      if (value.length > 10) {
+        value = value.slice(0, 10)
+      }
+      
+      event.target.value = value
+      
+      // Парсим дд/мм/гггг в yyyy-mm-dd
+      const parts = value.split('/')
+      if (parts.length === 3 && parts[0].length === 2 && parts[1].length === 2 && parts[2].length === 4) {
+        const day = parts[0]
+        const month = parts[1]
+        const year = parts[2]
+        this.commonEventForm.date = `${year}-${month}-${day}`
+      }
+    },
+    
+    validateCommonEventDate() {
+      if (!this.commonEventForm.date) return
+      
+      // Проверяем ограничения по дате
+      if (this.schedule) {
+        if (this.schedule.date_start && this.commonEventForm.date < this.schedule.date_start) {
+          this.commonEventForm.date = this.schedule.date_start
+        }
+        if (this.schedule.date_end && this.commonEventForm.date > this.schedule.date_end) {
+          this.commonEventForm.date = this.schedule.date_end
+        }
+      }
+    },
+    
+    openCommonEventDatePicker() {
+      if (this.$refs.commonEventDatePickerInput) {
+        this.$refs.commonEventDatePickerInput.showPicker()
+      }
+    },
+    
+    handleCommonEventDatePickerChange(event) {
+      const value = event.target.value
+      if (value) {
+        this.commonEventForm.date = value
+        this.validateCommonEventDate()
+      }
+    },
+    
+    handleCommonEventTimeInput(event) {
+      let value = event.target.value
+      // Оставляем только цифры и двоеточие
+      value = value.replace(/[^\d:]/g, '')
+      
+      // Автоматически добавляем двоеточие после двух цифр
+      if (value.length === 2 && !value.includes(':')) {
+        value += ':'
+      }
+      
+      // Ограничиваем длину
+      if (value.length > 5) {
+        value = value.slice(0, 5)
+      }
+      
+      event.target.value = value
+      this.commonEventForm.time = value
+    },
+    
+    validateCommonEventTime() {
+      if (!this.commonEventForm.time) return
+      
+      const parts = this.commonEventForm.time.split(':')
+      if (parts.length === 2) {
+        let hours = parseInt(parts[0], 10) || 0
+        let minutes = parseInt(parts[1], 10) || 0
+        
+        // Ограничиваем значения
+        if (hours > 23) hours = 23
+        if (hours < 0) hours = 0
+        if (minutes > 59) minutes = 59
+        if (minutes < 0) minutes = 0
+        
+        this.commonEventForm.time = `${String(hours).padStart(2, '0')}:${String(minutes).padStart(2, '0')}`
+      }
     }
   }
 }
@@ -1630,6 +1759,72 @@ export default {
   border-radius: 8px;
   color: #ff6b6b;
   font-size: 0.9rem;
+}
+
+/* Date and Time inputs */
+.format-hint {
+  font-size: 0.75rem;
+  color: #666;
+  font-weight: normal;
+  text-transform: none;
+}
+
+.date-picker-wrapper {
+  position: relative;
+  display: flex;
+  align-items: center;
+  width: 100%;
+}
+
+.date-picker-wrapper .date-input {
+  width: 100%;
+  padding-right: 44px;
+  box-sizing: border-box;
+}
+
+.date-picker-native {
+  position: absolute;
+  right: 40px;
+  top: 0;
+  width: 0;
+  height: 0;
+  opacity: 0;
+  pointer-events: none;
+}
+
+.date-picker-btn {
+  position: absolute;
+  right: 8px;
+  top: 50%;
+  transform: translateY(-50%);
+  background: none;
+  border: none;
+  font-size: 1.2rem;
+  cursor: pointer;
+  padding: 4px;
+  line-height: 1;
+  opacity: 0.7;
+  transition: opacity 0.2s;
+}
+
+.date-picker-btn:hover {
+  opacity: 1;
+}
+
+.date-input,
+.time-input {
+  font-family: 'JetBrains Mono', monospace;
+  letter-spacing: 0.05em;
+}
+
+.date-input::placeholder,
+.time-input::placeholder {
+  letter-spacing: normal;
+  font-family: inherit;
+}
+
+.form-group.half {
+  flex: 1;
 }
 
 /* ========== Адаптив ========== */
