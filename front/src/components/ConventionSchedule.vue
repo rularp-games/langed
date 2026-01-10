@@ -115,9 +115,9 @@
       </div>
 
       <!-- Пустое расписание -->
-      <div v-if="filteredRuns.length === 0" class="empty-schedule">
-        <p v-if="schedule.runs.length === 0">Расписание пока пусто</p>
-        <p v-else>Нет прогонов по выбранным фильтрам</p>
+      <div v-if="filteredRuns.length === 0 && filteredCommonEvents.length === 0" class="empty-schedule">
+        <p v-if="schedule.runs.length === 0 && (!schedule.common_events || schedule.common_events.length === 0)">Расписание пока пусто</p>
+        <p v-else>Нет событий по выбранным фильтрам</p>
       </div>
 
       <!-- Таймлайн -->
@@ -130,7 +130,7 @@
           
           <div class="timeline-content">
             <!-- Шкала времени -->
-            <div class="timeline-scale" :style="{ height: getTimelineHeightForDay(day) + 'px' }">
+            <div class="timeline-scale" :class="{ 'with-headers': allRooms.length > 0 }" :style="{ height: getTimelineHeightForDay(day) + 'px' }">
               <div 
                 v-for="hour in getTimelineHoursForDay(day)" 
                 :key="hour"
@@ -144,7 +144,7 @@
             <!-- Прогоны по помещениям -->
             <div class="timeline-rooms">
               <!-- Заголовки помещений (выровнены по высоте) -->
-              <div class="timeline-rooms-headers">
+              <div class="timeline-rooms-headers" v-if="allRooms.length > 0">
                 <div 
                   v-for="room in getRoomsForDay(day)" 
                   :key="'header-' + (room.id || 'no-room')"
@@ -417,6 +417,24 @@ export default {
         return dateA.localeCompare(dateB)
       })
     },
+    filteredCommonEvents() {
+      if (!this.schedule || !this.schedule.common_events) return []
+      let events = this.schedule.common_events
+      
+      if (this.selectedDay) {
+        events = events.filter(event => {
+          const dateStr = event.date_local || event.date
+          return dateStr.startsWith(this.selectedDay)
+        })
+      }
+      
+      // Сортируем по локальной дате
+      return events.sort((a, b) => {
+        const dateA = a.date_local || a.date
+        const dateB = b.date_local || b.date
+        return dateA.localeCompare(dateB)
+      })
+    },
     // timelineHours теперь вычисляется динамически в getTimelineHoursForDay
     allRooms() {
       if (!this.schedule) return []
@@ -646,7 +664,14 @@ export default {
     getRoomsForDay(day) {
       // Возвращаем все помещения из всех дней (чтобы столбцы были одинаковыми)
       // Помещения уже отсортированы по алфавиту в allRooms
-      return this.allRooms
+      if (this.allRooms.length > 0) {
+        return this.allRooms
+      }
+      // Если нет комнат, но есть общие события в этот день, добавляем пустую колонку для структуры
+      if (this.getCommonEventsForDay(day).length > 0) {
+        return [{ id: null, name: '' }]
+      }
+      return []
     },
     
     getRunsForDay(day) {
@@ -1077,6 +1102,9 @@ export default {
   width: 60px;
   flex-shrink: 0;
   position: relative;
+}
+
+.timeline-scale.with-headers {
   margin-top: 52px; /* Отступ для заголовков помещений (44px min-height + 8px gap) */
 }
 
@@ -1126,6 +1154,7 @@ export default {
 .timeline-rooms-columns {
   display: flex;
   gap: 16px;
+  min-width: 200px;
 }
 
 .timeline-room {
