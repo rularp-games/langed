@@ -679,41 +679,28 @@
     />
 
     <!-- Модальное окно подтверждения удаления -->
-    <div v-if="showDeleteConfirm" class="modal-overlay" @click.self="cancelDelete">
-      <div class="modal-content delete-confirm-modal">
-        <button class="modal-close" @click="cancelDelete">×</button>
-        
-        <h2>Удалить {{ deleteType === 'run' ? 'прогон' : 'проведение конвента' }}?</h2>
-        
-        <p class="delete-warning">
-          Это действие нельзя отменить. 
-          <template v-if="deleteType === 'run'">
-            Прогон будет удалён из расписания.
-          </template>
-          <template v-else>
-            Проведение конвента и все связанные прогоны будут удалены.
-          </template>
-        </p>
-        
-        <div class="form-actions">
-          <button type="button" @click="cancelDelete" class="btn btn-secondary">Отмена</button>
-          <button type="button" @click="executeDelete" class="btn btn-danger" :disabled="deleteLoading">
-            <span v-if="deleteLoading">Удаление...</span>
-            <span v-else>Удалить</span>
-          </button>
-        </div>
-      </div>
-    </div>
+    <DeleteConfirmModal
+      v-if="showDeleteConfirm"
+      :title="deleteType === 'run' ? 'Удалить прогон?' : 'Удалить проведение конвента?'"
+      :message="deleteType === 'run' 
+        ? 'Это действие нельзя отменить. Прогон будет удалён из расписания.'
+        : 'Это действие нельзя отменить. Проведение конвента и все связанные прогоны будут удалены.'"
+      :loading="deleteLoading"
+      @confirm="executeDelete"
+      @cancel="cancelDelete"
+    />
   </div>
 </template>
 
 <script>
 import RunEditor from './RunEditor.vue'
+import DeleteConfirmModal from './DeleteConfirmModal.vue'
 
 export default {
   name: 'AfishaPage',
   components: {
-    RunEditor
+    RunEditor,
+    DeleteConfirmModal
   },
   inject: ['getUser'],
   props: {
@@ -2389,23 +2376,6 @@ export default {
   background: rgba(255, 68, 68, 0.2);
   border-color: #ff4444;
   transform: scale(1.1);
-}
-
-/* Модальное окно удаления */
-.delete-confirm-modal {
-  max-width: 450px;
-  text-align: center;
-}
-
-.delete-confirm-modal h2 {
-  color: #ff4444;
-  padding-right: 0;
-}
-
-.delete-warning {
-  color: #aaa;
-  line-height: 1.6;
-  margin-bottom: 24px;
 }
 
 .btn-danger {

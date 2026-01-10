@@ -154,38 +154,27 @@
     />
 
     <!-- Модальное окно подтверждения удаления -->
-    <div v-if="showDeleteConfirm" class="modal-overlay" @click.self="cancelDelete">
-      <div class="modal-content delete-confirm-modal">
-        <button class="modal-close" @click="cancelDelete">×</button>
-        
-        <h2>Удалить прогон?</h2>
-        
-        <p class="delete-warning">
-          Прогон "{{ deleteTarget?.game_name }}" будет удалён из расписания.
-          <template v-if="deleteTarget?.registered_count > 0">
-            <br><strong class="warning-highlight">Внимание: на этот прогон записано {{ deleteTarget.registered_count }} игроков!</strong>
-          </template>
-        </p>
-        
-        <div class="form-actions">
-          <button type="button" @click="cancelDelete" class="btn btn-secondary">Отмена</button>
-          <button type="button" @click="executeDelete" class="btn btn-danger" :disabled="deleteLoading">
-            {{ deleteLoading ? 'Удаление...' : 'Удалить' }}
-          </button>
-        </div>
-      </div>
-    </div>
+    <DeleteConfirmModal
+      v-if="showDeleteConfirm"
+      title="Удалить прогон?"
+      :message="deleteRunMessage"
+      :loading="deleteLoading"
+      @confirm="executeDelete"
+      @cancel="cancelDelete"
+    />
 
   </div>
 </template>
 
 <script>
 import RunEditor from './RunEditor.vue'
+import DeleteConfirmModal from './DeleteConfirmModal.vue'
 
 export default {
   name: 'ScheduleEditor',
   components: {
-    RunEditor
+    RunEditor,
+    DeleteConfirmModal
   },
   props: {
     eventId: {
@@ -219,6 +208,13 @@ export default {
     csrfToken() {
       const match = document.cookie.match(/csrftoken=([^;]+)/)
       return match ? match[1] : ''
+    },
+    deleteRunMessage() {
+      let message = `Прогон "${this.deleteTarget?.game_name}" будет удалён из расписания.`
+      if (this.deleteTarget?.registered_count > 0) {
+        message += ` Внимание: на этот прогон записано ${this.deleteTarget.registered_count} игроков!`
+      }
+      return message
     },
     availableRooms() {
       // Если у конвента указана площадка, показываем только её помещения
@@ -989,42 +985,6 @@ export default {
   border-color: #ff6b35;
   background: rgba(255, 107, 53, 0.1);
 }
-
-.btn-danger {
-  background: linear-gradient(145deg, #ff4444, #cc3333);
-  color: #fff;
-}
-
-.btn-danger:hover:not(:disabled) {
-  box-shadow: 0 6px 20px rgba(255, 68, 68, 0.35);
-}
-
-.btn-danger:disabled {
-  opacity: 0.6;
-  cursor: not-allowed;
-}
-
-/* ========== Удаление ========== */
-.delete-confirm-modal {
-  max-width: 450px;
-  text-align: center;
-}
-
-.delete-confirm-modal h2 {
-  color: #ff4444;
-  padding-right: 0;
-}
-
-.delete-warning {
-  color: #aaa;
-  line-height: 1.6;
-  margin-bottom: 24px;
-}
-
-.warning-highlight {
-  color: #ff6b6b;
-}
-
 
 /* ========== Адаптив ========== */
 @media (max-width: 768px) {

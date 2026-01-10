@@ -269,220 +269,56 @@
     </div>
 
     <!-- Модальное окно подтверждения удаления помещения -->
-    <div v-if="showDeleteRoomConfirm" class="modal-overlay" @click.self="showDeleteRoomConfirm = false">
-      <div class="modal-content delete-confirm-modal">
-        <button class="modal-close" @click="showDeleteRoomConfirm = false">×</button>
-        
-        <h2>Удалить помещение?</h2>
-        
-        <p class="delete-warning">
-          Помещение "{{ roomToDelete?.name }}" будет удалено.
-        </p>
-        
-        <div class="form-actions">
-          <button type="button" @click="showDeleteRoomConfirm = false" class="btn btn-secondary">Отмена</button>
-          <button type="button" @click="deleteRoom" class="btn btn-danger" :disabled="deleteRoomLoading">
-            <span v-if="deleteRoomLoading">Удаление...</span>
-            <span v-else>Удалить</span>
-          </button>
-        </div>
-      </div>
-    </div>
+    <DeleteConfirmModal
+      v-if="showDeleteRoomConfirm"
+      title="Удалить помещение?"
+      :message="`Помещение '${roomToDelete?.name}' будет удалено.`"
+      :loading="deleteRoomLoading"
+      @confirm="deleteRoom"
+      @cancel="showDeleteRoomConfirm = false"
+    />
 
     <!-- Модальное окно добавления площадки -->
-    <div v-if="showAddModal && isAuthenticated" class="modal-overlay" @click.self="closeAddModal">
-      <div class="modal-content add-venue-modal">
-        <button class="modal-close" @click="closeAddModal">×</button>
-        
-        <div class="modal-body">
-          <h2>Добавить площадку</h2>
-          
-          <form @submit.prevent="submitVenue" class="add-venue-form">
-            <div class="form-group">
-              <label for="venue-name">Название *</label>
-              <input 
-                id="venue-name"
-                v-model="newVenue.name" 
-                type="text" 
-                required
-                class="form-input"
-                placeholder="Введите название площадки"
-              />
-            </div>
-            
-            <div class="form-group">
-              <label for="venue-city">Город *</label>
-              <select 
-                id="venue-city"
-                v-model="newVenue.city_id" 
-                required
-                class="form-input"
-              >
-                <option value="">Выберите город</option>
-                <option v-for="city in cities" :key="city.id" :value="city.id">
-                  {{ city.name }}
-                </option>
-              </select>
-            </div>
-            
-            <div class="form-group">
-              <label for="venue-address">Адрес</label>
-              <input 
-                id="venue-address"
-                v-model="newVenue.address" 
-                type="text" 
-                class="form-input"
-                placeholder="Улица, дом, помещение"
-              />
-            </div>
-            
-            <div class="form-group">
-              <label for="venue-description">Описание</label>
-              <textarea 
-                id="venue-description"
-                v-model="newVenue.description"
-                class="form-input form-textarea"
-                placeholder="Дополнительная информация о площадке"
-                rows="3"
-              ></textarea>
-            </div>
-            
-            <div class="form-group">
-              <label for="venue-capacity">Вместимость</label>
-              <input 
-                id="venue-capacity"
-                v-model.number="newVenue.capacity" 
-                type="number" 
-                min="1"
-                class="form-input small"
-                placeholder="Количество человек"
-              />
-            </div>
-            
-            <div v-if="addError" class="form-error">{{ addError }}</div>
-            
-            <div class="form-actions">
-              <button type="button" @click="closeAddModal" class="btn btn-secondary">Отмена</button>
-              <button type="submit" class="btn btn-primary" :disabled="addLoading">
-                <span v-if="addLoading">Сохранение...</span>
-                <span v-else>Добавить</span>
-              </button>
-            </div>
-          </form>
-        </div>
-      </div>
-    </div>
+    <VenueEditor
+      v-if="showAddModal && isAuthenticated"
+      mode="add"
+      :cities="cities"
+      @saved="onVenueAdded"
+      @cancel="closeAddModal"
+    />
 
     <!-- Модальное окно редактирования площадки -->
-    <div v-if="isEditingVenue" class="modal-overlay" @click.self="cancelEditingVenue">
-      <div class="modal-content add-venue-modal">
-        <button class="modal-close" @click="cancelEditingVenue">×</button>
-        
-        <div class="modal-body">
-          <h2>Редактировать площадку</h2>
-          
-          <form @submit.prevent="submitEditVenue" class="add-venue-form">
-            <div class="form-group">
-              <label for="edit-venue-name">Название *</label>
-              <input 
-                id="edit-venue-name"
-                v-model="editVenue.name" 
-                type="text" 
-                required
-                class="form-input"
-                placeholder="Введите название площадки"
-              />
-            </div>
-            
-            <div class="form-group">
-              <label for="edit-venue-city">Город *</label>
-              <select 
-                id="edit-venue-city"
-                v-model="editVenue.city_id" 
-                required
-                class="form-input"
-              >
-                <option value="">Выберите город</option>
-                <option v-for="city in cities" :key="city.id" :value="city.id">
-                  {{ city.name }}
-                </option>
-              </select>
-            </div>
-            
-            <div class="form-group">
-              <label for="edit-venue-address">Адрес</label>
-              <input 
-                id="edit-venue-address"
-                v-model="editVenue.address" 
-                type="text" 
-                class="form-input"
-                placeholder="Улица, дом, помещение"
-              />
-            </div>
-            
-            <div class="form-group">
-              <label for="edit-venue-description">Описание</label>
-              <textarea 
-                id="edit-venue-description"
-                v-model="editVenue.description"
-                class="form-input form-textarea"
-                placeholder="Дополнительная информация о площадке"
-                rows="3"
-              ></textarea>
-            </div>
-            
-            <div class="form-group">
-              <label for="edit-venue-capacity">Вместимость</label>
-              <input 
-                id="edit-venue-capacity"
-                v-model.number="editVenue.capacity" 
-                type="number" 
-                min="1"
-                class="form-input small"
-                placeholder="Количество человек"
-              />
-            </div>
-            
-            <div v-if="editVenueError" class="form-error">{{ editVenueError }}</div>
-            
-            <div class="form-actions">
-              <button type="button" @click="cancelEditingVenue" class="btn btn-secondary">Отмена</button>
-              <button type="submit" class="btn btn-primary" :disabled="editVenueLoading">
-                <span v-if="editVenueLoading">Сохранение...</span>
-                <span v-else>Сохранить</span>
-              </button>
-            </div>
-          </form>
-        </div>
-      </div>
-    </div>
+    <VenueEditor
+      v-if="isEditingVenue"
+      mode="edit"
+      :venue="selectedVenue"
+      :cities="cities"
+      @saved="onVenueEdited"
+      @cancel="cancelEditingVenue"
+    />
 
     <!-- Модальное окно подтверждения удаления -->
-    <div v-if="showDeleteConfirm" class="modal-overlay" @click.self="showDeleteConfirm = false">
-      <div class="modal-content delete-confirm-modal">
-        <button class="modal-close" @click="showDeleteConfirm = false">×</button>
-        
-        <h2>Удалить площадку?</h2>
-        
-        <p class="delete-warning">
-          Это действие нельзя отменить. Площадка "{{ selectedVenue?.name }}" будет удалена.
-        </p>
-        
-        <div class="form-actions">
-          <button type="button" @click="showDeleteConfirm = false" class="btn btn-secondary">Отмена</button>
-          <button type="button" @click="deleteVenue" class="btn btn-danger" :disabled="deleteLoading">
-            <span v-if="deleteLoading">Удаление...</span>
-            <span v-else>Удалить</span>
-          </button>
-        </div>
-      </div>
-    </div>
+    <DeleteConfirmModal
+      v-if="showDeleteConfirm"
+      title="Удалить площадку?"
+      :message="`Это действие нельзя отменить. Площадка '${selectedVenue?.name}' будет удалена.`"
+      :loading="deleteLoading"
+      @confirm="deleteVenue"
+      @cancel="showDeleteConfirm = false"
+    />
   </div>
 </template>
 
 <script>
+import DeleteConfirmModal from './DeleteConfirmModal.vue'
+import VenueEditor from './VenueEditor.vue'
+
 export default {
   name: 'VenuesPage',
+  components: {
+    DeleteConfirmModal,
+    VenueEditor
+  },
   inject: ['getUser'],
   props: {
     venueId: {
@@ -500,15 +336,9 @@ export default {
       selectedCity: '',
       selectedVenue: null,
       showAddModal: false,
-      addLoading: false,
-      addError: null,
-      newVenue: this.getEmptyVenue(),
       linkCopied: false,
       // Редактирование площадки
       isEditingVenue: false,
-      editVenueLoading: false,
-      editVenueError: null,
-      editVenue: this.getEmptyVenue(),
       // Удаление площадки
       showDeleteConfirm: false,
       deleteLoading: false,
@@ -603,15 +433,6 @@ export default {
         console.error('Failed to fetch cities:', err)
       }
     },
-    getEmptyVenue() {
-      return {
-        name: '',
-        city_id: '',
-        address: '',
-        description: '',
-        capacity: null
-      }
-    },
     getEmptyRoom() {
       return {
         name: '',
@@ -657,101 +478,31 @@ export default {
       })
     },
     openAddModal() {
-      this.newVenue = this.getEmptyVenue()
-      this.addError = null
       this.showAddModal = true
     },
     closeAddModal() {
       this.showAddModal = false
-      this.addError = null
     },
-    async submitVenue() {
-      this.addLoading = true
-      this.addError = null
-      
-      try {
-        const response = await fetch('/api/venues/', {
-          method: 'POST',
-          headers: {
-            'Content-Type': 'application/json',
-            'X-CSRFToken': this.csrfToken
-          },
-          body: JSON.stringify(this.newVenue)
-        })
-        
-        if (!response.ok) {
-          if (response.status === 401 || response.status === 403) {
-            throw new Error('Необходима авторизация для добавления площадки')
-          }
-          const data = await response.json()
-          throw new Error(data.detail || data.name?.[0] || 'Ошибка при сохранении')
-        }
-        
-        const createdVenue = await response.json()
-        this.venues.unshift(createdVenue)
-        this.closeAddModal()
-      } catch (err) {
-        this.addError = err.message
-      } finally {
-        this.addLoading = false
-      }
+    onVenueAdded(savedVenue) {
+      this.venues.unshift(savedVenue)
+      this.closeAddModal()
     },
     
     // === Редактирование ===
     startEditingVenue() {
       if (!this.selectedVenue) return
-      
-      this.editVenue = {
-        id: this.selectedVenue.id,
-        name: this.selectedVenue.name,
-        city_id: this.selectedVenue.city?.id || '',
-        address: this.selectedVenue.address || '',
-        description: this.selectedVenue.description || '',
-        capacity: this.selectedVenue.capacity || null
-      }
-      
-      this.editVenueError = null
       this.isEditingVenue = true
     },
     cancelEditingVenue() {
       this.isEditingVenue = false
-      this.editVenueError = null
     },
-    async submitEditVenue() {
-      this.editVenueLoading = true
-      this.editVenueError = null
-      
-      try {
-        const response = await fetch(`/api/venues/${this.editVenue.id}/`, {
-          method: 'PATCH',
-          headers: {
-            'Content-Type': 'application/json',
-            'X-CSRFToken': this.csrfToken
-          },
-          body: JSON.stringify(this.editVenue)
-        })
-        
-        if (!response.ok) {
-          if (response.status === 401 || response.status === 403) {
-            throw new Error('Нет прав для редактирования этой площадки')
-          }
-          const data = await response.json()
-          throw new Error(data.detail || data.name?.[0] || 'Ошибка при сохранении')
-        }
-        
-        const updatedVenue = await response.json()
-        
-        const index = this.venues.findIndex(v => v.id === updatedVenue.id)
-        if (index !== -1) {
-          this.venues.splice(index, 1, updatedVenue)
-        }
-        this.selectedVenue = updatedVenue
-        this.isEditingVenue = false
-      } catch (err) {
-        this.editVenueError = err.message
-      } finally {
-        this.editVenueLoading = false
+    onVenueEdited(updatedVenue) {
+      const index = this.venues.findIndex(v => v.id === updatedVenue.id)
+      if (index !== -1) {
+        this.venues.splice(index, 1, updatedVenue)
       }
+      this.selectedVenue = updatedVenue
+      this.isEditingVenue = false
     },
     
     // === Удаление площадки ===
@@ -1569,39 +1320,6 @@ export default {
 }
 
 .btn-primary:disabled {
-  opacity: 0.6;
-  cursor: not-allowed;
-}
-
-/* Модальное окно удаления */
-.delete-confirm-modal {
-  max-width: 450px;
-  text-align: center;
-}
-
-.delete-confirm-modal h2 {
-  color: #ff4444;
-  padding-right: 0;
-}
-
-.delete-warning {
-  color: #aaa;
-  line-height: 1.6;
-  margin-bottom: 24px;
-}
-
-.btn-danger {
-  background: linear-gradient(145deg, #ff4444, #cc3333);
-  border: none;
-  color: #fff;
-}
-
-.btn-danger:hover:not(:disabled) {
-  transform: translateY(-2px);
-  box-shadow: 0 6px 20px rgba(255, 68, 68, 0.35);
-}
-
-.btn-danger:disabled {
   opacity: 0.6;
   cursor: not-allowed;
 }
