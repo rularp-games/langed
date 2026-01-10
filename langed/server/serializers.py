@@ -570,6 +570,7 @@ class ConventionEventSerializer(serializers.ModelSerializer):
     pending_registrations_count = serializers.SerializerMethodField()
     available_slots = serializers.SerializerMethodField()
     is_full = serializers.SerializerMethodField()
+    current_user_registration = serializers.SerializerMethodField()
 
     def get_games(self, obj):
         """Получить уникальные игры из всех прогонов конвента"""
@@ -606,6 +607,17 @@ class ConventionEventSerializer(serializers.ModelSerializer):
     def get_is_full(self, obj):
         """Заполнен ли конвент"""
         return obj.is_full()
+    
+    def get_current_user_registration(self, obj):
+        """Регистрация текущего пользователя на этот конвент"""
+        request = self.context.get('request')
+        if not request or not request.user.is_authenticated:
+            return None
+        try:
+            registration = obj.event_registrations.get(user=request.user)
+            return ConventionEventRegistrationBriefSerializer(registration, context=self.context).data
+        except ConventionEventRegistration.DoesNotExist:
+            return None
 
     class Meta:
         model = ConventionEvent
@@ -617,7 +629,7 @@ class ConventionEventSerializer(serializers.ModelSerializer):
             'capacity', 'registration_open',
             'organizers', 'games', 'runs', 'runs_count',
             'registrations_count', 'pending_registrations_count', 
-            'available_slots', 'is_full',
+            'available_slots', 'is_full', 'current_user_registration',
             'can_edit', 'created_at', 'updated_at'
         ]
         read_only_fields = ['id', 'organizers', 'created_at', 'updated_at', 'can_edit']
