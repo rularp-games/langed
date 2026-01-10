@@ -46,6 +46,77 @@
         </div>
       </div>
       
+      <!-- Блок регистрации на конвент -->
+      <div class="modal-section registration-section">
+        <h3>Участие</h3>
+        <div class="registration-block">
+          <div class="registration-stats">
+            <span class="participants-count">
+              👥 {{ event.registrations_count || 0 }}{{ event.capacity ? ` / ${event.capacity}` : '' }} участников
+            </span>
+            <span v-if="event.is_full" class="full-badge">Мест нет</span>
+            <span v-if="!event.registration_open" class="closed-badge">Регистрация закрыта</span>
+          </div>
+          
+          <!-- Статус регистрации текущего пользователя -->
+          <div v-if="userRegistration" class="user-registration">
+            <span v-if="userRegistration.status === 'pending'" class="reg-status status-pending">
+              ⏳ Заявка ожидает подтверждения
+            </span>
+            <span v-else-if="userRegistration.status === 'confirmed'" class="reg-status status-confirmed">
+              ✅ Вы зарегистрированы
+            </span>
+            <span v-else-if="userRegistration.status === 'rejected'" class="reg-status status-rejected">
+              ❌ Заявка отклонена
+            </span>
+            <button 
+              v-if="userRegistration.status !== 'rejected'"
+              @click="unregister"
+              class="btn-unregister"
+              :disabled="loading"
+            >
+              {{ loading ? '...' : 'Отменить' }}
+            </button>
+          </div>
+          
+          <!-- Кнопка регистрации -->
+          <button 
+            v-else-if="event.registration_open && !event.is_full && isAuthenticated"
+            @click="showRegistrationForm = true"
+            class="btn-register"
+            v-show="!showRegistrationForm"
+          >
+            📝 Зарегистрироваться
+          </button>
+          
+          <!-- Форма регистрации -->
+          <div v-if="showRegistrationForm && !userRegistration" class="registration-form">
+            <div class="form-group">
+              <label>Комментарий (опционально)</label>
+              <textarea 
+                v-model="comment"
+                placeholder="Любая дополнительная информация..."
+                rows="2"
+                class="form-textarea"
+              ></textarea>
+            </div>
+            <div class="form-actions">
+              <button @click="showRegistrationForm = false" class="btn-cancel">Отмена</button>
+              <button @click="register" class="btn-submit" :disabled="loading">
+                {{ loading ? 'Отправка...' : 'Отправить заявку' }}
+              </button>
+            </div>
+          </div>
+          
+          <!-- Сообщение для неавторизованных -->
+          <span v-else-if="event.registration_open && !event.is_full && !isAuthenticated" class="login-hint">
+            <a href="/oidc/authenticate/">Войдите</a>, чтобы зарегистрироваться
+          </span>
+          
+          <div v-if="error" class="registration-error">{{ error }}</div>
+        </div>
+      </div>
+      
       <!-- Ссылки на расписание -->
       <div class="modal-section schedule-links-section">
         <h3>Расписание</h3>
@@ -90,12 +161,37 @@ export default {
     event: {
       type: Object,
       required: true
+    },
+    isAuthenticated: {
+      type: Boolean,
+      default: false
+    },
+    csrfToken: {
+      type: String,
+      default: ''
     }
   },
-  emits: ['close'],
+  emits: ['close', 'registration-changed'],
   data() {
     return {
-      linkCopied: false
+      linkCopied: false,
+      showRegistrationForm: false,
+      comment: '',
+      loading: false,
+      error: null,
+      userRegistration: null
+    }
+  },
+  watch: {
+    event: {
+      immediate: true,
+      handler(newEvent) {
+        if (newEvent && newEvent.current_user_registration) {
+          this.userRegistration = newEvent.current_user_registration
+        } else {
+          this.userRegistration = null
+        }
+      }
     }
   },
   computed: {
@@ -144,6 +240,68 @@ export default {
       }).catch(err => {
         console.error('Ошибка копирования:', err)
       })
+    },
+    
+    async register() {
+      this.loading = true
+      this.error = null
+      
+      try {
+        const response = await fetch(`/api/convention-events/${this.event.id}/register/`, {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+            'X-CSRFToken': this.csrfToken
+          },
+          body: JSON.stringify({ comment: this.comment })
+        })
+        
+        if (!response.ok) {
+          const data = await response.json()
+          throw new Error(data.error || 'Ошибка при регистрации')
+        }
+        
+        const result = await response.json()
+        this.userRegistration = result.registration
+        this.showRegistrationForm = false
+        this.comment = ''
+        this.$emit('registration-changed')
+        
+      } catch (err) {
+        this.error = err.message
+      } finally {
+        this.loading = false
+      }
+    },
+    
+    async unregister() {
+      if (!confirm('Отменить регистрацию на конвент?')) return
+      
+      this.loading = true
+      this.error = null
+      
+      try {
+        const response = await fetch(`/api/convention-events/${this.event.id}/unregister/`, {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+            'X-CSRFToken': this.csrfToken
+          }
+        })
+        
+        if (!response.ok) {
+          const data = await response.json()
+          throw new Error(data.error || 'Ошибка при отмене регистрации')
+        }
+        
+        this.userRegistration = null
+        this.$emit('registration-changed')
+        
+      } catch (err) {
+        this.error = err.message
+      } finally {
+        this.loading = false
+      }
     }
   }
 }
@@ -373,6 +531,220 @@ export default {
 
 .modal-game-players {
   color: #888;
+  font-size: 0.85rem;
+}
+
+/* Блок регистрации */
+.registration-section {
+  margin-top: 24px;
+  padding-top: 20px;
+  border-top: 1px solid #00ccff33;
+}
+
+.registration-block {
+  padding: 16px;
+  background: rgba(0, 204, 255, 0.06);
+  border-radius: 10px;
+  border-left: 3px solid #00ccff;
+}
+
+.registration-stats {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  flex-wrap: wrap;
+  margin-bottom: 12px;
+}
+
+.participants-count {
+  color: #00ccff;
+  font-weight: 600;
+}
+
+.full-badge {
+  padding: 3px 10px;
+  background: #ff4444;
+  color: #fff;
+  border-radius: 12px;
+  font-size: 0.8rem;
+  font-weight: 600;
+}
+
+.closed-badge {
+  padding: 3px 10px;
+  background: #666;
+  color: #ccc;
+  border-radius: 12px;
+  font-size: 0.8rem;
+}
+
+.user-registration {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  flex-wrap: wrap;
+}
+
+.reg-status {
+  font-weight: 500;
+}
+
+.status-pending {
+  color: #ffaa00;
+}
+
+.status-confirmed {
+  color: #4caf50;
+}
+
+.status-rejected {
+  color: #ff4444;
+}
+
+.btn-unregister {
+  padding: 6px 14px;
+  background: transparent;
+  border: 1px solid #ff444466;
+  border-radius: 6px;
+  color: #ff6b6b;
+  font-size: 0.85rem;
+  cursor: pointer;
+  transition: all 0.2s ease;
+}
+
+.btn-unregister:hover:not(:disabled) {
+  background: rgba(255, 68, 68, 0.15);
+  border-color: #ff4444;
+}
+
+.btn-unregister:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+
+.btn-register {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  padding: 12px 24px;
+  background: linear-gradient(145deg, #00ccff, #0099cc);
+  border: none;
+  border-radius: 8px;
+  color: #fff;
+  font-size: 1rem;
+  font-weight: 600;
+  cursor: pointer;
+  transition: all 0.3s ease;
+}
+
+.btn-register:hover {
+  transform: translateY(-2px);
+  box-shadow: 0 8px 25px rgba(0, 204, 255, 0.4);
+}
+
+.registration-form {
+  margin-top: 12px;
+  padding: 16px;
+  background: rgba(0, 0, 0, 0.2);
+  border-radius: 8px;
+}
+
+.form-group {
+  margin-bottom: 12px;
+}
+
+.form-group label {
+  display: block;
+  color: #00ccff;
+  font-size: 0.85rem;
+  margin-bottom: 6px;
+}
+
+.form-textarea {
+  width: 100%;
+  padding: 10px 14px;
+  background: rgba(10, 10, 10, 0.6);
+  border: 1px solid #00ccff44;
+  border-radius: 6px;
+  color: #e0e0e0;
+  font-size: 0.95rem;
+  resize: vertical;
+  font-family: inherit;
+}
+
+.form-textarea::placeholder {
+  color: #555;
+}
+
+.form-textarea:focus {
+  outline: none;
+  border-color: #00ccff;
+}
+
+.form-actions {
+  display: flex;
+  gap: 12px;
+  justify-content: flex-end;
+}
+
+.btn-cancel {
+  padding: 8px 16px;
+  background: transparent;
+  border: 1px solid #666;
+  border-radius: 6px;
+  color: #aaa;
+  font-size: 0.9rem;
+  cursor: pointer;
+  transition: all 0.2s;
+}
+
+.btn-cancel:hover {
+  background: rgba(255, 255, 255, 0.05);
+  border-color: #888;
+}
+
+.btn-submit {
+  padding: 8px 20px;
+  background: linear-gradient(145deg, #00ccff, #0099cc);
+  border: none;
+  border-radius: 6px;
+  color: #fff;
+  font-size: 0.9rem;
+  font-weight: 600;
+  cursor: pointer;
+  transition: all 0.2s;
+}
+
+.btn-submit:hover:not(:disabled) {
+  box-shadow: 0 4px 15px rgba(0, 204, 255, 0.4);
+}
+
+.btn-submit:disabled {
+  opacity: 0.6;
+  cursor: not-allowed;
+}
+
+.login-hint {
+  color: #888;
+  font-size: 0.95rem;
+}
+
+.login-hint a {
+  color: #00ccff;
+  text-decoration: none;
+}
+
+.login-hint a:hover {
+  text-decoration: underline;
+}
+
+.registration-error {
+  margin-top: 10px;
+  padding: 8px 12px;
+  background: rgba(255, 68, 68, 0.15);
+  border: 1px solid #ff4444;
+  border-radius: 6px;
+  color: #ff6b6b;
   font-size: 0.85rem;
 }
 

@@ -304,60 +304,10 @@
                 <span class="runs-count" v-if="event.runs_count > 0">
                   🎯 {{ event.runs_count }} {{ pluralizeRuns(event.runs_count) }}
                 </span>
+                <span class="participants-count" v-if="event.registration_open || event.registrations_count > 0">
+                  👥 {{ event.registrations_count || 0 }}{{ event.capacity ? ` / ${event.capacity}` : '' }}
+                </span>
               </div>
-              
-              <!-- Блок регистрации на конвент -->
-              <div class="event-registration" @click.stop>
-                <div class="event-reg-info">
-                  <span class="event-participants">
-                    👥 {{ event.registrations_count || 0 }}{{ event.capacity ? ` / ${event.capacity}` : '' }}
-                  </span>
-                  <span v-if="!event.registration_open" class="event-reg-closed">закрыта</span>
-                  <span v-else-if="event.is_full" class="event-reg-full">мест нет</span>
-                </div>
-                
-                <!-- Статус регистрации текущего пользователя -->
-                <div v-if="getUserRegistration(event)" class="event-user-reg">
-                  <span v-if="getUserRegistration(event).status === 'pending'" class="reg-status-pending">
-                    ⏳ Ожидает
-                  </span>
-                  <span v-else-if="getUserRegistration(event).status === 'confirmed'" class="reg-status-confirmed">
-                    ✅ Участник
-                  </span>
-                  <span v-else-if="getUserRegistration(event).status === 'rejected'" class="reg-status-rejected">
-                    ❌ Отклонена
-                  </span>
-                  <button 
-                    v-if="getUserRegistration(event).status !== 'rejected'"
-                    @click.stop="unregisterFromEvent(event)"
-                    class="btn-unreg-small"
-                    :disabled="eventRegLoading === event.id"
-                  >
-                    {{ eventRegLoading === event.id ? '...' : '×' }}
-                  </button>
-                </div>
-                
-                <!-- Кнопка регистрации -->
-                <button 
-                  v-else-if="event.registration_open && !event.is_full && isAuthenticated"
-                  @click.stop="registerForEvent(event)"
-                  class="btn-reg-small"
-                  :disabled="eventRegLoading === event.id"
-                >
-                  {{ eventRegLoading === event.id ? '...' : '📝 Участвовать' }}
-                </button>
-                
-                <!-- Для неавторизованных -->
-                <a 
-                  v-else-if="event.registration_open && !event.is_full && !isAuthenticated" 
-                  href="/oidc/authenticate/"
-                  class="btn-reg-small btn-login"
-                  @click.stop
-                >
-                  Войти
-                </a>
-              </div>
-              
               <div class="event-schedule-actions">
                 <router-link 
                   :to="`/schedule/${event.id}`" 
@@ -488,7 +438,10 @@
     <ConventionEventModal
       v-if="selectedConventionEvent"
       :event="selectedConventionEvent"
+      :is-authenticated="isAuthenticated"
+      :csrf-token="csrfToken"
       @close="closeConventionEventModal"
+      @registration-changed="refreshConventionEvents"
     />
   </div>
 </template>
@@ -574,10 +527,7 @@ export default {
         { value: 'other', label: 'Другое' }
       ],
       // Модальное окно проведения конвента
-      selectedConventionEvent: null,
-      // Регистрация на конвент
-      eventRegLoading: null,
-      eventUserRegistrations: {}  // { eventId: registration }
+      selectedConventionEvent: null
     }
   },
   watch: {
@@ -754,8 +704,6 @@ export default {
         const response = await fetch(`/api/convention-events/?convention=${convention.id}`)
         if (response.ok) {
           this.conventionEvents = await response.json()
-          // Собираем регистрации текущего пользователя
-          this.updateUserRegistrationsCache()
         }
       } catch (err) {
         console.error('Ошибка загрузки проведений:', err)
@@ -1258,80 +1206,6 @@ export default {
       this.selectedConventionEvent = null
     },
     
-    // === Регистрация на конвент ===
-    getUserRegistration(event) {
-      // Проверяем, есть ли у пользователя регистрация на это проведение
-      // API возвращает current_user_registration если пользователь авторизован
-      return this.eventUserRegistrations[event.id] || null
-    },
-    
-    async registerForEvent(event) {
-      if (!this.isAuthenticated) return
-      
-      this.eventRegLoading = event.id
-      
-      try {
-        const response = await fetch(`/api/convention-events/${event.id}/register/`, {
-          method: 'POST',
-          headers: {
-            'Content-Type': 'application/json',
-            'X-CSRFToken': this.csrfToken
-          },
-          body: JSON.stringify({ comment: '' })
-        })
-        
-        if (!response.ok) {
-          const data = await response.json()
-          throw new Error(data.error || 'Ошибка при регистрации')
-        }
-        
-        const result = await response.json()
-        
-        // Сохраняем регистрацию
-        this.eventUserRegistrations[event.id] = result.registration
-        
-        // Обновляем данные события
-        await this.refreshConventionEvents()
-        
-      } catch (err) {
-        alert(err.message)
-      } finally {
-        this.eventRegLoading = null
-      }
-    },
-    
-    async unregisterFromEvent(event) {
-      if (!confirm('Отменить регистрацию на конвент?')) return
-      
-      this.eventRegLoading = event.id
-      
-      try {
-        const response = await fetch(`/api/convention-events/${event.id}/unregister/`, {
-          method: 'POST',
-          headers: {
-            'Content-Type': 'application/json',
-            'X-CSRFToken': this.csrfToken
-          }
-        })
-        
-        if (!response.ok) {
-          const data = await response.json()
-          throw new Error(data.error || 'Ошибка при отмене регистрации')
-        }
-        
-        // Удаляем регистрацию из кэша
-        delete this.eventUserRegistrations[event.id]
-        
-        // Обновляем данные события
-        await this.refreshConventionEvents()
-        
-      } catch (err) {
-        alert(err.message)
-      } finally {
-        this.eventRegLoading = null
-      }
-    },
-    
     async refreshConventionEvents() {
       if (!this.selectedConvention) return
       
@@ -1339,22 +1213,16 @@ export default {
         const response = await fetch(`/api/convention-events/?convention=${this.selectedConvention.id}`)
         if (response.ok) {
           this.conventionEvents = await response.json()
-          // Обновляем кэш регистраций
-          this.updateUserRegistrationsCache()
+          // Обновляем выбранный event если модальное окно открыто
+          if (this.selectedConventionEvent) {
+            const updated = this.conventionEvents.find(e => e.id === this.selectedConventionEvent.id)
+            if (updated) {
+              this.selectedConventionEvent = updated
+            }
+          }
         }
       } catch (err) {
         console.error('Ошибка обновления проведений:', err)
-      }
-    },
-    
-    updateUserRegistrationsCache() {
-      // Собираем current_user_registration из всех событий
-      for (const event of this.conventionEvents) {
-        if (event.current_user_registration) {
-          this.eventUserRegistrations[event.id] = event.current_user_registration
-        } else {
-          delete this.eventUserRegistrations[event.id]
-        }
       }
     }
   }
@@ -2145,130 +2013,8 @@ export default {
   font-size: 0.85rem;
 }
 
-/* Блок регистрации в карточке проведения */
-.event-registration {
-  display: flex;
-  align-items: center;
-  gap: 12px;
-  flex-wrap: wrap;
-  margin-top: 10px;
-  padding: 10px 12px;
-  background: rgba(0, 204, 255, 0.08);
-  border-radius: 6px;
-  border-left: 2px solid #00ccff;
-}
-
-.event-reg-info {
-  display: flex;
-  align-items: center;
-  gap: 8px;
-}
-
-.event-participants {
+.participants-count {
   color: #00ccff;
-  font-weight: 600;
-  font-size: 0.9rem;
-}
-
-.event-reg-closed {
-  padding: 2px 8px;
-  background: #666;
-  color: #ccc;
-  border-radius: 10px;
-  font-size: 0.75rem;
-}
-
-.event-reg-full {
-  padding: 2px 8px;
-  background: #ff4444;
-  color: #fff;
-  border-radius: 10px;
-  font-size: 0.75rem;
-}
-
-.event-user-reg {
-  display: flex;
-  align-items: center;
-  gap: 8px;
-  margin-left: auto;
-}
-
-.reg-status-pending {
-  color: #ffaa00;
-  font-size: 0.85rem;
-  font-weight: 500;
-}
-
-.reg-status-confirmed {
-  color: #4caf50;
-  font-size: 0.85rem;
-  font-weight: 500;
-}
-
-.reg-status-rejected {
-  color: #ff4444;
-  font-size: 0.85rem;
-  font-weight: 500;
-}
-
-.btn-unreg-small {
-  width: 22px;
-  height: 22px;
-  padding: 0;
-  background: rgba(255, 68, 68, 0.2);
-  border: 1px solid #ff444466;
-  border-radius: 50%;
-  color: #ff6b6b;
-  font-size: 0.9rem;
-  cursor: pointer;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  transition: all 0.2s ease;
-}
-
-.btn-unreg-small:hover:not(:disabled) {
-  background: #ff4444;
-  color: #fff;
-}
-
-.btn-unreg-small:disabled {
-  opacity: 0.5;
-  cursor: not-allowed;
-}
-
-.btn-reg-small {
-  margin-left: auto;
-  padding: 6px 12px;
-  background: linear-gradient(145deg, #00ccff, #0099cc);
-  border: none;
-  border-radius: 6px;
-  color: #fff;
-  font-size: 0.85rem;
-  font-weight: 600;
-  cursor: pointer;
-  transition: all 0.2s ease;
-}
-
-.btn-reg-small:hover:not(:disabled) {
-  transform: translateY(-1px);
-  box-shadow: 0 4px 15px rgba(0, 204, 255, 0.4);
-}
-
-.btn-reg-small:disabled {
-  opacity: 0.6;
-  cursor: not-allowed;
-}
-
-.btn-reg-small.btn-login {
-  background: transparent;
-  border: 1px solid #00ccff;
-  color: #00ccff;
-  text-decoration: none;
-}
-
-.btn-reg-small.btn-login:hover {
-  background: rgba(0, 204, 255, 0.15);
 }
 
 .event-schedule-actions {
