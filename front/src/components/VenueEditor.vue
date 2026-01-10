@@ -247,7 +247,7 @@ export default {
 
 .venue-editor-modal {
   padding: 32px;
-  max-width: 500px;
+  max-width: 700px;
 }
 
 .venue-editor-modal h2 {

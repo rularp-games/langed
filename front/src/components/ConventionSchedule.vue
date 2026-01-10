@@ -459,7 +459,10 @@ export default {
     },
     
     formatHour(hour) {
-      return `${hour.toString().padStart(2, '0')}:00`
+      // Если час >= 24, показываем как время следующего дня (24:00 -> 00:00, 25:00 -> 01:00 и т.д.)
+      const displayHour = hour >= 24 ? hour - 24 : hour
+      const suffix = hour >= 24 ? ' +1' : ''
+      return `${displayHour.toString().padStart(2, '0')}:00${suffix}`
     },
     
     getLinkIcon(linkType) {
@@ -495,6 +498,7 @@ export default {
           if (parts.length === 2) {
             const timeParts = parts[1].split(':')
             const startHour = parseInt(timeParts[0], 10)
+            // Вычисляем час окончания, позволяя переход за полночь (> 24)
             const endHour = startHour + Math.ceil((run.duration || 60) / 60)
             
             minHour = Math.min(minHour, startHour)
@@ -503,10 +507,10 @@ export default {
         }
       })
       
-      // Добавляем небольшой отступ
+      // Не ограничиваем endHour до 24, чтобы игры, переходящие на следующий день, отображались корректно
       return { 
         startHour: Math.max(0, minHour), 
-        endHour: Math.min(24, maxHour) 
+        endHour: maxHour 
       }
     },
     

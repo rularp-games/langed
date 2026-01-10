@@ -93,9 +93,48 @@
                 <div class="run-name">{{ run.game_name }}</div>
                 <div class="run-details">
                   <span v-if="run.rooms && run.rooms.length" class="run-rooms">📍 {{ run.rooms.map(r => r.name).join(', ') }}</span>
-                  <span v-if="run.masters && run.masters.length" class="run-masters">
-                    👤 {{ run.masters.map(m => m.display_name).join(', ') }}
-                  </span>
+                </div>
+                <!-- Секция управления мастерами -->
+                <div class="run-masters-section">
+                  <span class="masters-label">👤 Мастера:</span>
+                  <div class="masters-list">
+                    <div 
+                      v-for="master in (run.masters || [])" 
+                      :key="master.id" 
+                      class="master-item"
+                    >
+                      <span class="master-name">{{ master.display_name }}</span>
+                      <button 
+                        v-if="run.masters && run.masters.length > 1"
+                        class="master-remove-btn"
+                        @click.stop="removeMaster(run, master)"
+                        title="Удалить мастера"
+                      >
+                        ×
+                      </button>
+                    </div>
+                    <div v-if="!run.masters || run.masters.length === 0" class="no-masters">
+                      Нет мастеров
+                    </div>
+                  </div>
+                  <!-- Форма добавления мастера -->
+                  <div class="add-master-form" @click.stop>
+                    <input 
+                      v-model="masterInputs[run.id]"
+                      type="text"
+                      class="add-master-input"
+                      placeholder="Имя пользователя..."
+                      @keydown.enter.prevent="addMaster(run)"
+                    />
+                    <button 
+                      class="add-master-btn"
+                      @click.stop="addMaster(run)"
+                      :disabled="!masterInputs[run.id] || masterLoading[run.id]"
+                    >
+                      {{ masterLoading[run.id] ? '...' : '+' }}
+                    </button>
+                  </div>
+                  <div v-if="masterErrors[run.id]" class="master-error">{{ masterErrors[run.id] }}</div>
                 </div>
               </div>
               
@@ -201,7 +240,12 @@ export default {
       // Удаление
       showDeleteConfirm: false,
       deleteTarget: null,
-      deleteLoading: false
+      deleteLoading: false,
+      
+      // Управление мастерами
+      masterInputs: {},
+      masterLoading: {},
+      masterErrors: {}
     }
   },
   computed: {
@@ -471,6 +515,67 @@ export default {
     
     handleRunError(errorMessage) {
       console.error('RunEditor error:', errorMessage)
+    },
+    
+    // === Управление мастерами ===
+    async addMaster(run) {
+      const username = this.masterInputs[run.id]
+      if (!username || !username.trim()) return
+      
+      this.masterLoading[run.id] = true
+      this.masterErrors[run.id] = null
+      
+      try {
+        const response = await fetch(`/api/runs/${run.id}/add_master/`, {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+            'X-CSRFToken': this.csrfToken
+          },
+          body: JSON.stringify({ username: username.trim() })
+        })
+        
+        if (!response.ok) {
+          const data = await response.json()
+          throw new Error(data.error || 'Ошибка при добавлении мастера')
+        }
+        
+        // Обновляем расписание
+        await this.fetchSchedule()
+        this.masterInputs[run.id] = ''
+      } catch (err) {
+        this.masterErrors[run.id] = err.message
+      } finally {
+        this.masterLoading[run.id] = false
+      }
+    },
+    
+    async removeMaster(run, master) {
+      this.masterLoading[run.id] = true
+      this.masterErrors[run.id] = null
+      
+      try {
+        const response = await fetch(`/api/runs/${run.id}/remove_master/`, {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+            'X-CSRFToken': this.csrfToken
+          },
+          body: JSON.stringify({ user_id: master.id })
+        })
+        
+        if (!response.ok) {
+          const data = await response.json()
+          throw new Error(data.error || 'Ошибка при удалении мастера')
+        }
+        
+        // Обновляем расписание
+        await this.fetchSchedule()
+      } catch (err) {
+        this.masterErrors[run.id] = err.message
+      } finally {
+        this.masterLoading[run.id] = false
+      }
     },
     
     // === Удаление прогона ===
@@ -796,10 +901,132 @@ export default {
   flex-wrap: wrap;
 }
 
-.run-rooms,
-.run-masters {
+.run-rooms {
   font-size: 0.9rem;
   color: #888;
+}
+
+/* Секция управления мастерами */
+.run-masters-section {
+  margin-top: 10px;
+  padding: 10px 12px;
+  background: rgba(0, 204, 255, 0.05);
+  border-radius: 8px;
+  border-left: 2px solid #00ccff55;
+}
+
+.masters-label {
+  font-size: 0.85rem;
+  color: #888;
+  margin-bottom: 8px;
+  display: block;
+}
+
+.masters-list {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  margin-bottom: 8px;
+}
+
+.master-item {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  padding: 4px 10px;
+  background: rgba(0, 204, 255, 0.15);
+  border-radius: 16px;
+  border: 1px solid #00ccff44;
+}
+
+.master-name {
+  color: #00ccff;
+  font-weight: 600;
+  font-size: 0.85rem;
+}
+
+.master-remove-btn {
+  width: 16px;
+  height: 16px;
+  padding: 0;
+  background: rgba(255, 68, 68, 0.3);
+  border: none;
+  border-radius: 50%;
+  color: #ff6b6b;
+  font-size: 0.9rem;
+  line-height: 1;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  transition: all 0.2s ease;
+}
+
+.master-remove-btn:hover {
+  background: #ff4444;
+  color: #fff;
+}
+
+.no-masters {
+  color: #666;
+  font-size: 0.85rem;
+}
+
+.add-master-form {
+  display: flex;
+  gap: 6px;
+  margin-top: 6px;
+}
+
+.add-master-input {
+  flex: 1;
+  padding: 6px 10px;
+  background: rgba(10, 10, 10, 0.6);
+  border: 1px solid #00ccff44;
+  border-radius: 6px;
+  color: #e0e0e0;
+  font-size: 0.85rem;
+}
+
+.add-master-input::placeholder {
+  color: #555;
+}
+
+.add-master-input:focus {
+  outline: none;
+  border-color: #00ccff;
+}
+
+.add-master-btn {
+  padding: 6px 12px;
+  background: rgba(0, 204, 255, 0.2);
+  border: 1px solid #00ccff;
+  border-radius: 6px;
+  color: #00ccff;
+  font-size: 1rem;
+  font-weight: bold;
+  cursor: pointer;
+  transition: all 0.2s ease;
+}
+
+.add-master-btn:hover:not(:disabled) {
+  background: #00ccff;
+  color: #0a0a0a;
+}
+
+.add-master-btn:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+
+.master-error {
+  margin-top: 6px;
+  padding: 6px 10px;
+  background: rgba(255, 68, 68, 0.15);
+  border: 1px solid #ff4444;
+  border-radius: 6px;
+  color: #ff6b6b;
+  font-size: 0.8rem;
 }
 
 .form-hint {

@@ -46,16 +46,6 @@
         </div>
       </div>
       
-      <div class="modal-section" v-if="event.games && event.games.length > 0">
-        <h3>Игры на конвенте ({{ event.games.length }})</h3>
-        <div class="modal-games-list">
-          <div v-for="game in sortedGames" :key="game.id" class="modal-game-item">
-            <span class="modal-game-name">{{ game.name }}</span>
-            <span class="modal-game-players">{{ game.players_min }}–{{ game.players_max }} игроков</span>
-          </div>
-        </div>
-      </div>
-      
       <!-- Ссылки на расписание -->
       <div class="modal-section schedule-links-section">
         <h3>Расписание</h3>
@@ -73,6 +63,16 @@
           >
             ✏️ Редактировать расписание
           </router-link>
+        </div>
+      </div>
+      
+      <div class="modal-section" v-if="event.games && event.games.length > 0">
+        <h3>Игры на конвенте ({{ event.games.length }})</h3>
+        <div class="modal-games-list">
+          <div v-for="game in sortedGames" :key="game.id" class="modal-game-item">
+            <span class="modal-game-name">{{ game.name }}</span>
+            <span class="modal-game-players">{{ game.players_min }}–{{ game.players_max }} игроков</span>
+          </div>
         </div>
       </div>
       

@@ -111,10 +111,50 @@
             </div>
           </div>
           
-          <div v-if="selectedGame.creators && selectedGame.creators.length > 0" class="modal-creators">
-            <span class="creators-icon">👤</span>
-            <span class="creators-label">{{ selectedGame.creators.length > 1 ? 'Создатели:' : 'Создатель:' }}</span>
-            <span class="creators-names">{{ selectedGame.creators.map(c => c.display_name).join(', ') }}</span>
+          <!-- Секция управления создателями -->
+          <div class="modal-creators-section">
+            <div class="creators-header">
+              <span class="creators-icon">👤</span>
+              <span class="creators-label">{{ selectedGame.creators && selectedGame.creators.length > 1 ? 'Создатели:' : 'Создатель:' }}</span>
+            </div>
+            <div v-if="selectedGame.creators && selectedGame.creators.length > 0" class="creators-list">
+              <div 
+                v-for="creator in selectedGame.creators" 
+                :key="creator.id" 
+                class="creator-item"
+              >
+                <span class="creator-name">{{ creator.display_name }}</span>
+                <button 
+                  v-if="selectedGame.can_edit && selectedGame.creators.length > 1"
+                  class="creator-remove-btn"
+                  @click="removeCreator(creator)"
+                  title="Удалить создателя"
+                >
+                  ×
+                </button>
+              </div>
+            </div>
+            <div v-else class="no-creators">
+              Создатели не указаны
+            </div>
+            <!-- Форма добавления создателя -->
+            <div v-if="selectedGame.can_edit" class="add-creator-form">
+              <input 
+                v-model="newCreatorUsername"
+                type="text"
+                class="add-creator-input"
+                placeholder="Имя пользователя..."
+                @keydown.enter.prevent="addCreator"
+              />
+              <button 
+                class="add-creator-btn"
+                @click="addCreator"
+                :disabled="!newCreatorUsername.trim() || creatorLoading"
+              >
+                {{ creatorLoading ? '...' : '+' }}
+              </button>
+            </div>
+            <div v-if="creatorError" class="creator-error">{{ creatorError }}</div>
           </div>
           
           <div class="modal-section" v-if="selectedGame.announcement">
@@ -274,7 +314,11 @@ export default {
       isEditingGame: false,
       // Удаление
       showDeleteConfirm: false,
-      deleteLoading: false
+      deleteLoading: false,
+      // Управление создателями
+      newCreatorUsername: '',
+      creatorLoading: false,
+      creatorError: null
     }
   },
   watch: {
@@ -340,6 +384,8 @@ export default {
     closeGameModal() {
       this.selectedGame = null
       this.linkCopied = false
+      this.newCreatorUsername = ''
+      this.creatorError = null
       this.updateUrlWithGame(null)
     },
     updateUrlWithGame(gameId) {
@@ -469,6 +515,77 @@ export default {
       }
       this.selectedGame = updatedGame
       this.isEditingGame = false
+    },
+    
+    // === Управление создателями ===
+    async addCreator() {
+      if (!this.newCreatorUsername.trim() || !this.selectedGame) return
+      
+      this.creatorLoading = true
+      this.creatorError = null
+      
+      try {
+        const response = await fetch(`/api/games/${this.selectedGame.id}/add_creator/`, {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+            'X-CSRFToken': this.csrfToken
+          },
+          body: JSON.stringify({ username: this.newCreatorUsername.trim() })
+        })
+        
+        if (!response.ok) {
+          const data = await response.json()
+          throw new Error(data.error || 'Ошибка при добавлении создателя')
+        }
+        
+        const updatedGame = await response.json()
+        this.updateGameInList(updatedGame)
+        this.selectedGame = updatedGame
+        this.newCreatorUsername = ''
+      } catch (err) {
+        this.creatorError = err.message
+      } finally {
+        this.creatorLoading = false
+      }
+    },
+    
+    async removeCreator(creator) {
+      if (!this.selectedGame) return
+      
+      this.creatorLoading = true
+      this.creatorError = null
+      
+      try {
+        const response = await fetch(`/api/games/${this.selectedGame.id}/remove_creator/`, {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+            'X-CSRFToken': this.csrfToken
+          },
+          body: JSON.stringify({ user_id: creator.id })
+        })
+        
+        if (!response.ok) {
+          const data = await response.json()
+          throw new Error(data.error || 'Ошибка при удалении создателя')
+        }
+        
+        const updatedGame = await response.json()
+        this.updateGameInList(updatedGame)
+        this.selectedGame = updatedGame
+      } catch (err) {
+        this.creatorError = err.message
+      } finally {
+        this.creatorLoading = false
+      }
+    },
+    
+    updateGameInList(updatedGame) {
+      const index = this.games.findIndex(g => g.id === updatedGame.id)
+      if (index !== -1) {
+        this.games.splice(index, 1, updatedGame)
+      }
     },
     
     // === Удаление игры ===
@@ -793,29 +910,136 @@ export default {
 }
 
 /* Создатели в модальном окне */
-.modal-creators {
-  display: flex;
-  align-items: center;
-  gap: 10px;
+.modal-creators-section {
   margin-bottom: 20px;
-  padding: 12px 16px;
+  padding: 16px;
   background: rgba(0, 204, 255, 0.08);
   border-radius: 8px;
   border-left: 3px solid #00ccff;
 }
 
-.modal-creators .creators-icon {
+.creators-header {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  margin-bottom: 12px;
+}
+
+.modal-creators-section .creators-icon {
   font-size: 1.2rem;
 }
 
-.modal-creators .creators-label {
+.modal-creators-section .creators-label {
   color: #888;
   font-size: 0.9rem;
 }
 
-.modal-creators .creators-names {
+.creators-list {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  margin-bottom: 12px;
+}
+
+.creator-item {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding: 6px 12px;
+  background: rgba(0, 204, 255, 0.15);
+  border-radius: 20px;
+  border: 1px solid #00ccff55;
+}
+
+.creator-name {
   color: #00ccff;
   font-weight: 600;
+  font-size: 0.9rem;
+}
+
+.creator-remove-btn {
+  width: 18px;
+  height: 18px;
+  padding: 0;
+  background: rgba(255, 68, 68, 0.3);
+  border: none;
+  border-radius: 50%;
+  color: #ff6b6b;
+  font-size: 1rem;
+  line-height: 1;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  transition: all 0.2s ease;
+}
+
+.creator-remove-btn:hover {
+  background: #ff4444;
+  color: #fff;
+}
+
+.no-creators {
+  color: #666;
+  font-size: 0.9rem;
+  margin-bottom: 12px;
+}
+
+.add-creator-form {
+  display: flex;
+  gap: 8px;
+  margin-top: 8px;
+}
+
+.add-creator-input {
+  flex: 1;
+  padding: 8px 12px;
+  background: rgba(10, 10, 10, 0.6);
+  border: 1px solid #00ccff44;
+  border-radius: 6px;
+  color: #e0e0e0;
+  font-size: 0.9rem;
+}
+
+.add-creator-input::placeholder {
+  color: #555;
+}
+
+.add-creator-input:focus {
+  outline: none;
+  border-color: #00ccff;
+}
+
+.add-creator-btn {
+  padding: 8px 14px;
+  background: rgba(0, 204, 255, 0.2);
+  border: 1px solid #00ccff;
+  border-radius: 6px;
+  color: #00ccff;
+  font-size: 1.1rem;
+  font-weight: bold;
+  cursor: pointer;
+  transition: all 0.2s ease;
+}
+
+.add-creator-btn:hover:not(:disabled) {
+  background: #00ccff;
+  color: #0a0a0a;
+}
+
+.add-creator-btn:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+
+.creator-error {
+  margin-top: 8px;
+  padding: 8px 12px;
+  background: rgba(255, 68, 68, 0.15);
+  border: 1px solid #ff4444;
+  border-radius: 6px;
+  color: #ff6b6b;
+  font-size: 0.85rem;
 }
 
 /* ========== Модальное окно ========== */

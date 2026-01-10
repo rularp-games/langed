@@ -84,6 +84,51 @@ class GameViewSet(viewsets.ModelViewSet):
         game = serializer.save()
         game.creators.add(self.request.user)
     
+    @action(detail=True, methods=['post'])
+    def add_creator(self, request, pk=None):
+        """Добавить создателя к игре"""
+        game = self.get_object()
+        username = request.data.get('username')
+        if not username:
+            return Response({'error': 'Укажите имя пользователя'}, status=status.HTTP_400_BAD_REQUEST)
+        
+        from django.contrib.auth import get_user_model
+        User = get_user_model()
+        try:
+            user = User.objects.get(username=username)
+        except User.DoesNotExist:
+            return Response({'error': 'Пользователь не найден'}, status=status.HTTP_404_NOT_FOUND)
+        
+        if user in game.creators.all():
+            return Response({'error': 'Пользователь уже является создателем'}, status=status.HTTP_400_BAD_REQUEST)
+        
+        game.creators.add(user)
+        return Response(GameSerializer(game, context={'request': request}).data)
+    
+    @action(detail=True, methods=['post'])
+    def remove_creator(self, request, pk=None):
+        """Удалить создателя из игры"""
+        game = self.get_object()
+        user_id = request.data.get('user_id')
+        if not user_id:
+            return Response({'error': 'Укажите ID пользователя'}, status=status.HTTP_400_BAD_REQUEST)
+        
+        from django.contrib.auth import get_user_model
+        User = get_user_model()
+        try:
+            user = User.objects.get(id=user_id)
+        except User.DoesNotExist:
+            return Response({'error': 'Пользователь не найден'}, status=status.HTTP_404_NOT_FOUND)
+        
+        if user not in game.creators.all():
+            return Response({'error': 'Пользователь не является создателем'}, status=status.HTTP_400_BAD_REQUEST)
+        
+        if game.creators.count() == 1:
+            return Response({'error': 'Нельзя удалить последнего создателя'}, status=status.HTTP_400_BAD_REQUEST)
+        
+        game.creators.remove(user)
+        return Response(GameSerializer(game, context={'request': request}).data)
+
     @action(detail=False, methods=['post'])
     def import_csv(self, request):
         """Импорт игр из CSV файла"""
@@ -793,6 +838,70 @@ class ConventionEventViewSet(viewsets.ModelViewSet):
         
         run.delete()
         return Response({'message': 'Прогон удалён'}, status=status.HTTP_204_NO_CONTENT)
+    
+    @action(detail=True, methods=['post'], permission_classes=[IsAuthenticated])
+    def add_organizer(self, request, pk=None):
+        """Добавить организатора к проведению конвента"""
+        event = self.get_object()
+        
+        # Проверяем права
+        if not request.user.is_staff:
+            is_event_organizer = request.user in event.organizers.all()
+            is_convention_organizer = request.user in event.convention.organizers.all()
+            if not is_event_organizer and not is_convention_organizer:
+                return Response(
+                    {'error': 'Только организатор может добавлять других организаторов'},
+                    status=status.HTTP_403_FORBIDDEN
+                )
+        
+        username = request.data.get('username')
+        if not username:
+            return Response({'error': 'Укажите имя пользователя'}, status=status.HTTP_400_BAD_REQUEST)
+        
+        from django.contrib.auth import get_user_model
+        User = get_user_model()
+        try:
+            user = User.objects.get(username=username)
+        except User.DoesNotExist:
+            return Response({'error': 'Пользователь не найден'}, status=status.HTTP_404_NOT_FOUND)
+        
+        if user in event.organizers.all():
+            return Response({'error': 'Пользователь уже является организатором'}, status=status.HTTP_400_BAD_REQUEST)
+        
+        event.organizers.add(user)
+        return Response(ConventionEventSerializer(event, context={'request': request}).data)
+    
+    @action(detail=True, methods=['post'], permission_classes=[IsAuthenticated])
+    def remove_organizer(self, request, pk=None):
+        """Удалить организатора из проведения конвента"""
+        event = self.get_object()
+        
+        # Проверяем права
+        if not request.user.is_staff:
+            is_event_organizer = request.user in event.organizers.all()
+            is_convention_organizer = request.user in event.convention.organizers.all()
+            if not is_event_organizer and not is_convention_organizer:
+                return Response(
+                    {'error': 'Только организатор может удалять других организаторов'},
+                    status=status.HTTP_403_FORBIDDEN
+                )
+        
+        user_id = request.data.get('user_id')
+        if not user_id:
+            return Response({'error': 'Укажите ID пользователя'}, status=status.HTTP_400_BAD_REQUEST)
+        
+        from django.contrib.auth import get_user_model
+        User = get_user_model()
+        try:
+            user = User.objects.get(id=user_id)
+        except User.DoesNotExist:
+            return Response({'error': 'Пользователь не найден'}, status=status.HTTP_404_NOT_FOUND)
+        
+        if user not in event.organizers.all():
+            return Response({'error': 'Пользователь не является организатором'}, status=status.HTTP_400_BAD_REQUEST)
+        
+        event.organizers.remove(user)
+        return Response(ConventionEventSerializer(event, context={'request': request}).data)
 
 
 class ConventionLinkViewSet(viewsets.ModelViewSet):

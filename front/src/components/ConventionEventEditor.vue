@@ -175,6 +175,53 @@
           </div>
         </div>
         
+        <!-- Секция управления организаторами (только в режиме редактирования) -->
+        <div v-if="mode === 'edit' && conventionEvent" class="organizers-section">
+          <div class="organizers-header">
+            <span class="organizers-icon">👤</span>
+            <span class="organizers-label">{{ organizers.length > 1 ? 'Организаторы:' : 'Организатор:' }}</span>
+          </div>
+          <div v-if="organizers.length > 0" class="organizers-list">
+            <div 
+              v-for="organizer in organizers" 
+              :key="organizer.id" 
+              class="organizer-item"
+            >
+              <span class="organizer-name">{{ organizer.display_name }}</span>
+              <button 
+                v-if="canEdit"
+                class="organizer-remove-btn"
+                @click="removeOrganizer(organizer)"
+                title="Удалить организатора"
+              >
+                ×
+              </button>
+            </div>
+          </div>
+          <div v-else class="no-organizers">
+            Организаторы не назначены
+          </div>
+          <!-- Форма добавления организатора -->
+          <div v-if="canEdit" class="add-organizer-form">
+            <input 
+              v-model="newOrganizerUsername"
+              type="text"
+              class="add-organizer-input"
+              placeholder="Имя пользователя..."
+              @keydown.enter.prevent="addOrganizer"
+            />
+            <button 
+              class="add-organizer-btn"
+              type="button"
+              @click="addOrganizer"
+              :disabled="!newOrganizerUsername.trim() || organizerLoading"
+            >
+              {{ organizerLoading ? '...' : '+' }}
+            </button>
+          </div>
+          <div v-if="organizerError" class="organizer-error">{{ organizerError }}</div>
+        </div>
+
         <div v-if="error" class="form-error">{{ error }}</div>
         
         <div class="form-actions">
@@ -239,7 +286,7 @@ export default {
       default: ''
     }
   },
-  emits: ['save', 'cancel', 'error', 'city-created'],
+  emits: ['save', 'cancel', 'error', 'city-created', 'organizer-changed'],
   data() {
     return {
       formData: {
@@ -256,7 +303,12 @@ export default {
       citySearch: '',
       showConventionDropdown: false,
       showCityDropdown: false,
-      venuesList: []
+      venuesList: [],
+      // Управление организаторами
+      organizers: [],
+      newOrganizerUsername: '',
+      organizerLoading: false,
+      organizerError: null
     }
   },
   computed: {
@@ -307,6 +359,10 @@ export default {
         return `${parts[2]}/${parts[1]}/${parts[0]}`
       }
       return this.formData.date_end
+    },
+    // Может ли текущий пользователь редактировать организаторов
+    canEdit() {
+      return this.conventionEvent && this.conventionEvent.can_edit
     }
   },
   watch: {
@@ -392,6 +448,11 @@ export default {
       if (cityId) {
         this.fetchVenuesByCity(cityId)
       }
+      
+      // Инициализируем организаторов
+      this.organizers = event.organizers || []
+      this.newOrganizerUsername = ''
+      this.organizerError = null
     },
     
     selectConvention(conv) {
@@ -598,6 +659,70 @@ export default {
       } finally {
         this.loading = false
       }
+    },
+    
+    // === Управление организаторами ===
+    async addOrganizer() {
+      if (!this.newOrganizerUsername.trim() || !this.conventionEvent) return
+      
+      this.organizerLoading = true
+      this.organizerError = null
+      
+      try {
+        const response = await fetch(`/api/convention-events/${this.conventionEvent.id}/add_organizer/`, {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+            'X-CSRFToken': this.csrfToken
+          },
+          body: JSON.stringify({ username: this.newOrganizerUsername.trim() })
+        })
+        
+        if (!response.ok) {
+          const data = await response.json()
+          throw new Error(data.error || 'Ошибка при добавлении организатора')
+        }
+        
+        const updatedEvent = await response.json()
+        this.organizers = updatedEvent.organizers || []
+        this.newOrganizerUsername = ''
+        this.$emit('organizer-changed', updatedEvent)
+      } catch (err) {
+        this.organizerError = err.message
+      } finally {
+        this.organizerLoading = false
+      }
+    },
+    
+    async removeOrganizer(organizer) {
+      if (!this.conventionEvent) return
+      
+      this.organizerLoading = true
+      this.organizerError = null
+      
+      try {
+        const response = await fetch(`/api/convention-events/${this.conventionEvent.id}/remove_organizer/`, {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+            'X-CSRFToken': this.csrfToken
+          },
+          body: JSON.stringify({ user_id: organizer.id })
+        })
+        
+        if (!response.ok) {
+          const data = await response.json()
+          throw new Error(data.error || 'Ошибка при удалении организатора')
+        }
+        
+        const updatedEvent = await response.json()
+        this.organizers = updatedEvent.organizers || []
+        this.$emit('organizer-changed', updatedEvent)
+      } catch (err) {
+        this.organizerError = err.message
+      } finally {
+        this.organizerLoading = false
+      }
     }
   }
 }
@@ -623,7 +748,7 @@ export default {
   border: 2px solid #ff6b35;
   border-radius: 16px;
   padding: 32px;
-  max-width: 550px;
+  max-width: 700px;
   width: 100%;
   max-height: 85vh;
   overflow-y: auto;
@@ -896,6 +1021,139 @@ export default {
 .dropdown-list::-webkit-scrollbar-thumb {
   background: #ff6b35;
   border-radius: 4px;
+}
+
+/* Секция организаторов */
+.organizers-section {
+  margin-top: 8px;
+  padding: 16px;
+  background: rgba(0, 204, 255, 0.08);
+  border-radius: 8px;
+  border-left: 3px solid #00ccff;
+}
+
+.organizers-header {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  margin-bottom: 12px;
+}
+
+.organizers-icon {
+  font-size: 1.2rem;
+}
+
+.organizers-label {
+  color: #888;
+  font-size: 0.9rem;
+}
+
+.organizers-list {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  margin-bottom: 12px;
+}
+
+.organizer-item {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding: 6px 12px;
+  background: rgba(0, 204, 255, 0.15);
+  border-radius: 20px;
+  border: 1px solid #00ccff55;
+}
+
+.organizer-name {
+  color: #00ccff;
+  font-weight: 600;
+  font-size: 0.9rem;
+}
+
+.organizer-remove-btn {
+  width: 18px;
+  height: 18px;
+  padding: 0;
+  background: rgba(255, 68, 68, 0.3);
+  border: none;
+  border-radius: 50%;
+  color: #ff6b6b;
+  font-size: 1rem;
+  line-height: 1;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  transition: all 0.2s ease;
+}
+
+.organizer-remove-btn:hover {
+  background: #ff4444;
+  color: #fff;
+}
+
+.no-organizers {
+  color: #666;
+  font-size: 0.9rem;
+  margin-bottom: 12px;
+}
+
+.add-organizer-form {
+  display: flex;
+  gap: 8px;
+  margin-top: 8px;
+}
+
+.add-organizer-input {
+  flex: 1;
+  padding: 8px 12px;
+  background: rgba(10, 10, 10, 0.6);
+  border: 1px solid #00ccff44;
+  border-radius: 6px;
+  color: #e0e0e0;
+  font-size: 0.9rem;
+}
+
+.add-organizer-input::placeholder {
+  color: #555;
+}
+
+.add-organizer-input:focus {
+  outline: none;
+  border-color: #00ccff;
+}
+
+.add-organizer-btn {
+  padding: 8px 14px;
+  background: rgba(0, 204, 255, 0.2);
+  border: 1px solid #00ccff;
+  border-radius: 6px;
+  color: #00ccff;
+  font-size: 1.1rem;
+  font-weight: bold;
+  cursor: pointer;
+  transition: all 0.2s ease;
+}
+
+.add-organizer-btn:hover:not(:disabled) {
+  background: #00ccff;
+  color: #0a0a0a;
+}
+
+.add-organizer-btn:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+
+.organizer-error {
+  margin-top: 8px;
+  padding: 8px 12px;
+  background: rgba(255, 68, 68, 0.15);
+  border: 1px solid #ff4444;
+  border-radius: 6px;
+  color: #ff6b6b;
+  font-size: 0.85rem;
 }
 
 /* Responsive */

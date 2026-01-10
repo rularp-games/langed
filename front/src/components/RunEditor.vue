@@ -1045,7 +1045,7 @@ export default {
   border: 2px solid #ff6b35;
   border-radius: 16px;
   padding: 32px;
-  max-width: 550px;
+  max-width: 700px;
   width: 100%;
   max-height: 85vh;
   overflow-y: auto;

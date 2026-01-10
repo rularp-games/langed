@@ -371,7 +371,7 @@ export default {
 
 .game-editor-modal {
   padding: 32px;
-  max-width: 550px;
+  max-width: 700px;
 }
 
 .game-editor-modal h2 {
