@@ -275,6 +275,26 @@ class ScheduleRunSerializer(serializers.ModelSerializer):
         except Exception:
             return value
     
+    def validate(self, attrs):
+        """Проверяем, что дата прогона попадает в даты проведения конвента"""
+        # Получаем convention_event из контекста view (add_run передаёт его при save)
+        # Для update_run проверяем существующий instance
+        convention_event = None
+        if self.instance and self.instance.convention_event:
+            convention_event = self.instance.convention_event
+        
+        date_value = attrs.get('date')
+        if convention_event and date_value:
+            run_date = date_value.date()
+            if run_date < convention_event.date_start or run_date > convention_event.date_end:
+                raise serializers.ValidationError({
+                    'date': f'Дата прогона ({run_date.strftime("%d.%m.%Y")}) должна быть в пределах дат '
+                            f'проведения конвента ({convention_event.date_start.strftime("%d.%m.%Y")} — '
+                            f'{convention_event.date_end.strftime("%d.%m.%Y")})'
+                })
+        
+        return attrs
+    
     def get_registered_count(self, obj):
         return obj.get_registered_count()
     
@@ -541,6 +561,7 @@ class RunSerializer(serializers.ModelSerializer):
         Конвертирует локальное время в UTC с учётом таймзоны города.
         Дата приходит с фронтенда в формате без таймзоны (например 2026-01-15T14:00:00),
         интерпретируется как локальное время в таймзоне города.
+        Также проверяет, что дата прогона попадает в даты проведения конвента.
         """
         import pytz
         from django.utils import timezone as django_timezone
@@ -575,6 +596,21 @@ class RunSerializer(serializers.ModelSerializer):
                     attrs['date'] = local_dt.astimezone(pytz.UTC)
                 except Exception:
                     pass
+        
+        # Проверяем, что дата прогона попадает в даты проведения конвента
+        convention_event = attrs.get('convention_event')
+        if not convention_event and self.instance:
+            convention_event = self.instance.convention_event
+        
+        date_to_check = attrs.get('date', self.instance.date if self.instance else None)
+        if convention_event and date_to_check:
+            run_date = date_to_check.date()
+            if run_date < convention_event.date_start or run_date > convention_event.date_end:
+                raise serializers.ValidationError({
+                    'date': f'Дата прогона ({run_date.strftime("%d.%m.%Y")}) должна быть в пределах дат '
+                            f'проведения конвента ({convention_event.date_start.strftime("%d.%m.%Y")} — '
+                            f'{convention_event.date_end.strftime("%d.%m.%Y")})'
+                })
         
         return attrs
     

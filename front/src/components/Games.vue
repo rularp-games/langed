@@ -280,17 +280,21 @@ export default {
   watch: {
     // Реагируем на изменение параметра gameId в URL
     gameId: {
-      handler(newId) {
-        if (newId && this.games.length > 0) {
+      handler(newId, oldId) {
+        // Не реагируем если значение не изменилось или игра уже выбрана
+        if (!newId || newId === oldId) return
+        if (this.selectedGame && this.selectedGame.id === parseInt(newId, 10)) return
+        if (this.games.length > 0) {
           this.openGameById(newId)
         }
       },
       immediate: false
     },
-    // Реагируем на загрузку списка игр
+    // Реагируем на загрузку списка игр (только при первичной загрузке)
     games: {
-      handler() {
-        if (this.gameId && this.games.length > 0 && !this.selectedGame) {
+      handler(newVal, oldVal) {
+        const wasEmpty = !oldVal || oldVal.length === 0
+        if (wasEmpty && this.gameId && this.games.length > 0 && !this.selectedGame) {
           this.openGameById(this.gameId)
         }
       }

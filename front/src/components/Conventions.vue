@@ -263,6 +263,7 @@
               :key="event.id" 
               class="event-item"
               :class="{ 'past-event': isEventPast(event.date_end) }"
+              @click="openConventionEventModal(event)"
             >
               <div class="event-header-row">
                 <div class="event-dates">
@@ -429,6 +430,13 @@
       @confirm="executeDelete"
       @cancel="cancelDelete"
     />
+
+    <!-- Модальное окно с деталями проведения конвента -->
+    <ConventionEventModal
+      v-if="selectedConventionEvent"
+      :event="selectedConventionEvent"
+      @close="closeConventionEventModal"
+    />
   </div>
 </template>
 
@@ -436,13 +444,15 @@
 import ConventionEditor from './ConventionEditor.vue'
 import ConventionEventEditor from './ConventionEventEditor.vue'
 import DeleteConfirmModal from './DeleteConfirmModal.vue'
+import ConventionEventModal from './ConventionEventModal.vue'
 
 export default {
   name: 'ConventionsPage',
   components: {
     ConventionEditor,
     ConventionEventEditor,
-    DeleteConfirmModal
+    DeleteConfirmModal,
+    ConventionEventModal
   },
   inject: ['getUser'],
   props: {
@@ -509,14 +519,19 @@ export default {
         { value: 'discord', label: 'Discord' },
         { value: 'youtube', label: 'YouTube' },
         { value: 'other', label: 'Другое' }
-      ]
+      ],
+      // Модальное окно проведения конвента
+      selectedConventionEvent: null
     }
   },
   watch: {
     // Реагируем на изменение параметра conventionId в URL
     conventionId: {
-      handler(newId) {
-        if (newId && this.conventions.length > 0) {
+      handler(newId, oldId) {
+        // Не реагируем если значение не изменилось или модальное окно уже открыто с этим конвентом
+        if (!newId || newId === oldId) return
+        if (this.selectedConvention && this.selectedConvention.id === parseInt(newId, 10)) return
+        if (this.conventions.length > 0) {
           this.openConventionById(newId)
         }
       },
@@ -524,21 +539,25 @@ export default {
     },
     // Реагируем на изменение параметра eventId в URL
     eventId: {
-      handler(newId) {
-        if (newId && this.conventions.length > 0) {
+      handler(newId, oldId) {
+        // Не реагируем если значение не изменилось
+        if (!newId || newId === oldId) return
+        if (this.conventions.length > 0) {
           this.openEventById(newId)
         }
       },
       immediate: false
     },
-    // Реагируем на загрузку списка конвентов
+    // Реагируем на загрузку списка конвентов (только один раз при первой загрузке)
     conventions: {
-      handler() {
-        if (this.conventions.length > 0 && !this.selectedConvention) {
-          if (this.conventionId) {
-            this.openConventionById(this.conventionId)
-          } else if (this.eventId) {
+      handler(newVal, oldVal) {
+        // Открываем модальное окно только при первичной загрузке (oldVal был пустым)
+        const wasEmpty = !oldVal || oldVal.length === 0
+        if (wasEmpty && this.conventions.length > 0 && !this.selectedConvention) {
+          if (this.eventId) {
             this.openEventById(this.eventId)
+          } else if (this.conventionId) {
+            this.openConventionById(this.conventionId)
           }
         }
       }
@@ -587,7 +606,8 @@ export default {
           // Найдём конвент
           const convention = this.conventions.find(c => c.id === event.convention)
           if (convention) {
-            await this.openConvention(convention)
+            // Передаём skipUrlUpdate=true, чтобы избежать бесконечного цикла редиректов
+            await this.openConvention(convention, true)
             this.updateUrlWithEvent(eventId)
           }
         }
@@ -667,10 +687,12 @@ export default {
         this.loading = false
       }
     },
-    async openConvention(convention) {
+    async openConvention(convention, skipUrlUpdate = false) {
       this.selectedConvention = convention
-      // Обновляем URL при открытии модального окна
-      this.updateUrlWithConvention(convention.id)
+      // Обновляем URL при открытии модального окна (если не передан флаг skipUrlUpdate)
+      if (!skipUrlUpdate) {
+        this.updateUrlWithConvention(convention.id)
+      }
       // Загрузить проведения этого конвента
       try {
         const response = await fetch(`/api/convention-events/?convention=${convention.id}`)
@@ -1168,6 +1190,14 @@ export default {
       } catch (err) {
         alert(err.message)
       }
+    },
+    
+    // === Модальное окно проведения конвента ===
+    openConventionEventModal(event) {
+      this.selectedConventionEvent = event
+    },
+    closeConventionEventModal() {
+      this.selectedConventionEvent = null
     }
   }
 }
@@ -1660,7 +1690,13 @@ export default {
   background: rgba(0, 0, 0, 0.3);
   border-radius: 8px;
   border-left: 3px solid #ff6b35;
-  transition: opacity 0.3s;
+  transition: all 0.3s;
+  cursor: pointer;
+}
+
+.event-item:hover {
+  background: rgba(255, 107, 53, 0.1);
+  transform: translateX(4px);
 }
 
 .event-item.past-event {

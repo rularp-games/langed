@@ -349,6 +349,17 @@ class Run(models.Model):
     def __str__(self):
         return f'{self.game.name} — {self.city.name} ({self.date.strftime("%d.%m.%Y %H:%M")})'
     
+    def clean(self):
+        # Проверяем, что дата прогона попадает в даты проведения конвента
+        if self.convention_event and self.date:
+            run_date = self.date.date()
+            if run_date < self.convention_event.date_start or run_date > self.convention_event.date_end:
+                raise ValidationError(
+                    f'Дата прогона ({run_date.strftime("%d.%m.%Y")}) должна быть в пределах дат '
+                    f'проведения конвента ({self.convention_event.date_start.strftime("%d.%m.%Y")} — '
+                    f'{self.convention_event.date_end.strftime("%d.%m.%Y")})'
+                )
+    
     def get_max_players(self):
         """Возвращает максимальное количество игроков для этого прогона"""
         if self.max_players is not None:

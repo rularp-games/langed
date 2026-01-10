@@ -464,88 +464,11 @@
     </div>
 
     <!-- Модальное окно с деталями проведения конвента -->
-    <div v-if="selectedConvention" class="modal-overlay" @click.self="closeConventionModal">
-      <div class="modal-content">
-        <button class="modal-close" @click="closeConventionModal">×</button>
-        <div class="modal-dates">
-          {{ formatConventionDates(selectedConvention.date_start, selectedConvention.date_end) }}
-        </div>
-        <div class="modal-header-row">
-          <h2>{{ selectedConvention.convention_name }}</h2>
-          <button class="copy-link-btn" @click="copyEventLink" :title="eventLinkCopied ? 'Скопировано!' : 'Скопировать ссылку'">
-            <span v-if="eventLinkCopied">✓</span>
-            <span v-else>🔗</span>
-          </button>
-        </div>
-        <div class="modal-city">📍 {{ selectedConvention.city_name || (selectedConvention.city && selectedConvention.city.name) }}</div>
-        
-        <div class="modal-section" v-if="selectedConvention.organizers && selectedConvention.organizers.length > 0">
-          <h3>{{ selectedConvention.organizers.length > 1 ? 'Организаторы' : 'Организатор' }}</h3>
-          <div class="modal-organizers">
-            <span class="organizers-icon">👤</span>
-            <span class="organizers-names">{{ selectedConvention.organizers.map(o => o.display_name).join(', ') }}</span>
-          </div>
-        </div>
-        
-        <div class="modal-section" v-if="selectedConvention.description">
-          <h3>Описание</h3>
-          <p>{{ selectedConvention.description }}</p>
-        </div>
-        
-        <div class="modal-section" v-if="selectedConvention.links && selectedConvention.links.length > 0">
-          <h3>Ссылки</h3>
-          <div class="links-list">
-            <a 
-              v-for="link in selectedConvention.links" 
-              :key="link.id"
-              :href="link.url"
-              target="_blank"
-              rel="noopener noreferrer"
-              class="link-item"
-              :class="'link-type-' + link.link_type"
-              @click.stop
-            >
-              <span class="link-icon">{{ getLinkIcon(link.link_type) }}</span>
-              <span class="link-title">{{ link.display_title }}</span>
-            </a>
-          </div>
-        </div>
-        
-        <div class="modal-section" v-if="selectedConvention.games && selectedConvention.games.length > 0">
-          <h3>Игры на конвенте ({{ selectedConvention.games.length }})</h3>
-          <div class="modal-games-list">
-            <div v-for="game in sortedConventionGames" :key="game.id" class="modal-game-item">
-              <span class="modal-game-name">{{ game.name }}</span>
-              <span class="modal-game-players">{{ game.players_min }}–{{ game.players_max }} игроков</span>
-            </div>
-          </div>
-        </div>
-        
-        <!-- Ссылки на расписание -->
-        <div class="modal-section schedule-links-section">
-          <h3>Расписание</h3>
-          <div class="schedule-links">
-            <router-link 
-              :to="`/schedule/${selectedConvention.id}`" 
-              class="schedule-link"
-            >
-              📅 Посмотреть расписание
-            </router-link>
-            <router-link 
-              v-if="selectedConvention.can_edit"
-              :to="`/schedule/${selectedConvention.id}/edit`" 
-              class="schedule-edit-link"
-            >
-              ✏️ Редактировать расписание
-            </router-link>
-          </div>
-        </div>
-        
-        <div v-if="!selectedConvention.games || selectedConvention.games.length === 0" class="modal-section">
-          <p class="no-runs">Игры пока не добавлены</p>
-        </div>
-      </div>
-    </div>
+    <ConventionEventModal
+      v-if="selectedConvention"
+      :event="selectedConvention"
+      @close="closeConventionModal"
+    />
 
     <!-- Модальное окно добавления проведения конвента -->
     <div v-if="showAddEventModal" class="modal-overlay" @click.self="closeAddEventModal">
@@ -695,12 +618,14 @@
 <script>
 import RunEditor from './RunEditor.vue'
 import DeleteConfirmModal from './DeleteConfirmModal.vue'
+import ConventionEventModal from './ConventionEventModal.vue'
 
 export default {
   name: 'AfishaPage',
   components: {
     RunEditor,
-    DeleteConfirmModal
+    DeleteConfirmModal,
+    ConventionEventModal
   },
   inject: ['getUser'],
   props: {
@@ -838,36 +763,40 @@ export default {
   watch: {
     // Реагируем на изменение параметра runId в URL
     runId: {
-      handler(newId) {
-        if (newId) {
-          this.activeTab = 'runs'
-          this.openRunById(newId)
-        }
+      handler(newId, oldId) {
+        // Не реагируем если значение не изменилось или прогон уже выбран
+        if (!newId || newId === oldId) return
+        if (this.selectedRun && this.selectedRun.id === parseInt(newId, 10)) return
+        this.activeTab = 'runs'
+        this.openRunById(newId)
       },
       immediate: false
     },
     // Реагируем на изменение параметра eventId в URL
     eventId: {
-      handler(newId) {
-        if (newId) {
-          this.activeTab = 'conventions'
-          this.openEventById(newId)
-        }
+      handler(newId, oldId) {
+        // Не реагируем если значение не изменилось или проведение уже выбрано
+        if (!newId || newId === oldId) return
+        if (this.selectedConvention && this.selectedConvention.id === parseInt(newId, 10)) return
+        this.activeTab = 'conventions'
+        this.openEventById(newId)
       },
       immediate: false
     },
-    // Реагируем на загрузку прогонов
+    // Реагируем на загрузку прогонов (только при первичной загрузке)
     runs: {
-      handler() {
-        if (this.runId && this.runs.length > 0 && !this.selectedRun) {
+      handler(newVal, oldVal) {
+        const wasEmpty = !oldVal || oldVal.length === 0
+        if (wasEmpty && this.runId && this.runs.length > 0 && !this.selectedRun) {
           this.openRunById(this.runId)
         }
       }
     },
-    // Реагируем на загрузку проведений конвентов
+    // Реагируем на загрузку проведений конвентов (только при первичной загрузке)
     conventions: {
-      handler() {
-        if (this.eventId && this.conventions.length > 0 && !this.selectedConvention) {
+      handler(newVal, oldVal) {
+        const wasEmpty = !oldVal || oldVal.length === 0
+        if (wasEmpty && this.eventId && this.conventions.length > 0 && !this.selectedConvention) {
           this.openEventById(this.eventId)
         }
       }

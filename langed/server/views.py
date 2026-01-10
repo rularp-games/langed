@@ -703,6 +703,16 @@ class ConventionEventViewSet(viewsets.ModelViewSet):
         if not serializer.is_valid():
             return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
         
+        # Проверяем, что дата прогона попадает в даты проведения конвента
+        run_date = serializer.validated_data['date'].date()
+        if run_date < event.date_start or run_date > event.date_end:
+            return Response(
+                {'date': [f'Дата прогона ({run_date.strftime("%d.%m.%Y")}) должна быть в пределах дат '
+                         f'проведения конвента ({event.date_start.strftime("%d.%m.%Y")} — '
+                         f'{event.date_end.strftime("%d.%m.%Y")})']},
+                status=status.HTTP_400_BAD_REQUEST
+            )
+        
         run = serializer.save(
             convention_event=event,
             city=event.city

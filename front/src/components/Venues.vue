@@ -358,16 +358,21 @@ export default {
   },
   watch: {
     venueId: {
-      handler(newId) {
-        if (newId && this.venues.length > 0) {
+      handler(newId, oldId) {
+        // Не реагируем если значение не изменилось или площадка уже выбрана
+        if (!newId || newId === oldId) return
+        if (this.selectedVenue && this.selectedVenue.id === parseInt(newId, 10)) return
+        if (this.venues.length > 0) {
           this.openVenueById(newId)
         }
       },
       immediate: false
     },
     venues: {
-      handler() {
-        if (this.venueId && this.venues.length > 0 && !this.selectedVenue) {
+      handler(newVal, oldVal) {
+        // Открываем модальное окно только при первичной загрузке
+        const wasEmpty = !oldVal || oldVal.length === 0
+        if (wasEmpty && this.venueId && this.venues.length > 0 && !this.selectedVenue) {
           this.openVenueById(this.venueId)
         }
       }
