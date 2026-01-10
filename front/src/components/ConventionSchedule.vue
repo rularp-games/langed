@@ -68,7 +68,7 @@
       </div>
 
       <!-- Блок регистрации на конвент -->
-      <div v-if="schedule.registration_open || schedule.current_user_registration" class="registration-section">
+      <div class="registration-section">
         <div class="registration-info">
           <div class="registration-stats">
             <span class="participants-count">
@@ -78,6 +78,9 @@
               ⏳ Ожидают: {{ schedule.pending_registrations_count }}
             </span>
             <span v-if="schedule.is_full" class="full-badge">Мест нет</span>
+            <span v-if="!schedule.registration_open" class="registration-closed-badge">
+              Регистрация закрыта
+            </span>
           </div>
           
           <div class="registration-actions">
@@ -1813,6 +1816,15 @@ export default {
   border-radius: 16px;
   font-size: 0.85rem;
   font-weight: 600;
+}
+
+.registration-closed-badge {
+  padding: 4px 12px;
+  background: #666;
+  color: #ccc;
+  border-radius: 16px;
+  font-size: 0.85rem;
+  font-weight: 500;
 }
 
 .registration-actions {
