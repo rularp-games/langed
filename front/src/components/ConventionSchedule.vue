@@ -423,7 +423,7 @@ export default {
       
       // Если у конвента указана площадка с комнатами, используем их
       if (this.schedule.venue_rooms && this.schedule.venue_rooms.length > 0) {
-        return this.schedule.venue_rooms.sort((a, b) => 
+        return [...this.schedule.venue_rooms].sort((a, b) => 
           (a.name || '').localeCompare(b.name || '', 'ru')
         )
       }
