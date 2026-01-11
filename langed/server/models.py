@@ -1,6 +1,7 @@
 from django.db import models
 from django.conf import settings
 from django.core.exceptions import ValidationError
+from auditlog.registry import auditlog
 
 
 class Region(models.Model):
@@ -593,3 +594,18 @@ class ConventionEventRegistration(models.Model):
 
     def __str__(self):
         return f'{self.user.username} → {self.convention_event.convention.name} ({self.get_status_display()})'
+
+
+# Регистрация моделей для аудита (логирование изменений)
+auditlog.register(Region)
+auditlog.register(City)
+auditlog.register(Game, m2m_fields={'creators'})
+auditlog.register(Convention, m2m_fields={'organizers'})
+auditlog.register(ConventionLink)
+auditlog.register(ConventionEvent, m2m_fields={'organizers'})
+auditlog.register(Venue)
+auditlog.register(Room)
+auditlog.register(Run, m2m_fields={'masters', 'rooms'})
+auditlog.register(CommonEvent)
+auditlog.register(Registration)
+auditlog.register(ConventionEventRegistration)
