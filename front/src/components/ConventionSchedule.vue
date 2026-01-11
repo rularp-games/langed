@@ -664,14 +664,7 @@ export default {
     getRoomsForDay(day) {
       // Возвращаем все помещения из всех дней (чтобы столбцы были одинаковыми)
       // Помещения уже отсортированы по алфавиту в allRooms
-      if (this.allRooms.length > 0) {
-        return this.allRooms
-      }
-      // Если нет комнат, но есть общие события в этот день, добавляем пустую колонку для структуры
-      if (this.getCommonEventsForDay(day).length > 0) {
-        return [{ id: null, name: '' }]
-      }
-      return []
+      return this.allRooms
     },
     
     getRunsForDay(day) {
@@ -1168,6 +1161,7 @@ export default {
 .timeline-rooms-content {
   position: relative;
   width: fit-content;
+  min-width: 300px;
 }
 
 .timeline-common-event {
