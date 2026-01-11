@@ -5,7 +5,6 @@ from django import forms
 from django.contrib import messages
 from django.utils import timezone
 from datetime import time
-from auditlog.models import LogEntry
 from .models import Game, City, Region, Convention, ConventionEvent, Run, ConventionLink, Venue, Room, Registration
 
 User = get_user_model()
@@ -302,39 +301,3 @@ class RegistrationAdmin(admin.ModelAdmin):
             'fields': ('comment',)
         }),
     )
-
-
-# Настройка отображения журнала аудита
-@admin.register(LogEntry)
-class LogEntryAdmin(admin.ModelAdmin):
-    list_display = ('timestamp', 'action', 'content_type', 'object_repr', 'actor', 'changes_display')
-    list_filter = ('action', 'content_type', 'timestamp')
-    search_fields = ('object_repr', 'actor__username', 'actor__first_name', 'actor__last_name')
-    date_hierarchy = 'timestamp'
-    readonly_fields = (
-        'timestamp', 'action', 'content_type', 'object_pk', 'object_id', 
-        'object_repr', 'actor', 'changes', 'remote_addr', 'additional_data'
-    )
-    ordering = ('-timestamp',)
-    
-    def has_add_permission(self, request):
-        return False
-    
-    def has_change_permission(self, request, obj=None):
-        return False
-    
-    def has_delete_permission(self, request, obj=None):
-        # Только суперпользователь может удалять логи
-        return request.user.is_superuser
-    
-    def changes_display(self, obj):
-        """Краткое отображение изменений"""
-        if obj.changes:
-            changes = obj.changes
-            if isinstance(changes, dict):
-                fields = list(changes.keys())
-                if len(fields) <= 3:
-                    return ', '.join(fields)
-                return f'{", ".join(fields[:3])} и ещё {len(fields) - 3}'
-        return '-'
-    changes_display.short_description = 'Изменённые поля'
