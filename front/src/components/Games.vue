@@ -8,9 +8,9 @@
     <!-- Панель управления -->
     <div class="controls-bar">
       <div class="controls-filters">
-        <input 
-          v-model="searchQuery" 
-          type="text" 
+        <input
+          v-model="searchQuery"
+          type="text"
           placeholder="Поиск..."
           class="control-search"
         />
@@ -20,26 +20,26 @@
         Добавить игру
       </button>
     </div>
-    
+
     <div v-if="loading" class="loading">
       <div class="loading-spinner"></div>
       <p>Загрузка...</p>
     </div>
-    
+
     <div v-else-if="error" class="error">
       <p>{{ error }}</p>
       <button @click="fetchGames" class="retry-btn">Повторить</button>
     </div>
-    
+
     <div v-else-if="filteredGames.length === 0" class="empty">
       <p v-if="searchQuery">Игры не найдены по запросу "{{ searchQuery }}"</p>
       <p v-else>Игры пока не добавлены</p>
     </div>
-    
+
     <div v-else class="games-grid">
-      <div 
-        v-for="game in filteredGames" 
-        :key="game.id" 
+      <div
+        v-for="game in filteredGames"
+        :key="game.id"
         class="game-card"
         :class="{ 'has-poster': game.poster_url }"
         @click="openGameModal(game)"
@@ -49,22 +49,33 @@
         </div>
         <div class="game-info">
           <h2 class="game-title">{{ game.name }}</h2>
-          <div v-if="game.creators && game.creators.length > 0" class="game-creators">
+          <div
+            v-if="game.creators && game.creators.length > 0"
+            class="game-creators"
+          >
             <span class="creators-icon">👤</span>
-            <span class="creators-names">{{ game.creators.map(c => c.display_name).join(', ') }}</span>
+            <span class="creators-names">{{
+              game.creators.map((c) => c.display_name).join(", ")
+            }}</span>
           </div>
           <div class="game-stats">
             <div class="stat">
               <span class="stat-label">Игроки</span>
-              <span class="stat-value">{{ game.players_min }} – {{ game.players_max }}</span>
+              <span class="stat-value"
+                >{{ game.players_min }} – {{ game.players_max }}</span
+              >
             </div>
             <div class="stat">
               <span class="stat-label">Жен. роли</span>
-              <span class="stat-value">{{ game.female_roles_min }} – {{ game.female_roles_max }}</span>
+              <span class="stat-value"
+                >{{ game.female_roles_min }} – {{ game.female_roles_max }}</span
+              >
             </div>
             <div class="stat">
               <span class="stat-label">Муж. роли</span>
-              <span class="stat-value">{{ game.male_roles_min }} – {{ game.male_roles_max }}</span>
+              <span class="stat-value"
+                >{{ game.male_roles_min }} – {{ game.male_roles_max }}</span
+              >
             </div>
             <div class="stat">
               <span class="stat-label">Игротехники</span>
@@ -77,55 +88,71 @@
 
     <!-- Модальное окно с деталями игры -->
     <div v-if="selectedGame" class="modal-overlay" @click.self="closeGameModal">
-      <div class="modal-content" :class="{ 'with-poster': selectedGame.poster_url }">
+      <div
+        class="modal-content"
+        :class="{ 'with-poster': selectedGame.poster_url }"
+      >
         <button class="modal-close" @click="closeGameModal">×</button>
-        
+
         <div v-if="selectedGame.poster_url" class="modal-poster">
           <img :src="selectedGame.poster_url" :alt="selectedGame.name" />
         </div>
-        
+
         <div class="modal-body">
           <div class="modal-header-row">
             <h2>{{ selectedGame.name }}</h2>
             <div class="header-actions">
-              <button 
-                v-if="selectedGame.can_edit" 
-                class="edit-btn" 
+              <button
+                v-if="selectedGame.can_edit"
+                class="edit-btn"
                 @click="startEditingGame"
                 title="Редактировать"
               >
                 ✏️
               </button>
-              <button 
-                v-if="selectedGame.can_edit" 
-                class="delete-btn" 
+              <button
+                v-if="selectedGame.can_edit"
+                class="delete-btn"
                 @click="showDeleteConfirm = true"
                 title="Удалить"
               >
                 🗑️
               </button>
-              <button class="copy-link-btn" @click="copyGameLink" :title="linkCopied ? 'Скопировано!' : 'Скопировать ссылку'">
+              <button
+                class="copy-link-btn"
+                @click="copyGameLink"
+                :title="linkCopied ? 'Скопировано!' : 'Скопировать ссылку'"
+              >
                 <span v-if="linkCopied">✓</span>
                 <span v-else>🔗</span>
               </button>
             </div>
           </div>
-          
+
           <!-- Секция управления создателями -->
           <div class="modal-creators-section">
             <div class="creators-header">
               <span class="creators-icon">👤</span>
-              <span class="creators-label">{{ selectedGame.creators && selectedGame.creators.length > 1 ? 'Создатели:' : 'Создатель:' }}</span>
+              <span class="creators-label">{{
+                selectedGame.creators && selectedGame.creators.length > 1
+                  ? "Создатели:"
+                  : "Создатель:"
+              }}</span>
             </div>
-            <div v-if="selectedGame.creators && selectedGame.creators.length > 0" class="creators-list">
-              <div 
-                v-for="creator in selectedGame.creators" 
-                :key="creator.id" 
+            <div
+              v-if="selectedGame.creators && selectedGame.creators.length > 0"
+              class="creators-list"
+            >
+              <div
+                v-for="creator in selectedGame.creators"
+                :key="creator.id"
                 class="creator-item"
               >
                 <span class="creator-name">{{ creator.display_name }}</span>
-                <button 
-                  v-if="selectedGame.can_edit && selectedGame.creators.length > 1"
+                <button
+                  v-if="
+                    selectedGame.can_edit && selectedGame.creators.length > 1
+                  "
                   class="creator-remove-btn"
                   @click="removeCreator(creator)"
                   title="Удалить создателя"
@@ -134,55 +161,66 @@
                 </button>
               </div>
             </div>
-            <div v-else class="no-creators">
-              Создатели не указаны
-            </div>
+            <div v-else class="no-creators">Создатели не указаны</div>
             <!-- Форма добавления создателя -->
             <div v-if="selectedGame.can_edit" class="add-creator-form">
-              <input 
+              <input
                 v-model="newCreatorUsername"
                 type="text"
                 class="add-creator-input"
                 placeholder="Имя пользователя..."
                 @keydown.enter.prevent="addCreator"
               />
-              <button 
+              <button
                 class="add-creator-btn"
                 @click="addCreator"
                 :disabled="!newCreatorUsername.trim() || creatorLoading"
               >
-                {{ creatorLoading ? '...' : '+' }}
+                {{ creatorLoading ? "..." : "+" }}
               </button>
             </div>
-            <div v-if="creatorError" class="creator-error">{{ creatorError }}</div>
+            <div v-if="creatorError" class="creator-error">
+              {{ creatorError }}
+            </div>
           </div>
-          
+
           <div class="modal-section" v-if="selectedGame.announcement">
             <h3>Анонс</h3>
             <p>{{ selectedGame.announcement }}</p>
           </div>
-          
+
           <div class="modal-section" v-if="selectedGame.red_flags">
             <h3>Красные флаги</h3>
             <p class="red-flags">{{ selectedGame.red_flags }}</p>
           </div>
-          
+
           <div class="modal-stats">
             <div class="modal-stat">
               <span class="modal-stat-label">Игроки</span>
-              <span class="modal-stat-value">{{ selectedGame.players_min }} – {{ selectedGame.players_max }}</span>
+              <span class="modal-stat-value"
+                >{{ selectedGame.players_min }} –
+                {{ selectedGame.players_max }}</span
+              >
             </div>
             <div class="modal-stat">
               <span class="modal-stat-label">Женские роли</span>
-              <span class="modal-stat-value">{{ selectedGame.female_roles_min }} – {{ selectedGame.female_roles_max }}</span>
+              <span class="modal-stat-value"
+                >{{ selectedGame.female_roles_min }} –
+                {{ selectedGame.female_roles_max }}</span
+              >
             </div>
             <div class="modal-stat">
               <span class="modal-stat-label">Мужские роли</span>
-              <span class="modal-stat-value">{{ selectedGame.male_roles_min }} – {{ selectedGame.male_roles_max }}</span>
+              <span class="modal-stat-value"
+                >{{ selectedGame.male_roles_min }} –
+                {{ selectedGame.male_roles_max }}</span
+              >
             </div>
             <div class="modal-stat">
               <span class="modal-stat-label">Игротехники</span>
-              <span class="modal-stat-value">{{ selectedGame.technicians }}</span>
+              <span class="modal-stat-value">{{
+                selectedGame.technicians
+              }}</span>
             </div>
           </div>
         </div>
@@ -198,54 +236,74 @@
     />
 
     <!-- Модальное окно импорта CSV -->
-    <div v-if="showAddModal && addMode === 'csv' && isAuthenticated" class="modal-overlay" @click.self="closeAddModal">
+    <div
+      v-if="showAddModal && addMode === 'csv' && isAuthenticated"
+      class="modal-overlay"
+      @click.self="closeAddModal"
+    >
       <div class="modal-content add-game-modal">
         <button class="modal-close" @click="closeAddModal">×</button>
-        
+
         <div class="modal-body">
           <h2>Импорт игр из CSV</h2>
-          
+
           <!-- Форма импорта CSV -->
           <div class="csv-import-form">
             <div class="csv-upload">
-              <label class="csv-dropzone" for="csv-file" :class="{ 'has-file': csvFile }">
+              <label
+                class="csv-dropzone"
+                for="csv-file"
+                :class="{ 'has-file': csvFile }"
+              >
                 <span class="csv-icon">📄</span>
-                <span v-if="csvFile" class="csv-filename">{{ csvFile.name }}</span>
+                <span v-if="csvFile" class="csv-filename">{{
+                  csvFile.name
+                }}</span>
                 <span v-else class="csv-text">Выберите CSV файл</span>
-                <span class="csv-hint">Формат: название, анонс, красные флаги</span>
+                <span class="csv-hint"
+                  >Формат: название, анонс, красные флаги</span
+                >
               </label>
-              <input 
+              <input
                 id="csv-file"
                 type="file"
                 accept=".csv"
                 @change="onCsvChange"
                 class="csv-input"
               />
-              <button 
-                v-if="csvFile" 
-                type="button" 
-                @click="removeCsv" 
+              <button
+                v-if="csvFile"
+                type="button"
+                @click="removeCsv"
                 class="csv-remove"
               >
                 Удалить файл
               </button>
             </div>
-            
+
             <div v-if="addError" class="form-error">{{ addError }}</div>
-            
+
             <div v-if="csvResult" class="csv-result">
-              <p class="csv-result-success">Создано игр: {{ csvResult.created }}</p>
+              <p class="csv-result-success">
+                Создано игр: {{ csvResult.created }}
+              </p>
               <p v-if="csvResult.skipped > 0" class="csv-result-skipped">
                 Пропущено (уже существуют): {{ csvResult.skipped }}
               </p>
             </div>
-            
+
             <div class="form-actions">
-              <button type="button" @click="closeAddModal" class="btn btn-secondary">Закрыть</button>
-              <button 
-                type="button" 
-                @click="submitCsv" 
-                class="btn btn-primary" 
+              <button
+                type="button"
+                @click="closeAddModal"
+                class="btn btn-secondary"
+              >
+                Закрыть
+              </button>
+              <button
+                type="button"
+                @click="submitCsv"
+                class="btn btn-primary"
                 :disabled="addLoading || !csvFile"
               >
                 <span v-if="addLoading">Импорт...</span>
@@ -279,31 +337,33 @@
 </template>
 
 <script>
-import DeleteConfirmModal from './DeleteConfirmModal.vue'
-import GameEditor from './GameEditor.vue'
+import DeleteConfirmModal from "./DeleteConfirmModal.vue";
+import GameEditor from "./GameEditor.vue";
 
 export default {
-  name: 'GamesPage',
+  name: "GamesPage",
   components: {
     DeleteConfirmModal,
-    GameEditor
+    GameEditor,
   },
-  inject: ['getUser'],
+  inject: ["getUser"],
   props: {
     gameId: {
       type: [String, Number],
-      default: null
-    }
+      default: null,
+    },
   },
   data() {
     return {
       games: [],
       loading: true,
       error: null,
-      searchQuery: '',
+      searchQuery: "",
       selectedGame: null,
       showAddModal: false,
-      addMode: 'single',
+      addMode: "single",
+      // Сохранение позиции прокрутки
+      savedScrollY: 0,
       // CSV импорт
       addLoading: false,
       addError: null,
@@ -316,315 +376,370 @@ export default {
       showDeleteConfirm: false,
       deleteLoading: false,
       // Управление создателями
-      newCreatorUsername: '',
+      newCreatorUsername: "",
       creatorLoading: false,
-      creatorError: null
-    }
+      creatorError: null,
+    };
   },
   watch: {
     // Реагируем на изменение параметра gameId в URL
     gameId: {
       handler(newId, oldId) {
         // Не реагируем если значение не изменилось или игра уже выбрана
-        if (!newId || newId === oldId) return
-        if (this.selectedGame && this.selectedGame.id === parseInt(newId, 10)) return
+        if (!newId || newId === oldId) return;
+        if (this.selectedGame && this.selectedGame.id === parseInt(newId, 10))
+          return;
         if (this.games.length > 0) {
-          this.openGameById(newId)
+          this.openGameById(newId);
         }
       },
-      immediate: false
+      immediate: false,
     },
     // Реагируем на загрузку списка игр (только при первичной загрузке)
     games: {
       handler(newVal, oldVal) {
-        const wasEmpty = !oldVal || oldVal.length === 0
-        if (wasEmpty && this.gameId && this.games.length > 0 && !this.selectedGame) {
-          this.openGameById(this.gameId)
+        const wasEmpty = !oldVal || oldVal.length === 0;
+        if (
+          wasEmpty &&
+          this.gameId &&
+          this.games.length > 0 &&
+          !this.selectedGame
+        ) {
+          this.openGameById(this.gameId);
         }
+      },
+    },
+    // Блокировка прокрутки при открытии модальных окон
+    selectedGame(newVal, oldVal) {
+      if (newVal && !oldVal) {
+        this.lockBodyScroll();
+      } else if (!newVal && oldVal) {
+        this.unlockBodyScroll();
       }
-    }
+    },
+    showAddModal(newVal, oldVal) {
+      if (newVal && !oldVal) {
+        this.lockBodyScroll();
+      } else if (!newVal && oldVal) {
+        this.unlockBodyScroll();
+      }
+    },
+    isEditingGame(newVal, oldVal) {
+      if (newVal && !oldVal) {
+        this.lockBodyScroll();
+      } else if (!newVal && oldVal) {
+        this.unlockBodyScroll();
+      }
+    },
   },
   computed: {
     isAuthenticated() {
-      const user = this.getUser()
-      return user && user.is_authenticated
+      const user = this.getUser();
+      return user && user.is_authenticated;
     },
     csrfToken() {
-      const match = document.cookie.match(/csrftoken=([^;]+)/)
-      return match ? match[1] : ''
+      const match = document.cookie.match(/csrftoken=([^;]+)/);
+      return match ? match[1] : "";
     },
     filteredGames() {
-      let result = this.games
+      let result = this.games;
       if (this.searchQuery) {
-        const query = this.searchQuery.toLowerCase()
-        result = result.filter(g => 
-          g.name.toLowerCase().includes(query) ||
-          (g.announcement && g.announcement.toLowerCase().includes(query))
-        )
+        const query = this.searchQuery.toLowerCase();
+        result = result.filter(
+          (g) =>
+            g.name.toLowerCase().includes(query) ||
+            (g.announcement && g.announcement.toLowerCase().includes(query))
+        );
       }
-      return result.slice().sort((a, b) => a.name.localeCompare(b.name, 'ru'))
-    }
+      return result.slice().sort((a, b) => a.name.localeCompare(b.name, "ru"));
+    },
   },
   mounted() {
-    this.fetchGames()
+    this.fetchGames();
   },
   methods: {
+    // === Блокировка прокрутки ===
+    lockBodyScroll() {
+      this.savedScrollY = window.scrollY;
+      document.body.classList.add("modal-open");
+      document.body.style.top = `-${this.savedScrollY}px`;
+    },
+    unlockBodyScroll() {
+      const scrollY = this.savedScrollY;
+      document.body.classList.remove("modal-open");
+      document.body.style.top = "";
+      requestAnimationFrame(() => {
+        window.scrollTo(0, scrollY);
+      });
+    },
+
     openGameById(id) {
-      const gameId = parseInt(id, 10)
-      const game = this.games.find(g => g.id === gameId)
+      const gameId = parseInt(id, 10);
+      const game = this.games.find((g) => g.id === gameId);
       if (game) {
-        this.selectedGame = game
-        this.updateUrlWithGame(game.id)
+        this.selectedGame = game;
+        this.updateUrlWithGame(game.id);
       }
     },
     openGameModal(game) {
-      this.selectedGame = game
-      this.updateUrlWithGame(game.id)
+      this.selectedGame = game;
+      this.updateUrlWithGame(game.id);
     },
     closeGameModal() {
-      this.selectedGame = null
-      this.linkCopied = false
-      this.newCreatorUsername = ''
-      this.creatorError = null
-      this.updateUrlWithGame(null)
+      this.selectedGame = null;
+      this.linkCopied = false;
+      this.newCreatorUsername = "";
+      this.creatorError = null;
+      this.updateUrlWithGame(null);
     },
     updateUrlWithGame(gameId) {
-      const query = { ...this.$route.query }
+      const query = { ...this.$route.query };
       if (gameId) {
-        query.id = gameId
+        query.id = gameId;
       } else {
-        delete query.id
+        delete query.id;
       }
-      this.$router.replace({ query }).catch(() => {})
+      this.$router.replace({ query }).catch(() => {});
     },
     copyGameLink() {
-      if (!this.selectedGame) return
-      const url = `${window.location.origin}/games?id=${this.selectedGame.id}`
-      navigator.clipboard.writeText(url).then(() => {
-        this.linkCopied = true
-        setTimeout(() => {
-          this.linkCopied = false
-        }, 2000)
-      }).catch(err => {
-        console.error('Ошибка копирования:', err)
-      })
+      if (!this.selectedGame) return;
+      const url = `${window.location.origin}/games?id=${this.selectedGame.id}`;
+      navigator.clipboard
+        .writeText(url)
+        .then(() => {
+          this.linkCopied = true;
+          setTimeout(() => {
+            this.linkCopied = false;
+          }, 2000);
+        })
+        .catch((err) => {
+          console.error("Ошибка копирования:", err);
+        });
     },
     async fetchGames() {
-      this.loading = true
-      this.error = null
+      this.loading = true;
+      this.error = null;
       try {
-        const response = await fetch('/api/games/')
+        const response = await fetch("/api/games/");
         if (!response.ok) {
-          throw new Error('Ошибка загрузки данных')
+          throw new Error("Ошибка загрузки данных");
         }
-        this.games = await response.json()
+        this.games = await response.json();
       } catch (err) {
-        this.error = err.message
+        this.error = err.message;
       } finally {
-        this.loading = false
+        this.loading = false;
       }
     },
     openAddModal() {
-      this.addError = null
-      this.addMode = 'single'
-      this.csvFile = null
-      this.csvResult = null
-      this.showAddModal = true
+      this.addError = null;
+      this.addMode = "single";
+      this.csvFile = null;
+      this.csvResult = null;
+      this.showAddModal = true;
     },
     closeAddModal() {
-      this.showAddModal = false
-      this.addError = null
-      this.csvFile = null
-      this.csvResult = null
+      this.showAddModal = false;
+      this.addError = null;
+      this.csvFile = null;
+      this.csvResult = null;
     },
     onCsvChange(event) {
-      const file = event.target.files[0]
-      if (!file) return
-      this.csvFile = file
-      this.csvResult = null
-      this.addError = null
+      const file = event.target.files[0];
+      if (!file) return;
+      this.csvFile = file;
+      this.csvResult = null;
+      this.addError = null;
     },
     removeCsv() {
-      this.csvFile = null
-      this.csvResult = null
-      const input = document.getElementById('csv-file')
-      if (input) input.value = ''
+      this.csvFile = null;
+      this.csvResult = null;
+      const input = document.getElementById("csv-file");
+      if (input) input.value = "";
     },
     async submitCsv() {
-      if (!this.csvFile) return
-      
-      this.addLoading = true
-      this.addError = null
-      this.csvResult = null
-      
+      if (!this.csvFile) return;
+
+      this.addLoading = true;
+      this.addError = null;
+      this.csvResult = null;
+
       try {
-        const formData = new FormData()
-        formData.append('file', this.csvFile)
-        
-        const response = await fetch('/api/games/import_csv/', {
-          method: 'POST',
+        const formData = new FormData();
+        formData.append("file", this.csvFile);
+
+        const response = await fetch("/api/games/import_csv/", {
+          method: "POST",
           headers: {
-            'X-CSRFToken': this.csrfToken
+            "X-CSRFToken": this.csrfToken,
           },
-          body: formData
-        })
-        
+          body: formData,
+        });
+
         if (!response.ok) {
           if (response.status === 401 || response.status === 403) {
-            throw new Error('Необходима авторизация для импорта')
+            throw new Error("Необходима авторизация для импорта");
           }
-          const data = await response.json()
-          throw new Error(data.error || 'Ошибка при импорте')
+          const data = await response.json();
+          throw new Error(data.error || "Ошибка при импорте");
         }
-        
-        const result = await response.json()
-        this.csvResult = result
-        
+
+        const result = await response.json();
+        this.csvResult = result;
+
         // Добавляем новые игры в список
         if (result.games && result.games.length > 0) {
-          this.games = [...result.games, ...this.games]
+          this.games = [...result.games, ...this.games];
         }
-        
+
         // Очищаем файл
-        this.csvFile = null
-        const input = document.getElementById('csv-file')
-        if (input) input.value = ''
+        this.csvFile = null;
+        const input = document.getElementById("csv-file");
+        if (input) input.value = "";
       } catch (err) {
-        this.addError = err.message
+        this.addError = err.message;
       } finally {
-        this.addLoading = false
+        this.addLoading = false;
       }
     },
-    
+
     // === Редактирование игры ===
     startEditingGame() {
-      if (!this.selectedGame) return
-      this.isEditingGame = true
+      if (!this.selectedGame) return;
+      this.isEditingGame = true;
     },
     cancelEditingGame() {
-      this.isEditingGame = false
+      this.isEditingGame = false;
     },
     onGameAdded(savedGame) {
-      this.games.unshift(savedGame)
-      this.closeAddModal()
+      this.games.unshift(savedGame);
+      this.closeAddModal();
     },
     onGameEdited(updatedGame) {
-      const index = this.games.findIndex(g => g.id === updatedGame.id)
+      const index = this.games.findIndex((g) => g.id === updatedGame.id);
       if (index !== -1) {
-        this.games.splice(index, 1, updatedGame)
+        this.games.splice(index, 1, updatedGame);
       }
-      this.selectedGame = updatedGame
-      this.isEditingGame = false
+      this.selectedGame = updatedGame;
+      this.isEditingGame = false;
     },
-    
+
     // === Управление создателями ===
     async addCreator() {
-      if (!this.newCreatorUsername.trim() || !this.selectedGame) return
-      
-      this.creatorLoading = true
-      this.creatorError = null
-      
+      if (!this.newCreatorUsername.trim() || !this.selectedGame) return;
+
+      this.creatorLoading = true;
+      this.creatorError = null;
+
       try {
-        const response = await fetch(`/api/games/${this.selectedGame.id}/add_creator/`, {
-          method: 'POST',
-          headers: {
-            'Content-Type': 'application/json',
-            'X-CSRFToken': this.csrfToken
-          },
-          body: JSON.stringify({ username: this.newCreatorUsername.trim() })
-        })
-        
+        const response = await fetch(
+          `/api/games/${this.selectedGame.id}/add_creator/`,
+          {
+            method: "POST",
+            headers: {
+              "Content-Type": "application/json",
+              "X-CSRFToken": this.csrfToken,
+            },
+            body: JSON.stringify({ username: this.newCreatorUsername.trim() }),
+          }
+        );
+
         if (!response.ok) {
-          const data = await response.json()
-          throw new Error(data.error || 'Ошибка при добавлении создателя')
+          const data = await response.json();
+          throw new Error(data.error || "Ошибка при добавлении создателя");
         }
-        
-        const updatedGame = await response.json()
-        this.updateGameInList(updatedGame)
-        this.selectedGame = updatedGame
-        this.newCreatorUsername = ''
+
+        const updatedGame = await response.json();
+        this.updateGameInList(updatedGame);
+        this.selectedGame = updatedGame;
+        this.newCreatorUsername = "";
       } catch (err) {
-        this.creatorError = err.message
+        this.creatorError = err.message;
       } finally {
-        this.creatorLoading = false
+        this.creatorLoading = false;
       }
     },
-    
+
     async removeCreator(creator) {
-      if (!this.selectedGame) return
-      
-      this.creatorLoading = true
-      this.creatorError = null
-      
+      if (!this.selectedGame) return;
+
+      this.creatorLoading = true;
+      this.creatorError = null;
+
       try {
-        const response = await fetch(`/api/games/${this.selectedGame.id}/remove_creator/`, {
-          method: 'POST',
-          headers: {
-            'Content-Type': 'application/json',
-            'X-CSRFToken': this.csrfToken
-          },
-          body: JSON.stringify({ user_id: creator.id })
-        })
-        
+        const response = await fetch(
+          `/api/games/${this.selectedGame.id}/remove_creator/`,
+          {
+            method: "POST",
+            headers: {
+              "Content-Type": "application/json",
+              "X-CSRFToken": this.csrfToken,
+            },
+            body: JSON.stringify({ user_id: creator.id }),
+          }
+        );
+
         if (!response.ok) {
-          const data = await response.json()
-          throw new Error(data.error || 'Ошибка при удалении создателя')
+          const data = await response.json();
+          throw new Error(data.error || "Ошибка при удалении создателя");
         }
-        
-        const updatedGame = await response.json()
-        this.updateGameInList(updatedGame)
-        this.selectedGame = updatedGame
+
+        const updatedGame = await response.json();
+        this.updateGameInList(updatedGame);
+        this.selectedGame = updatedGame;
       } catch (err) {
-        this.creatorError = err.message
+        this.creatorError = err.message;
       } finally {
-        this.creatorLoading = false
+        this.creatorLoading = false;
       }
     },
-    
+
     updateGameInList(updatedGame) {
-      const index = this.games.findIndex(g => g.id === updatedGame.id)
+      const index = this.games.findIndex((g) => g.id === updatedGame.id);
       if (index !== -1) {
-        this.games.splice(index, 1, updatedGame)
+        this.games.splice(index, 1, updatedGame);
       }
     },
-    
+
     // === Удаление игры ===
     async deleteGame() {
-      if (!this.selectedGame) return
-      
-      this.deleteLoading = true
-      
+      if (!this.selectedGame) return;
+
+      this.deleteLoading = true;
+
       try {
         const response = await fetch(`/api/games/${this.selectedGame.id}/`, {
-          method: 'DELETE',
+          method: "DELETE",
           headers: {
-            'X-CSRFToken': this.csrfToken
-          }
-        })
-        
+            "X-CSRFToken": this.csrfToken,
+          },
+        });
+
         if (!response.ok) {
           if (response.status === 401 || response.status === 403) {
-            throw new Error('Нет прав для удаления')
+            throw new Error("Нет прав для удаления");
           }
-          throw new Error('Ошибка при удалении')
+          throw new Error("Ошибка при удалении");
         }
-        
+
         // Удаляем из списка
-        const index = this.games.findIndex(g => g.id === this.selectedGame.id)
+        const index = this.games.findIndex(
+          (g) => g.id === this.selectedGame.id
+        );
         if (index !== -1) {
-          this.games.splice(index, 1)
+          this.games.splice(index, 1);
         }
-        
-        this.showDeleteConfirm = false
-        this.closeGameModal()
+
+        this.showDeleteConfirm = false;
+        this.closeGameModal();
       } catch (err) {
-        alert(err.message)
+        alert(err.message);
       } finally {
-        this.deleteLoading = false
+        this.deleteLoading = false;
       }
-    }
-  }
-}
+    },
+  },
+};
 </script>
 
 <style scoped>
@@ -642,7 +757,7 @@ export default {
 }
 
 .page-header h1 {
-  font-family: 'JetBrains Mono', monospace;
+  font-family: "JetBrains Mono", monospace;
   font-size: 3rem;
   color: #ff6b35;
   text-shadow: 0 0 20px rgba(255, 107, 53, 0.5);
@@ -754,7 +869,9 @@ export default {
 }
 
 @keyframes spin {
-  to { transform: rotate(360deg); }
+  to {
+    transform: rotate(360deg);
+  }
 }
 
 .error {
@@ -813,13 +930,18 @@ export default {
 }
 
 .game-card::before {
-  content: '';
+  content: "";
   position: absolute;
   top: 0;
   left: -100%;
   width: 100%;
   height: 100%;
-  background: linear-gradient(90deg, transparent, rgba(255, 107, 53, 0.1), transparent);
+  background: linear-gradient(
+    90deg,
+    transparent,
+    rgba(255, 107, 53, 0.1),
+    transparent
+  );
   transition: left 0.5s;
   z-index: 1;
   pointer-events: none;
@@ -858,7 +980,7 @@ export default {
 }
 
 .game-title {
-  font-family: 'JetBrains Mono', monospace;
+  font-family: "JetBrains Mono", monospace;
   font-size: 1.4rem;
   color: #ff6b35;
   margin-bottom: 20px;
@@ -885,7 +1007,7 @@ export default {
 
 .stat-value {
   color: #00ccff;
-  font-family: 'JetBrains Mono', monospace;
+  font-family: "JetBrains Mono", monospace;
   font-weight: bold;
 }
 
@@ -1127,7 +1249,7 @@ export default {
 }
 
 .modal-content h2 {
-  font-family: 'JetBrains Mono', monospace;
+  font-family: "JetBrains Mono", monospace;
   color: #ff6b35;
   font-size: 1.8rem;
   margin-bottom: 24px;
@@ -1249,7 +1371,7 @@ export default {
 
 .modal-stat-value {
   color: #00ccff;
-  font-family: 'JetBrains Mono', monospace;
+  font-family: "JetBrains Mono", monospace;
   font-size: 1.2rem;
   font-weight: bold;
 }
@@ -1309,7 +1431,8 @@ export default {
   color: #fff;
 }
 
-.add-game-form, .csv-import-form {
+.add-game-form,
+.csv-import-form {
   display: flex;
   flex-direction: column;
   gap: 20px;
@@ -1616,44 +1739,44 @@ export default {
   .page-header h1 {
     font-size: 2rem;
   }
-  
+
   .controls-bar {
     flex-direction: column;
     gap: 16px;
   }
-  
+
   .controls-filters {
     width: 100%;
   }
-  
+
   .control-search {
     width: 100%;
     min-width: 100%;
   }
-  
+
   .add-btn {
     width: 100%;
     justify-content: center;
   }
-  
+
   .games-grid {
     grid-template-columns: 1fr;
   }
-  
+
   .modal-stats {
     grid-template-columns: 1fr;
     gap: 12px;
   }
-  
+
   .form-row {
     flex-direction: column;
     gap: 20px;
   }
-  
+
   .form-actions {
     flex-direction: column-reverse;
   }
-  
+
   .btn {
     width: 100%;
     text-align: center;

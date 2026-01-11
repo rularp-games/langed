@@ -35,7 +35,27 @@ export default {
       default: false
     }
   },
-  emits: ['confirm', 'cancel']
+  emits: ['confirm', 'cancel'],
+  data() {
+    return {
+      savedScrollY: 0
+    }
+  },
+  mounted() {
+    // Сохраняем позицию прокрутки и блокируем прокрутку body
+    this.savedScrollY = window.scrollY
+    document.body.classList.add('modal-open')
+    document.body.style.top = `-${this.savedScrollY}px`
+  },
+  beforeUnmount() {
+    // Восстанавливаем прокрутку body
+    const scrollY = this.savedScrollY
+    document.body.classList.remove('modal-open')
+    document.body.style.top = ''
+    requestAnimationFrame(() => {
+      window.scrollTo(0, scrollY)
+    })
+  }
 }
 </script>
 

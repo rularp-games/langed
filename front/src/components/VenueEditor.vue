@@ -2,28 +2,30 @@
   <div class="modal-overlay" @click.self="$emit('cancel')">
     <div class="modal-content venue-editor-modal">
       <button class="modal-close" @click="$emit('cancel')">×</button>
-      
+
       <div class="modal-body">
-        <h2>{{ mode === 'add' ? 'Добавить площадку' : 'Редактировать площадку' }}</h2>
-        
+        <h2>
+          {{ mode === "add" ? "Добавить площадку" : "Редактировать площадку" }}
+        </h2>
+
         <form @submit.prevent="submitForm" class="venue-form">
           <div class="form-group">
             <label for="venue-name">Название *</label>
-            <input 
+            <input
               id="venue-name"
-              v-model="formData.name" 
-              type="text" 
+              v-model="formData.name"
+              type="text"
               required
               class="form-input"
               placeholder="Введите название площадки"
             />
           </div>
-          
+
           <div class="form-group">
             <label for="venue-city">Город *</label>
-            <select 
+            <select
               id="venue-city"
-              v-model="formData.city_id" 
+              v-model="formData.city_id"
               required
               class="form-input"
             >
@@ -33,21 +35,21 @@
               </option>
             </select>
           </div>
-          
+
           <div class="form-group">
             <label for="venue-address">Адрес</label>
-            <input 
+            <input
               id="venue-address"
-              v-model="formData.address" 
-              type="text" 
+              v-model="formData.address"
+              type="text"
               class="form-input"
               placeholder="Улица, дом, помещение"
             />
           </div>
-          
+
           <div class="form-group">
             <label for="venue-description">Описание</label>
-            <textarea 
+            <textarea
               id="venue-description"
               v-model="formData.description"
               class="form-input form-textarea"
@@ -55,26 +57,34 @@
               rows="3"
             ></textarea>
           </div>
-          
+
           <div class="form-group">
             <label for="venue-capacity">Вместимость</label>
-            <input 
+            <input
               id="venue-capacity"
-              v-model.number="formData.capacity" 
-              type="number" 
+              v-model.number="formData.capacity"
+              type="number"
               min="1"
               class="form-input small"
               placeholder="Количество человек"
             />
           </div>
-          
+
           <div v-if="error" class="form-error">{{ error }}</div>
-          
+
           <div class="form-actions">
-            <button type="button" @click="$emit('cancel')" class="btn btn-secondary">Отмена</button>
+            <button
+              type="button"
+              @click="$emit('cancel')"
+              class="btn btn-secondary"
+            >
+              Отмена
+            </button>
             <button type="submit" class="btn btn-primary" :disabled="loading">
               <span v-if="loading">Сохранение...</span>
-              <span v-else>{{ mode === 'add' ? 'Добавить' : 'Сохранить' }}</span>
+              <span v-else>{{
+                mode === "add" ? "Добавить" : "Сохранить"
+              }}</span>
             </button>
           </div>
         </form>
@@ -85,113 +95,133 @@
 
 <script>
 export default {
-  name: 'VenueEditor',
+  name: "VenueEditor",
   props: {
     venue: {
       type: Object,
-      default: null
+      default: null,
     },
     cities: {
       type: Array,
-      required: true
+      required: true,
     },
     mode: {
       type: String,
-      default: 'add',
-      validator: (value) => ['add', 'edit'].includes(value)
-    }
+      default: "add",
+      validator: (value) => ["add", "edit"].includes(value),
+    },
   },
-  emits: ['saved', 'cancel'],
+  emits: ["saved", "cancel"],
   data() {
     return {
+      savedScrollY: 0,
       formData: this.getEmptyVenue(),
       loading: false,
-      error: null
-    }
+      error: null,
+    };
+  },
+  mounted() {
+    // Сохраняем позицию прокрутки и блокируем прокрутку body
+    this.savedScrollY = window.scrollY;
+    document.body.classList.add("modal-open");
+    document.body.style.top = `-${this.savedScrollY}px`;
+  },
+  beforeUnmount() {
+    // Восстанавливаем прокрутку body
+    const scrollY = this.savedScrollY;
+    document.body.classList.remove("modal-open");
+    document.body.style.top = "";
+    requestAnimationFrame(() => {
+      window.scrollTo(0, scrollY);
+    });
   },
   computed: {
     csrfToken() {
-      const match = document.cookie.match(/csrftoken=([^;]+)/)
-      return match ? match[1] : ''
-    }
+      const match = document.cookie.match(/csrftoken=([^;]+)/);
+      return match ? match[1] : "";
+    },
   },
   watch: {
     venue: {
       handler(newVenue) {
-        if (newVenue && this.mode === 'edit') {
+        if (newVenue && this.mode === "edit") {
           this.formData = {
             id: newVenue.id,
-            name: newVenue.name || '',
-            city_id: newVenue.city?.id || '',
-            address: newVenue.address || '',
-            description: newVenue.description || '',
-            capacity: newVenue.capacity || null
-          }
+            name: newVenue.name || "",
+            city_id: newVenue.city?.id || "",
+            address: newVenue.address || "",
+            description: newVenue.description || "",
+            capacity: newVenue.capacity || null,
+          };
         }
       },
-      immediate: true
-    }
+      immediate: true,
+    },
   },
   methods: {
     getEmptyVenue() {
       return {
-        name: '',
-        city_id: '',
-        address: '',
-        description: '',
-        capacity: null
-      }
+        name: "",
+        city_id: "",
+        address: "",
+        description: "",
+        capacity: null,
+      };
     },
     async submitForm() {
-      this.loading = true
-      this.error = null
-      
+      this.loading = true;
+      this.error = null;
+
       try {
         const payload = {
           name: this.formData.name,
           city_id: this.formData.city_id,
-          address: this.formData.address || '',
-          description: this.formData.description || '',
-          capacity: this.formData.capacity || null
+          address: this.formData.address || "",
+          description: this.formData.description || "",
+          capacity: this.formData.capacity || null,
+        };
+
+        let url = "/api/venues/";
+        let method = "POST";
+
+        if (this.mode === "edit" && this.formData.id) {
+          url = `/api/venues/${this.formData.id}/`;
+          method = "PATCH";
         }
-        
-        let url = '/api/venues/'
-        let method = 'POST'
-        
-        if (this.mode === 'edit' && this.formData.id) {
-          url = `/api/venues/${this.formData.id}/`
-          method = 'PATCH'
-        }
-        
+
         const response = await fetch(url, {
           method,
           headers: {
-            'Content-Type': 'application/json',
-            'X-CSRFToken': this.csrfToken
+            "Content-Type": "application/json",
+            "X-CSRFToken": this.csrfToken,
           },
-          body: JSON.stringify(payload)
-        })
-        
+          body: JSON.stringify(payload),
+        });
+
         if (!response.ok) {
           if (response.status === 401 || response.status === 403) {
-            throw new Error(this.mode === 'add' 
-              ? 'Необходима авторизация для добавления площадки'
-              : 'Нет прав для редактирования этой площадки')
+            throw new Error(
+              this.mode === "add"
+                ? "Необходима авторизация для добавления площадки"
+                : "Нет прав для редактирования этой площадки"
+            );
           }
-          const data = await response.json()
-          throw new Error(data.detail || data.name?.[0] || 'Ошибка при сохранении')
+          const data = await response.json();
+          throw new Error(
+            data.detail || data.name?.[0] || "Ошибка при сохранении"
+          );
         }
-        
-        const savedVenue = await response.json()
-        this.$emit('saved', savedVenue)
+
+        const savedVenue = await response.json();
+        this.$emit("saved", savedVenue);
       } catch (err) {
-        this.error = err.message
+        this.error = err.message;
       } finally {
-        this.loading = false
+        this.loading = false;
       }
-    }
-  }
-}
+    },
+  },
+};
 </script>
 
 <style scoped>
@@ -251,7 +281,7 @@ export default {
 }
 
 .venue-editor-modal h2 {
-  font-family: 'JetBrains Mono', monospace;
+  font-family: "JetBrains Mono", monospace;
   color: #ff6b35;
   font-size: 1.8rem;
   margin-bottom: 20px;
@@ -384,7 +414,7 @@ export default {
   .form-actions {
     flex-direction: column-reverse;
   }
-  
+
   .btn {
     width: 100%;
     text-align: center;

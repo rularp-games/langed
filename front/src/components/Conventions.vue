@@ -508,6 +508,8 @@ export default {
       searchQuery: '',
       selectedConvention: null,
       conventionEvents: [],
+      // Сохранение позиции прокрутки
+      savedScrollY: 0,
       // CSV импорт
       addLoading: false,
       addError: null,
@@ -603,6 +605,35 @@ export default {
           }
         }
       }
+    },
+    // Блокировка прокрутки при открытии модальных окон
+    selectedConvention(newVal, oldVal) {
+      if (newVal && !oldVal) {
+        this.lockBodyScroll()
+      } else if (!newVal && oldVal) {
+        this.unlockBodyScroll()
+      }
+    },
+    showConventionEditor(newVal, oldVal) {
+      if (newVal && !oldVal) {
+        this.lockBodyScroll()
+      } else if (!newVal && oldVal) {
+        this.unlockBodyScroll()
+      }
+    },
+    showCsvImportModal(newVal, oldVal) {
+      if (newVal && !oldVal) {
+        this.lockBodyScroll()
+      } else if (!newVal && oldVal) {
+        this.unlockBodyScroll()
+      }
+    },
+    showConventionEventEditor(newVal, oldVal) {
+      if (newVal && !oldVal) {
+        this.lockBodyScroll()
+      } else if (!newVal && oldVal) {
+        this.unlockBodyScroll()
+      }
     }
   },
   computed: {
@@ -631,6 +662,21 @@ export default {
     this.fetchCities()
   },
   methods: {
+    // === Блокировка прокрутки ===
+    lockBodyScroll() {
+      this.savedScrollY = window.scrollY
+      document.body.classList.add('modal-open')
+      document.body.style.top = `-${this.savedScrollY}px`
+    },
+    unlockBodyScroll() {
+      const scrollY = this.savedScrollY
+      document.body.classList.remove('modal-open')
+      document.body.style.top = ''
+      requestAnimationFrame(() => {
+        window.scrollTo(0, scrollY)
+      })
+    },
+    
     openConventionById(id) {
       const convId = parseInt(id, 10)
       const convention = this.conventions.find(c => c.id === convId)
