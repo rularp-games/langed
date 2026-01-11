@@ -2,14 +2,14 @@
   <div class="modal-overlay" @click.self="$emit('cancel')">
     <div class="modal-content run-editor-modal">
       <button class="modal-close" @click="$emit('cancel')">×</button>
-      
-      <h2>{{ mode === 'add' ? 'Добавить прогон' : 'Редактировать прогон' }}</h2>
-      
+
+      <h2>{{ mode === "add" ? "Добавить прогон" : "Редактировать прогон" }}</h2>
+
       <form @submit.prevent="submitForm" class="run-form">
         <!-- Игра -->
         <div class="form-group searchable-select">
           <label>Игра *</label>
-          <input 
+          <input
             v-model="gameSearch"
             type="text"
             class="form-input"
@@ -20,16 +20,21 @@
             @blur="onGameInputBlur"
             @keydown.enter.prevent
           />
-          <div v-if="showGameDropdown && !(mode === 'edit' && lockGame)" class="dropdown-list">
-            <div 
-              v-for="game in filteredGamesList" 
-              :key="game.id" 
+          <div
+            v-if="showGameDropdown && !(mode === 'edit' && lockGame)"
+            class="dropdown-list"
+          >
+            <div
+              v-for="game in filteredGamesList"
+              :key="game.id"
               class="dropdown-item"
               :class="{ selected: formData.game_id === game.id }"
               @mousedown.prevent="selectGame(game)"
             >
               <span class="dropdown-item-name">{{ game.name }}</span>
-              <span class="dropdown-item-info">{{ game.players_min }}–{{ game.players_max }} игроков</span>
+              <span class="dropdown-item-info"
+                >{{ game.players_min }}–{{ game.players_max }} игроков</span
+              >
             </div>
             <div v-if="filteredGamesList.length === 0" class="dropdown-empty">
               Игры не найдены
@@ -38,20 +43,28 @@
         </div>
 
         <!-- Проведение конвента (если не заблокировано) -->
-        <div v-if="!lockConvention && conventionEvents && conventionEvents.length > 0" class="form-group">
+        <div
+          v-if="
+            !lockConvention && conventionEvents && conventionEvents.length > 0
+          "
+          class="form-group"
+        >
           <label>Проведение конвента (опционально)</label>
-          <select 
+          <select
             v-model="formData.convention_event_id"
             @change="onConventionEventChange"
             class="form-input"
           >
             <option :value="null">Без конвента (отдельный прогон)</option>
-            <option 
-              v-for="event in sortedConventionEvents" 
-              :key="event.id" 
+            <option
+              v-for="event in sortedConventionEvents"
+              :key="event.id"
               :value="event.id"
             >
-              {{ event.convention_name }} — {{ event.city_name || (event.city && event.city.name) }} ({{ formatDates(event.date_start, event.date_end) }})
+              {{ event.convention_name }} —
+              {{ event.city_name || (event.city && event.city.name) }} ({{
+                formatDates(event.date_start, event.date_end)
+              }})
             </option>
           </select>
         </div>
@@ -59,18 +72,18 @@
         <!-- Информация о конвенте (если заблокировано) -->
         <div v-if="lockConvention && conventionName" class="form-group">
           <label>Конвент</label>
-          <input 
+          <input
             type="text"
             class="form-input"
             :value="conventionName"
             disabled
           />
         </div>
-        
+
         <!-- Город -->
         <div class="form-group searchable-select">
           <label>Город *</label>
-          <input 
+          <input
             v-if="!lockConvention && !formData.convention_event_id"
             v-model="citySearch"
             type="text"
@@ -81,45 +94,61 @@
             @blur="onCityInputBlur"
             @keydown.enter.prevent
           />
-          <input 
+          <input
             v-else
             type="text"
             class="form-input"
             :value="citySearch"
             disabled
           />
-          <div v-if="showCityDropdown && !lockConvention && !formData.convention_event_id" class="dropdown-list">
-            <div 
-              v-for="city in filteredCitiesList" 
-              :key="city.id" 
+          <div
+            v-if="
+              showCityDropdown &&
+              !lockConvention &&
+              !formData.convention_event_id
+            "
+            class="dropdown-list"
+          >
+            <div
+              v-for="city in filteredCitiesList"
+              :key="city.id"
               class="dropdown-item"
               :class="{ selected: formData.city_id === city.id }"
               @mousedown.prevent="selectCity(city)"
             >
-              {{ city.name }}{{ city.region && city.region.name ? ` (${city.region.name})` : '' }}
+              {{ city.name
+              }}{{
+                city.region && city.region.name ? ` (${city.region.name})` : ""
+              }}
             </div>
-            <div 
+            <div
               v-if="allowNewCity"
               class="dropdown-item dropdown-item-new"
               @mousedown.prevent="selectNewCity"
             >
               + Создать новый город
             </div>
-            <div v-if="filteredCitiesList.length === 0 && citySearch" class="dropdown-empty">
+            <div
+              v-if="filteredCitiesList.length === 0 && citySearch"
+              class="dropdown-empty"
+            >
               Города не найдены
             </div>
           </div>
-          <p v-if="formData.convention_event_id || lockConvention" class="form-hint">
+          <p
+            v-if="formData.convention_event_id || lockConvention"
+            class="form-hint"
+          >
             Город определяется проведением конвента
           </p>
         </div>
-        
+
         <!-- Новый город -->
         <div v-if="formData.city_id === 'new'" class="form-group">
           <label>Название нового города *</label>
-          <input 
-            v-model="formData.newCityName" 
-            type="text" 
+          <input
+            v-model="formData.newCityName"
+            type="text"
             required
             class="form-input"
             placeholder="Введите название города"
@@ -127,10 +156,13 @@
         </div>
 
         <!-- Площадка -->
-        <div v-if="formData.city_id && formData.city_id !== 'new'" class="form-group">
+        <div
+          v-if="formData.city_id && formData.city_id !== 'new'"
+          class="form-group"
+        >
           <label>Площадка</label>
           <!-- Режим только для чтения (когда игра на конвенте) -->
-          <input 
+          <input
             v-if="isVenueReadonly"
             type="text"
             class="form-input"
@@ -138,16 +170,16 @@
             disabled
           />
           <!-- Режим выбора -->
-          <select 
+          <select
             v-else
             v-model="formData.venue_id"
             @change="onVenueChange"
             class="form-input"
           >
             <option :value="null">Не указана</option>
-            <option 
-              v-for="venue in venuesList" 
-              :key="venue.id" 
+            <option
+              v-for="venue in venuesList"
+              :key="venue.id"
               :value="venue.id"
             >
               {{ venue.name }}
@@ -157,15 +189,15 @@
             Площадка определяется проведением конвента
           </p>
         </div>
-        
+
         <!-- Помещения -->
         <div v-if="roomsList.length > 0" class="form-group searchable-select">
           <label>Помещения</label>
-          <div 
-            class="form-input rooms-select"
-            @click="toggleRoomsDropdown"
-          >
-            <span v-if="formData.room_ids.length === 0" class="rooms-placeholder">
+          <div class="form-input rooms-select" @click="toggleRoomsDropdown">
+            <span
+              v-if="formData.room_ids.length === 0"
+              class="rooms-placeholder"
+            >
               Выберите помещения...
             </span>
             <span v-else class="rooms-selected">
@@ -174,38 +206,42 @@
             <span class="rooms-arrow">▼</span>
           </div>
           <div v-if="showRoomsDropdown" class="dropdown-list rooms-dropdown">
-            <div 
-              v-for="room in roomsList" 
-              :key="room.id" 
+            <div
+              v-for="room in roomsList"
+              :key="room.id"
               class="dropdown-item rooms-item"
               :class="{ selected: formData.room_ids.includes(room.id) }"
               @mousedown.prevent="toggleRoom(room.id)"
             >
-              <span class="room-checkbox">{{ formData.room_ids.includes(room.id) ? '☑' : '☐' }}</span>
-              <span class="dropdown-item-name">{{ room.name }}{{ room.blackbox ? ' [blackbox]' : '' }}</span>
+              <span class="room-checkbox">{{
+                formData.room_ids.includes(room.id) ? "☑" : "☐"
+              }}</span>
+              <span class="dropdown-item-name"
+                >{{ room.name }}{{ room.blackbox ? " [blackbox]" : "" }}</span
+              >
             </div>
             <div v-if="roomsList.length === 0" class="dropdown-empty">
               Помещения не найдены
             </div>
           </div>
         </div>
-        
+
         <!-- Дата и время -->
         <div class="form-row">
           <div class="form-group half">
             <label>Дата * <span class="format-hint">(дд/мм/гггг)</span></label>
             <div class="date-picker-wrapper">
-              <input 
+              <input
                 :value="formattedDate"
                 @input="handleDateInput"
                 @blur="validateDate"
-                type="text" 
+                type="text"
                 required
                 class="form-input date-input"
                 placeholder="дд/мм/гггг"
                 maxlength="10"
               />
-              <input 
+              <input
                 ref="datePickerInput"
                 type="date"
                 class="date-picker-native"
@@ -214,8 +250,8 @@
                 :max="dateConstraints.max"
                 @change="handleDatePickerChange"
               />
-              <button 
-                type="button" 
+              <button
+                type="button"
                 class="date-picker-btn"
                 @click="openDatePicker"
                 title="Открыть календарь"
@@ -224,12 +260,17 @@
               </button>
             </div>
           </div>
-          
+
           <div class="form-group half">
-            <label>Время * <span v-if="timezoneLabel" class="timezone-label">({{ timezoneLabel }})</span></label>
-            <input 
-              v-model="formData.time" 
-              type="text" 
+            <label
+              >Время *
+              <span v-if="timezoneLabel" class="timezone-label"
+                >({{ timezoneLabel }})</span
+              ></label
+            >
+            <input
+              v-model="formData.time"
+              type="text"
               required
               class="form-input time-input"
               placeholder="чч:мм"
@@ -239,33 +280,37 @@
             />
           </div>
         </div>
-        
+
         <!-- Длительность и макс. игроков -->
         <div class="form-row">
           <div class="form-group half">
             <label>Длительность (мин) *</label>
-            <input 
-              v-model.number="formData.duration" 
-              type="number" 
+            <input
+              v-model.number="formData.duration"
+              type="number"
               required
               min="30"
               max="720"
               class="form-input"
             />
           </div>
-          
+
           <div class="form-group half">
             <label>Макс. игроков</label>
-            <input 
-              v-model.number="formData.max_players" 
-              type="number" 
+            <input
+              v-model.number="formData.max_players"
+              type="number"
               min="1"
               class="form-input"
-              :placeholder="selectedGameMaxPlayers ? `Из игры: ${selectedGameMaxPlayers}` : 'Из игры'"
+              :placeholder="
+                selectedGameMaxPlayers
+                  ? `Из игры: ${selectedGameMaxPlayers}`
+                  : 'Из игры'
+              "
             />
           </div>
         </div>
-        
+
         <!-- Регистрация -->
         <div class="form-group">
           <label class="checkbox-label">
@@ -273,13 +318,25 @@
             <span>Регистрация открыта</span>
           </label>
         </div>
-        
+
         <div v-if="error" class="form-error">{{ error }}</div>
-        
+
         <div class="form-actions">
-          <button type="button" @click="$emit('cancel')" class="btn btn-secondary">Отмена</button>
+          <button
+            type="button"
+            @click="$emit('cancel')"
+            class="btn btn-secondary"
+          >
+            Отмена
+          </button>
           <button type="submit" class="btn btn-primary" :disabled="loading">
-            {{ loading ? 'Сохранение...' : (mode === 'add' ? 'Добавить' : 'Сохранить') }}
+            {{
+              loading
+                ? "Сохранение..."
+                : mode === "add"
+                ? "Добавить"
+                : "Сохранить"
+            }}
           </button>
         </div>
       </form>
@@ -289,706 +346,800 @@
 
 <script>
 export default {
-  name: 'RunEditor',
+  name: "RunEditor",
   props: {
     // Режим: 'add' или 'edit'
     mode: {
       type: String,
-      default: 'add',
-      validator: v => ['add', 'edit'].includes(v)
+      default: "add",
+      validator: (v) => ["add", "edit"].includes(v),
     },
     // Данные существующего прогона для редактирования
     run: {
       type: Object,
-      default: null
+      default: null,
     },
     // ID проведения конвента (если редактируем в контексте расписания конвента)
     conventionEventId: {
       type: [Number, String],
-      default: null
+      default: null,
     },
     // Заблокировать выбор конвента
     lockConvention: {
       type: Boolean,
-      default: false
+      default: false,
     },
     // Заблокировать изменение игры при редактировании
     lockGame: {
       type: Boolean,
-      default: false
+      default: false,
     },
     // Название конвента для отображения (если lockConvention)
     conventionName: {
       type: String,
-      default: ''
+      default: "",
     },
     // Список игр
     games: {
       type: Array,
-      default: () => []
+      default: () => [],
     },
     // Список городов
     cities: {
       type: Array,
-      default: () => []
+      default: () => [],
     },
     // Список проведений конвентов
     conventionEvents: {
       type: Array,
-      default: () => []
+      default: () => [],
     },
     // Помещения, доступные для выбора (если lockConvention - помещения площадки конвента)
     availableRooms: {
       type: Array,
-      default: () => []
+      default: () => [],
     },
     // Площадка конвента (для режима lockConvention)
     conventionVenue: {
       type: Object,
-      default: null
+      default: null,
     },
     // Ограничения по датам
     dateConstraints: {
       type: Object,
-      default: () => ({ min: '', max: '' })
+      default: () => ({ min: "", max: "" }),
     },
     // Разрешить создание нового города
     allowNewCity: {
       type: Boolean,
-      default: true
+      default: true,
     },
     // CSRF токен
     csrfToken: {
       type: String,
-      default: ''
+      default: "",
     },
     // Город по умолчанию (для контекста конвента)
     defaultCity: {
       type: Object,
-      default: null
+      default: null,
     },
     // Таймзона по умолчанию
     defaultTimezone: {
       type: String,
-      default: 'Europe/Moscow'
+      default: "Europe/Moscow",
     },
     // Дата по умолчанию
     defaultDate: {
       type: String,
-      default: ''
-    }
+      default: "",
+    },
   },
-  emits: ['save', 'cancel', 'error'],
+  emits: ["save", "cancel", "error", "city-created"],
   mounted() {
-    document.addEventListener('click', this.handleDocumentClick)
+    // Сохраняем позицию прокрутки и блокируем прокрутку body
+    this.savedScrollY = window.scrollY;
+    document.body.classList.add("modal-open");
+    document.body.style.top = `-${this.savedScrollY}px`;
+    document.addEventListener("click", this.handleDocumentClick);
   },
   beforeUnmount() {
-    document.removeEventListener('click', this.handleDocumentClick)
+    // Восстанавливаем прокрутку body
+    document.body.classList.remove("modal-open");
+    document.body.style.top = "";
+    window.scrollTo(0, this.savedScrollY);
+    document.removeEventListener("click", this.handleDocumentClick);
   },
   data() {
     return {
+      savedScrollY: 0,
       formData: {
         game_id: null,
         convention_event_id: null,
         city_id: null,
-        city_timezone: 'Europe/Moscow',
-        newCityName: '',
+        city_timezone: "Europe/Moscow",
+        newCityName: "",
         venue_id: null,
         room_ids: [],
-        date: '',
-        time: '12:00',
+        date: "",
+        time: "12:00",
         duration: 180,
         max_players: null,
-        registration_open: true
+        registration_open: true,
       },
       loading: false,
       error: null,
-      gameSearch: '',
-      citySearch: '',
+      gameSearch: "",
+      citySearch: "",
       showGameDropdown: false,
       showCityDropdown: false,
       showRoomsDropdown: false,
       venuesList: [],
-      roomsList: []
-    }
+      roomsList: [],
+    };
   },
   computed: {
     sortedGames() {
-      return this.games.slice().sort((a, b) => a.name.localeCompare(b.name, 'ru'))
+      return this.games
+        .slice()
+        .sort((a, b) => a.name.localeCompare(b.name, "ru"));
     },
     sortedConventionEvents() {
       return this.conventionEvents.slice().sort((a, b) => {
-        const nameA = a.convention_name || ''
-        const nameB = b.convention_name || ''
-        return nameA.localeCompare(nameB, 'ru')
-      })
+        const nameA = a.convention_name || "";
+        const nameB = b.convention_name || "";
+        return nameA.localeCompare(nameB, "ru");
+      });
     },
     filteredGamesList() {
       if (!this.gameSearch) {
-        return this.sortedGames
+        return this.sortedGames;
       }
-      const query = this.gameSearch.toLowerCase()
-      return this.sortedGames.filter(g => g.name.toLowerCase().includes(query))
+      const query = this.gameSearch.toLowerCase();
+      return this.sortedGames.filter((g) =>
+        g.name.toLowerCase().includes(query)
+      );
     },
     filteredCitiesList() {
-      const sortedCities = this.cities.slice().sort((a, b) => a.name.localeCompare(b.name, 'ru'))
+      const sortedCities = this.cities
+        .slice()
+        .sort((a, b) => a.name.localeCompare(b.name, "ru"));
       if (!this.citySearch) {
-        return sortedCities
+        return sortedCities;
       }
-      const query = this.citySearch.toLowerCase()
-      return sortedCities.filter(c => c.name.toLowerCase().includes(query))
+      const query = this.citySearch.toLowerCase();
+      return sortedCities.filter((c) => c.name.toLowerCase().includes(query));
     },
     selectedGameName() {
-      if (!this.formData.game_id) return ''
-      const game = this.games.find(g => g.id === this.formData.game_id)
-      return game ? game.name : ''
+      if (!this.formData.game_id) return "";
+      const game = this.games.find((g) => g.id === this.formData.game_id);
+      return game ? game.name : "";
     },
     selectedGameMaxPlayers() {
-      if (!this.formData.game_id) return null
-      const game = this.games.find(g => g.id === this.formData.game_id)
-      return game ? game.players_max : null
+      if (!this.formData.game_id) return null;
+      const game = this.games.find((g) => g.id === this.formData.game_id);
+      return game ? game.players_max : null;
     },
     selectedCityName() {
-      if (!this.formData.city_id || this.formData.city_id === 'new') return ''
-      const city = this.cities.find(c => c.id === this.formData.city_id)
-      if (!city) return ''
-      const regionName = city.region && city.region.name ? city.region.name : ''
-      return regionName ? `${city.name} (${regionName})` : city.name
+      if (!this.formData.city_id || this.formData.city_id === "new") return "";
+      const city = this.cities.find((c) => c.id === this.formData.city_id);
+      if (!city) return "";
+      const regionName =
+        city.region && city.region.name ? city.region.name : "";
+      return regionName ? `${city.name} (${regionName})` : city.name;
     },
     timezoneLabel() {
-      return this.getTimezoneAbbr(this.formData.city_timezone)
+      return this.getTimezoneAbbr(this.formData.city_timezone);
     },
     selectedRoomsText() {
-      if (this.formData.room_ids.length === 0) return ''
-      const selectedRooms = this.roomsList.filter(r => this.formData.room_ids.includes(r.id))
-      return selectedRooms.map(r => r.name).join(', ')
+      if (this.formData.room_ids.length === 0) return "";
+      const selectedRooms = this.roomsList.filter((r) =>
+        this.formData.room_ids.includes(r.id)
+      );
+      return selectedRooms.map((r) => r.name).join(", ");
     },
     isVenueReadonly() {
       // Площадка только для чтения, если игра проводится на конвенте
-      return this.lockConvention || (this.formData.convention_event_id && this.hasConventionVenue)
+      return (
+        this.lockConvention ||
+        (this.formData.convention_event_id && this.hasConventionVenue)
+      );
     },
     hasConventionVenue() {
       // Проверяем, есть ли у выбранного конвента площадка
-      if (this.conventionVenue) return true
+      if (this.conventionVenue) return true;
       if (this.formData.convention_event_id) {
-        const event = this.conventionEvents.find(e => e.id === this.formData.convention_event_id)
-        return event && event.venue && event.venue.id
+        const event = this.conventionEvents.find(
+          (e) => e.id === this.formData.convention_event_id
+        );
+        return event && event.venue && event.venue.id;
       }
-      return false
+      return false;
     },
     selectedVenueName() {
-      if (!this.formData.venue_id) return null
-      const venue = this.venuesList.find(v => v.id === this.formData.venue_id)
-      if (venue) return venue.name
+      if (!this.formData.venue_id) return null;
+      const venue = this.venuesList.find(
+        (v) => v.id === this.formData.venue_id
+      );
+      if (venue) return venue.name;
       // Проверяем conventionVenue
-      if (this.conventionVenue && this.conventionVenue.id === this.formData.venue_id) {
-        return this.conventionVenue.name
+      if (
+        this.conventionVenue &&
+        this.conventionVenue.id === this.formData.venue_id
+      ) {
+        return this.conventionVenue.name;
       }
-      return null
+      return null;
     },
     // Форматированная дата для отображения (дд/мм/гггг)
     formattedDate: {
       get() {
-        if (!this.formData.date) return ''
-        const parts = this.formData.date.split('-')
+        if (!this.formData.date) return "";
+        const parts = this.formData.date.split("-");
         if (parts.length === 3) {
-          return `${parts[2]}/${parts[1]}/${parts[0]}`
+          return `${parts[2]}/${parts[1]}/${parts[0]}`;
         }
-        return this.formData.date
+        return this.formData.date;
       },
       set(val) {
         // Парсим дд/мм/гггг в yyyy-mm-dd
-        const parts = val.replace(/[^\d/]/g, '').split('/')
-        if (parts.length === 3 && parts[0].length === 2 && parts[1].length === 2 && parts[2].length === 4) {
-          this.formData.date = `${parts[2]}-${parts[1]}-${parts[0]}`
+        const parts = val.replace(/[^\d/]/g, "").split("/");
+        if (
+          parts.length === 3 &&
+          parts[0].length === 2 &&
+          parts[1].length === 2 &&
+          parts[2].length === 4
+        ) {
+          this.formData.date = `${parts[2]}-${parts[1]}-${parts[0]}`;
         }
-      }
-    }
+      },
+    },
   },
   watch: {
     run: {
       immediate: true,
       handler(newVal) {
-        if (newVal && this.mode === 'edit') {
-          this.initFromRun(newVal)
+        if (newVal && this.mode === "edit") {
+          this.initFromRun(newVal);
         }
-      }
+      },
     },
     conventionEventId: {
       immediate: true,
       handler(newVal) {
         if (newVal && this.lockConvention) {
-          this.formData.convention_event_id = newVal
+          this.formData.convention_event_id = newVal;
         }
-      }
+      },
     },
     defaultCity: {
       immediate: true,
       handler(newVal) {
         if (newVal && this.lockConvention) {
-          this.formData.city_id = newVal.id
-          this.formData.city_timezone = newVal.timezone || 'Europe/Moscow'
-          const regionName = newVal.region && newVal.region.name ? newVal.region.name : ''
-          this.citySearch = regionName ? `${newVal.name} (${regionName})` : newVal.name
+          this.formData.city_id = newVal.id;
+          this.formData.city_timezone = newVal.timezone || "Europe/Moscow";
+          const regionName =
+            newVal.region && newVal.region.name ? newVal.region.name : "";
+          this.citySearch = regionName
+            ? `${newVal.name} (${regionName})`
+            : newVal.name;
         }
-      }
+      },
     },
     defaultDate: {
       immediate: true,
       handler(newVal) {
-        if (newVal && this.mode === 'add') {
-          this.formData.date = newVal
+        if (newVal && this.mode === "add") {
+          this.formData.date = newVal;
         }
-      }
+      },
     },
     defaultTimezone: {
       immediate: true,
       handler(newVal) {
-        if (newVal && this.mode === 'add') {
-          this.formData.city_timezone = newVal
+        if (newVal && this.mode === "add") {
+          this.formData.city_timezone = newVal;
         }
-      }
+      },
     },
     availableRooms: {
       immediate: true,
       handler(newVal) {
         if (this.lockConvention && newVal && newVal.length > 0) {
-          this.roomsList = newVal
+          this.roomsList = newVal;
         }
-      }
+      },
     },
     conventionVenue: {
       immediate: true,
       handler(newVal) {
         if (newVal && this.lockConvention) {
-          this.formData.venue_id = newVal.id
+          this.formData.venue_id = newVal.id;
           // Добавляем площадку в venuesList для отображения имени
-          if (!this.venuesList.find(v => v.id === newVal.id)) {
-            this.venuesList = [{ id: newVal.id, name: newVal.name }]
+          if (!this.venuesList.find((v) => v.id === newVal.id)) {
+            this.venuesList = [{ id: newVal.id, name: newVal.name }];
           }
         }
-      }
-    }
+      },
+    },
   },
   methods: {
     initFromRun(run) {
       // Парсим дату и время
-      let runDate = ''
-      let runTime = '12:00'
-      
+      let runDate = "";
+      let runTime = "12:00";
+
       // Используем date_local если доступна (формат YYYY-MM-DDTHH:MM:SS)
-      const dateStr = run.date_local || run.date
+      const dateStr = run.date_local || run.date;
       if (dateStr) {
-        const parts = dateStr.split('T')
+        const parts = dateStr.split("T");
         if (parts.length >= 1) {
-          runDate = parts[0]
+          runDate = parts[0];
         }
         if (parts.length >= 2) {
-          runTime = parts[1].slice(0, 5)
+          runTime = parts[1].slice(0, 5);
         }
       }
-      
+
       // Определяем convention_event_id
-      const conventionEventId = this.lockConvention ? this.conventionEventId : (run.convention_event_id || run.convention_event || null)
-      
+      const conventionEventId = this.lockConvention
+        ? this.conventionEventId
+        : run.convention_event_id || run.convention_event || null;
+
       // Находим проведение конвента, если есть
-      let conventionEvent = null
-      if (conventionEventId && this.conventionEvents && this.conventionEvents.length > 0) {
-        conventionEvent = this.conventionEvents.find(e => e.id === conventionEventId)
+      let conventionEvent = null;
+      if (
+        conventionEventId &&
+        this.conventionEvents &&
+        this.conventionEvents.length > 0
+      ) {
+        conventionEvent = this.conventionEvents.find(
+          (e) => e.id === conventionEventId
+        );
       }
-      
+
       // Определяем city_id
-      let cityId = null
-      let cityTimezone = 'Europe/Moscow'
-      let cityName = ''
-      
+      let cityId = null;
+      let cityTimezone = "Europe/Moscow";
+      let cityName = "";
+
       // При lockConvention берём город из defaultCity (город конвента)
       if (this.lockConvention && this.defaultCity) {
-        cityId = this.defaultCity.id
-        cityTimezone = this.defaultCity.timezone || 'Europe/Moscow'
-        const regionName = this.defaultCity.region && this.defaultCity.region.name ? this.defaultCity.region.name : ''
-        cityName = regionName ? `${this.defaultCity.name} (${regionName})` : this.defaultCity.name
+        cityId = this.defaultCity.id;
+        cityTimezone = this.defaultCity.timezone || "Europe/Moscow";
+        const regionName =
+          this.defaultCity.region && this.defaultCity.region.name
+            ? this.defaultCity.region.name
+            : "";
+        cityName = regionName
+          ? `${this.defaultCity.name} (${regionName})`
+          : this.defaultCity.name;
       } else if (conventionEvent && conventionEvent.city) {
         // Если есть проведение конвента - берём город из него
-        cityId = conventionEvent.city.id
-        cityTimezone = conventionEvent.city.timezone || 'Europe/Moscow'
-        const regionName = conventionEvent.city.region && conventionEvent.city.region.name ? conventionEvent.city.region.name : ''
-        cityName = regionName ? `${conventionEvent.city.name} (${regionName})` : conventionEvent.city.name
+        cityId = conventionEvent.city.id;
+        cityTimezone = conventionEvent.city.timezone || "Europe/Moscow";
+        const regionName =
+          conventionEvent.city.region && conventionEvent.city.region.name
+            ? conventionEvent.city.region.name
+            : "";
+        cityName = regionName
+          ? `${conventionEvent.city.name} (${regionName})`
+          : conventionEvent.city.name;
       } else if (run.city_id) {
-        cityId = run.city_id
+        cityId = run.city_id;
       } else if (run.city) {
         // Ищем город по названию
-        const city = this.cities.find(c => c.name === run.city)
+        const city = this.cities.find((c) => c.name === run.city);
         if (city) {
-          cityId = city.id
-          cityTimezone = city.timezone || 'Europe/Moscow'
+          cityId = city.id;
+          cityTimezone = city.timezone || "Europe/Moscow";
         }
       }
-      
+
       // Определяем venue и rooms
-      let venueId = null
-      let roomIds = []
+      let venueId = null;
+      let roomIds = [];
       if (run.rooms && run.rooms.length > 0) {
-        roomIds = run.rooms.map(r => r.id)
+        roomIds = run.rooms.map((r) => r.id);
         // Площадка берётся из первого помещения
         if (run.rooms[0].venue_id) {
-          venueId = run.rooms[0].venue_id
+          venueId = run.rooms[0].venue_id;
         }
       }
-      
+
       this.formData = {
         game_id: run.game_id || (run.game && run.game.id) || null,
         convention_event_id: conventionEventId,
         city_id: cityId,
         city_timezone: run.city_timezone || cityTimezone,
-        newCityName: '',
+        newCityName: "",
         venue_id: venueId,
         room_ids: roomIds,
         date: runDate,
         time: runTime,
         duration: run.duration || 180,
         max_players: run.max_players || null,
-        registration_open: run.registration_open !== false
-      }
-      
+        registration_open: run.registration_open !== false,
+      };
+
       // Устанавливаем поисковые поля
-      this.gameSearch = run.game_name || (run.game && run.game.name) || ''
-      this.citySearch = cityName || this.selectedCityName || run.city || ''
-      
+      this.gameSearch = run.game_name || (run.game && run.game.name) || "";
+      this.citySearch = cityName || this.selectedCityName || run.city || "";
+
       // Загружаем площадки и помещения
       if (cityId) {
         if (this.lockConvention && this.conventionVenue) {
           // Для конвента используем площадку конвента (режим lockConvention)
-          this.formData.venue_id = this.conventionVenue.id
-          this.venuesList = [{ id: this.conventionVenue.id, name: this.conventionVenue.name }]
+          this.formData.venue_id = this.conventionVenue.id;
+          this.venuesList = [
+            { id: this.conventionVenue.id, name: this.conventionVenue.name },
+          ];
           // roomsList уже заполнен из availableRooms через watcher
-        } else if (conventionEvent && conventionEvent.venue && conventionEvent.venue.id) {
+        } else if (
+          conventionEvent &&
+          conventionEvent.venue &&
+          conventionEvent.venue.id
+        ) {
           // Если прогон привязан к проведению конвента с площадкой - используем её
-          this.formData.venue_id = conventionEvent.venue.id
-          this.venuesList = [{ id: conventionEvent.venue.id, name: conventionEvent.venue.name }]
+          this.formData.venue_id = conventionEvent.venue.id;
+          this.venuesList = [
+            { id: conventionEvent.venue.id, name: conventionEvent.venue.name },
+          ];
           // Загружаем помещения площадки конвента
-          this.fetchRoomsByVenue(conventionEvent.venue.id)
+          this.fetchRoomsByVenue(conventionEvent.venue.id);
         } else {
           this.fetchVenuesByCity(cityId).then(() => {
             if (venueId) {
-              this.fetchRoomsByVenue(venueId)
+              this.fetchRoomsByVenue(venueId);
             }
-          })
+          });
         }
       }
     },
-    
+
     selectGame(game) {
-      this.formData.game_id = game.id
-      this.gameSearch = game.name
-      this.showGameDropdown = false
+      this.formData.game_id = game.id;
+      this.gameSearch = game.name;
+      this.showGameDropdown = false;
     },
-    
+
     selectCity(city) {
-      this.formData.city_id = city.id
-      this.formData.city_timezone = city.timezone || 'Europe/Moscow'
-      const regionName = city.region && city.region.name ? city.region.name : ''
-      this.citySearch = regionName ? `${city.name} (${regionName})` : city.name
-      this.showCityDropdown = false
+      this.formData.city_id = city.id;
+      this.formData.city_timezone = city.timezone || "Europe/Moscow";
+      const regionName =
+        city.region && city.region.name ? city.region.name : "";
+      this.citySearch = regionName ? `${city.name} (${regionName})` : city.name;
+      this.showCityDropdown = false;
       // Сбрасываем площадку и помещения
-      this.formData.venue_id = null
-      this.formData.room_ids = []
-      this.roomsList = []
-      this.fetchVenuesByCity(city.id)
+      this.formData.venue_id = null;
+      this.formData.room_ids = [];
+      this.roomsList = [];
+      this.fetchVenuesByCity(city.id);
     },
-    
+
     selectNewCity() {
-      this.formData.city_id = 'new'
-      this.citySearch = ''
-      this.showCityDropdown = false
-      this.formData.venue_id = null
-      this.formData.room_ids = []
-      this.venuesList = []
-      this.roomsList = []
+      this.formData.city_id = "new";
+      this.citySearch = "";
+      this.showCityDropdown = false;
+      this.formData.venue_id = null;
+      this.formData.room_ids = [];
+      this.venuesList = [];
+      this.roomsList = [];
     },
-    
+
     onGameInputBlur() {
       setTimeout(() => {
-        this.showGameDropdown = false
-        if (this.formData.game_id && this.gameSearch !== this.selectedGameName) {
-          this.gameSearch = this.selectedGameName
+        this.showGameDropdown = false;
+        if (
+          this.formData.game_id &&
+          this.gameSearch !== this.selectedGameName
+        ) {
+          this.gameSearch = this.selectedGameName;
         }
-      }, 200)
+      }, 200);
     },
-    
+
     onCityInputBlur() {
       setTimeout(() => {
-        this.showCityDropdown = false
-        if (this.formData.city_id && this.formData.city_id !== 'new' && this.citySearch !== this.selectedCityName) {
-          this.citySearch = this.selectedCityName
+        this.showCityDropdown = false;
+        if (
+          this.formData.city_id &&
+          this.formData.city_id !== "new" &&
+          this.citySearch !== this.selectedCityName
+        ) {
+          this.citySearch = this.selectedCityName;
         }
-      }, 200)
+      }, 200);
     },
-    
+
     toggleRoomsDropdown() {
-      this.showRoomsDropdown = !this.showRoomsDropdown
+      this.showRoomsDropdown = !this.showRoomsDropdown;
     },
-    
+
     toggleRoom(roomId) {
-      const index = this.formData.room_ids.indexOf(roomId)
+      const index = this.formData.room_ids.indexOf(roomId);
       if (index === -1) {
-        this.formData.room_ids.push(roomId)
+        this.formData.room_ids.push(roomId);
       } else {
-        this.formData.room_ids.splice(index, 1)
+        this.formData.room_ids.splice(index, 1);
       }
     },
-    
+
     handleDocumentClick(event) {
       // Закрываем dropdown помещений при клике вне его
-      if (this.showRoomsDropdown && !event.target.closest('.rooms-dropdown') && !event.target.closest('.rooms-select')) {
-        this.showRoomsDropdown = false
+      if (
+        this.showRoomsDropdown &&
+        !event.target.closest(".rooms-dropdown") &&
+        !event.target.closest(".rooms-select")
+      ) {
+        this.showRoomsDropdown = false;
       }
     },
-    
+
     onConventionEventChange() {
       if (this.formData.convention_event_id) {
-        const event = this.conventionEvents.find(e => e.id === this.formData.convention_event_id)
+        const event = this.conventionEvents.find(
+          (e) => e.id === this.formData.convention_event_id
+        );
         if (event && event.city) {
-          this.formData.city_id = event.city.id
-          this.formData.city_timezone = event.city.timezone || 'Europe/Moscow'
-          const regionName = event.city.region && event.city.region.name ? event.city.region.name : ''
-          this.citySearch = regionName ? `${event.city.name} (${regionName})` : event.city.name
-          
+          this.formData.city_id = event.city.id;
+          this.formData.city_timezone = event.city.timezone || "Europe/Moscow";
+          const regionName =
+            event.city.region && event.city.region.name
+              ? event.city.region.name
+              : "";
+          this.citySearch = regionName
+            ? `${event.city.name} (${regionName})`
+            : event.city.name;
+
           // Сбрасываем помещения
-          this.formData.room_ids = []
-          this.roomsList = []
-          
+          this.formData.room_ids = [];
+          this.roomsList = [];
+
           // Если у конвента указана площадка - устанавливаем её
           if (event.venue && event.venue.id) {
-            this.formData.venue_id = event.venue.id
-            this.venuesList = [{ id: event.venue.id, name: event.venue.name }]
+            this.formData.venue_id = event.venue.id;
+            this.venuesList = [{ id: event.venue.id, name: event.venue.name }];
             // Загружаем помещения площадки конвента
-            this.fetchRoomsByVenue(event.venue.id)
+            this.fetchRoomsByVenue(event.venue.id);
           } else {
             // Загружаем площадки города
-            this.formData.venue_id = null
-            this.fetchVenuesByCity(event.city.id)
+            this.formData.venue_id = null;
+            this.fetchVenuesByCity(event.city.id);
           }
         }
       } else {
-        this.formData.city_id = null
-        this.formData.city_timezone = 'Europe/Moscow'
-        this.citySearch = ''
-        this.formData.venue_id = null
-        this.formData.room_ids = []
-        this.venuesList = []
-        this.roomsList = []
+        this.formData.city_id = null;
+        this.formData.city_timezone = "Europe/Moscow";
+        this.citySearch = "";
+        this.formData.venue_id = null;
+        this.formData.room_ids = [];
+        this.venuesList = [];
+        this.roomsList = [];
       }
     },
-    
+
     onVenueChange() {
-      this.formData.room_ids = []
+      this.formData.room_ids = [];
       if (this.formData.venue_id) {
-        this.fetchRoomsByVenue(this.formData.venue_id)
+        this.fetchRoomsByVenue(this.formData.venue_id);
       } else {
-        this.roomsList = []
+        this.roomsList = [];
       }
     },
-    
+
     async fetchVenuesByCity(cityId) {
-      if (!cityId) return
+      if (!cityId) return;
       try {
-        const response = await fetch(`/api/venues/?city=${cityId}`)
+        const response = await fetch(`/api/venues/?city=${cityId}`);
         if (response.ok) {
-          this.venuesList = await response.json()
+          this.venuesList = await response.json();
         }
       } catch (err) {
-        console.error('Ошибка загрузки площадок:', err)
+        console.error("Ошибка загрузки площадок:", err);
       }
     },
-    
+
     async fetchRoomsByVenue(venueId) {
-      if (!venueId) return
+      if (!venueId) return;
       try {
-        const response = await fetch(`/api/rooms/?venue=${venueId}`)
+        const response = await fetch(`/api/rooms/?venue=${venueId}`);
         if (response.ok) {
-          this.roomsList = await response.json()
+          this.roomsList = await response.json();
         }
       } catch (err) {
-        console.error('Ошибка загрузки помещений:', err)
+        console.error("Ошибка загрузки помещений:", err);
       }
     },
-    
+
     getTimezoneAbbr(timezone) {
-      if (!timezone) return ''
+      if (!timezone) return "";
       const abbrs = {
-        'Europe/Kaliningrad': 'UTC+2',
-        'Europe/Moscow': 'MSK',
-        'Europe/Samara': 'UTC+4',
-        'Asia/Yekaterinburg': 'UTC+5',
-        'Asia/Omsk': 'UTC+6',
-        'Asia/Krasnoyarsk': 'UTC+7',
-        'Asia/Irkutsk': 'UTC+8',
-        'Asia/Yakutsk': 'UTC+9',
-        'Asia/Vladivostok': 'UTC+10',
-        'Asia/Magadan': 'UTC+11',
-        'Asia/Kamchatka': 'UTC+12'
-      }
-      return abbrs[timezone] || timezone
+        "Europe/Kaliningrad": "UTC+2",
+        "Europe/Moscow": "MSK",
+        "Europe/Samara": "UTC+4",
+        "Asia/Yekaterinburg": "UTC+5",
+        "Asia/Omsk": "UTC+6",
+        "Asia/Krasnoyarsk": "UTC+7",
+        "Asia/Irkutsk": "UTC+8",
+        "Asia/Yakutsk": "UTC+9",
+        "Asia/Vladivostok": "UTC+10",
+        "Asia/Magadan": "UTC+11",
+        "Asia/Kamchatka": "UTC+12",
+      };
+      return abbrs[timezone] || timezone;
     },
-    
+
     formatDates(start, end) {
       const formatDate = (dateStr) => {
-        const d = new Date(dateStr)
-        const day = String(d.getDate()).padStart(2, '0')
-        const month = String(d.getMonth() + 1).padStart(2, '0')
-        const year = d.getFullYear()
-        return `${day}/${month}/${year}`
-      }
-      return `${formatDate(start)} — ${formatDate(end)}`
+        const d = new Date(dateStr);
+        const day = String(d.getDate()).padStart(2, "0");
+        const month = String(d.getMonth() + 1).padStart(2, "0");
+        const year = d.getFullYear();
+        return `${day}/${month}/${year}`;
+      };
+      return `${formatDate(start)} — ${formatDate(end)}`;
     },
-    
+
     handleDateInput(event) {
-      let value = event.target.value
+      let value = event.target.value;
       // Оставляем только цифры и слэши
-      value = value.replace(/[^\d/]/g, '')
-      
+      value = value.replace(/[^\d/]/g, "");
+
       // Автоматически добавляем слэши
-      if (value.length === 2 && !value.includes('/')) {
-        value += '/'
-      } else if (value.length === 5 && value.split('/').length === 2) {
-        value += '/'
+      if (value.length === 2 && !value.includes("/")) {
+        value += "/";
+      } else if (value.length === 5 && value.split("/").length === 2) {
+        value += "/";
       }
-      
+
       // Ограничиваем длину
       if (value.length > 10) {
-        value = value.slice(0, 10)
+        value = value.slice(0, 10);
       }
-      
-      event.target.value = value
-      
+
+      event.target.value = value;
+
       // Парсим дд/мм/гггг в yyyy-mm-dd
-      const parts = value.split('/')
-      if (parts.length === 3 && parts[0].length === 2 && parts[1].length === 2 && parts[2].length === 4) {
-        const day = parts[0]
-        const month = parts[1]
-        const year = parts[2]
-        this.formData.date = `${year}-${month}-${day}`
+      const parts = value.split("/");
+      if (
+        parts.length === 3 &&
+        parts[0].length === 2 &&
+        parts[1].length === 2 &&
+        parts[2].length === 4
+      ) {
+        const day = parts[0];
+        const month = parts[1];
+        const year = parts[2];
+        this.formData.date = `${year}-${month}-${day}`;
       }
     },
-    
+
     validateDate() {
-      if (!this.formData.date) return
-      
+      if (!this.formData.date) return;
+
       // Проверяем ограничения по дате
-      if (this.dateConstraints.min && this.formData.date < this.dateConstraints.min) {
-        this.formData.date = this.dateConstraints.min
+      if (
+        this.dateConstraints.min &&
+        this.formData.date < this.dateConstraints.min
+      ) {
+        this.formData.date = this.dateConstraints.min;
       }
-      if (this.dateConstraints.max && this.formData.date > this.dateConstraints.max) {
-        this.formData.date = this.dateConstraints.max
+      if (
+        this.dateConstraints.max &&
+        this.formData.date > this.dateConstraints.max
+      ) {
+        this.formData.date = this.dateConstraints.max;
       }
     },
-    
+
     openDatePicker() {
       // Открываем нативный date picker
       if (this.$refs.datePickerInput) {
-        this.$refs.datePickerInput.showPicker()
+        this.$refs.datePickerInput.showPicker();
       }
     },
-    
+
     handleDatePickerChange(event) {
-      const value = event.target.value
+      const value = event.target.value;
       if (value) {
-        this.formData.date = value
-        this.validateDate()
+        this.formData.date = value;
+        this.validateDate();
       }
     },
-    
+
     handleTimeInput(event) {
-      let value = event.target.value
+      let value = event.target.value;
       // Оставляем только цифры и двоеточие
-      value = value.replace(/[^\d:]/g, '')
-      
+      value = value.replace(/[^\d:]/g, "");
+
       // Автоматически добавляем двоеточие после двух цифр
-      if (value.length === 2 && !value.includes(':')) {
-        value += ':'
+      if (value.length === 2 && !value.includes(":")) {
+        value += ":";
       }
-      
+
       // Ограничиваем длину
       if (value.length > 5) {
-        value = value.slice(0, 5)
+        value = value.slice(0, 5);
       }
-      
-      event.target.value = value
-      this.formData.time = value
+
+      event.target.value = value;
+      this.formData.time = value;
     },
-    
+
     validateTime() {
-      if (!this.formData.time) return
-      
-      const parts = this.formData.time.split(':')
+      if (!this.formData.time) return;
+
+      const parts = this.formData.time.split(":");
       if (parts.length === 2) {
-        let hours = parseInt(parts[0], 10) || 0
-        let minutes = parseInt(parts[1], 10) || 0
-        
+        let hours = parseInt(parts[0], 10) || 0;
+        let minutes = parseInt(parts[1], 10) || 0;
+
         // Ограничиваем значения
-        if (hours > 23) hours = 23
-        if (hours < 0) hours = 0
-        if (minutes > 59) minutes = 59
-        if (minutes < 0) minutes = 0
-        
-        this.formData.time = `${String(hours).padStart(2, '0')}:${String(minutes).padStart(2, '0')}`
+        if (hours > 23) hours = 23;
+        if (hours < 0) hours = 0;
+        if (minutes > 59) minutes = 59;
+        if (minutes < 0) minutes = 0;
+
+        this.formData.time = `${String(hours).padStart(2, "0")}:${String(
+          minutes
+        ).padStart(2, "0")}`;
       }
     },
-    
+
     // eslint-disable-next-line no-unused-vars
     convertToTimezone(date, time, timezone) {
       // Создаём строку даты-времени и конвертируем в ISO
-      const dateTimeStr = `${date}T${time}:00`
-      
+      const dateTimeStr = `${date}T${time}:00`;
+
       // Для простоты используем локальную дату-время
       // Бэкенд должен обрабатывать таймзону на своей стороне
-      return dateTimeStr
+      return dateTimeStr;
     },
-    
+
     async submitForm() {
-      this.loading = true
-      this.error = null
-      
+      this.loading = true;
+      this.error = null;
+
       try {
         // Валидация
         if (!this.formData.game_id) {
-          throw new Error('Выберите игру из списка')
+          throw new Error("Выберите игру из списка");
         }
-        
+
         if (!this.formData.date || !this.formData.time) {
-          throw new Error('Укажите дату и время')
+          throw new Error("Укажите дату и время");
         }
-        
-        let cityId = this.formData.city_id
-        
+
+        let cityId = this.formData.city_id;
+
         // Создание нового города если нужно
-        if (cityId === 'new' && this.formData.newCityName.trim()) {
-          const cityResponse = await fetch('/api/cities/', {
-            method: 'POST',
+        if (cityId === "new" && this.formData.newCityName.trim()) {
+          const cityResponse = await fetch("/api/cities/", {
+            method: "POST",
             headers: {
-              'Content-Type': 'application/json',
-              'X-CSRFToken': this.csrfToken
+              "Content-Type": "application/json",
+              "X-CSRFToken": this.csrfToken,
             },
-            body: JSON.stringify({ name: this.formData.newCityName.trim() })
-          })
-          
+            body: JSON.stringify({ name: this.formData.newCityName.trim() }),
+          });
+
           if (!cityResponse.ok) {
-            throw new Error('Ошибка при создании города')
+            throw new Error("Ошибка при создании города");
           }
-          
-          const newCity = await cityResponse.json()
-          cityId = newCity.id
-          this.$emit('city-created', newCity)
+
+          const newCity = await cityResponse.json();
+          cityId = newCity.id;
+          this.$emit("city-created", newCity);
         }
-        
-        if (!cityId || cityId === 'new') {
-          throw new Error('Выберите или создайте город')
+
+        if (!cityId || cityId === "new") {
+          throw new Error("Выберите или создайте город");
         }
-        
+
         // Формируем дату-время
-        const dateTime = `${this.formData.date}T${this.formData.time}:00`
-        
+        const dateTime = `${this.formData.date}T${this.formData.time}:00`;
+
         // Формируем данные для API
         const runData = {
           game_id: this.formData.game_id,
@@ -996,33 +1147,33 @@ export default {
           date: dateTime,
           duration: this.formData.duration,
           max_players: this.formData.max_players || null,
-          registration_open: this.formData.registration_open
-        }
-        
+          registration_open: this.formData.registration_open,
+        };
+
         if (this.formData.convention_event_id) {
-          runData.convention_event_id = this.formData.convention_event_id
+          runData.convention_event_id = this.formData.convention_event_id;
         }
-        
+
         if (this.formData.room_ids && this.formData.room_ids.length > 0) {
-          runData.room_ids = this.formData.room_ids
+          runData.room_ids = this.formData.room_ids;
         }
-        
+
         // Добавляем ID для редактирования
-        if (this.mode === 'edit' && this.run) {
-          runData.id = this.run.id
+        if (this.mode === "edit" && this.run) {
+          runData.id = this.run.id;
         }
-        
+
         // Эмитим событие с данными
-        this.$emit('save', runData)
+        this.$emit("save", runData);
       } catch (err) {
-        this.error = err.message
-        this.$emit('error', err.message)
+        this.error = err.message;
+        this.$emit("error", err.message);
       } finally {
-        this.loading = false
+        this.loading = false;
       }
-    }
-  }
-}
+    },
+  },
+};
 </script>
 
 <style scoped>
@@ -1071,7 +1222,7 @@ export default {
 }
 
 .modal-content h2 {
-  font-family: 'JetBrains Mono', monospace;
+  font-family: "JetBrains Mono", monospace;
   color: #e0e0e0;
   font-size: 1.5rem;
   margin-bottom: 24px;
@@ -1372,7 +1523,7 @@ export default {
 
 .date-input,
 .time-input {
-  font-family: 'JetBrains Mono', monospace;
+  font-family: "JetBrains Mono", monospace;
   letter-spacing: 0.05em;
 }
 
@@ -1405,11 +1556,11 @@ export default {
     flex-direction: column;
     gap: 20px;
   }
-  
+
   .form-actions {
     flex-direction: column-reverse;
   }
-  
+
   .btn {
     width: 100%;
     text-align: center;

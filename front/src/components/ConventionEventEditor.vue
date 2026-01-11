@@ -2,14 +2,20 @@
   <div class="modal-overlay" @click.self="$emit('cancel')">
     <div class="modal-content event-editor-modal">
       <button class="modal-close" @click="$emit('cancel')">×</button>
-      
-      <h2>{{ mode === 'add' ? 'Добавить проведение конвента' : 'Редактировать проведение' }}</h2>
-      
+
+      <h2>
+        {{
+          mode === "add"
+            ? "Добавить проведение конвента"
+            : "Редактировать проведение"
+        }}
+      </h2>
+
       <form @submit.prevent="submitForm" class="event-form">
         <!-- Конвент -->
         <div class="form-group searchable-select">
           <label>Конвент *</label>
-          <input 
+          <input
             v-if="!lockConvention"
             v-model="conventionSearch"
             type="text"
@@ -20,33 +26,39 @@
             @blur="onConventionInputBlur"
             @keydown.enter.prevent
           />
-          <input 
+          <input
             v-else
             type="text"
             class="form-input"
             :value="conventionSearch"
             disabled
           />
-          <div v-if="showConventionDropdown && !lockConvention" class="dropdown-list">
-            <div 
-              v-for="conv in filteredConventionsList" 
-              :key="conv.id" 
+          <div
+            v-if="showConventionDropdown && !lockConvention"
+            class="dropdown-list"
+          >
+            <div
+              v-for="conv in filteredConventionsList"
+              :key="conv.id"
               class="dropdown-item"
               :class="{ selected: formData.convention_id === conv.id }"
               @mousedown.prevent="selectConvention(conv)"
             >
               <span class="dropdown-item-name">{{ conv.name }}</span>
             </div>
-            <div v-if="filteredConventionsList.length === 0" class="dropdown-empty">
+            <div
+              v-if="filteredConventionsList.length === 0"
+              class="dropdown-empty"
+            >
               Конвенты не найдены
             </div>
           </div>
         </div>
-        
+
         <!-- Город -->
         <div class="form-group searchable-select">
           <label>Город *</label>
-          <input 
+          <input
             v-model="citySearch"
             type="text"
             class="form-input"
@@ -57,34 +69,40 @@
             @keydown.enter.prevent
           />
           <div v-if="showCityDropdown" class="dropdown-list">
-            <div 
-              v-for="city in filteredCitiesList" 
-              :key="city.id" 
+            <div
+              v-for="city in filteredCitiesList"
+              :key="city.id"
               class="dropdown-item"
               :class="{ selected: formData.city_id === city.id }"
               @mousedown.prevent="selectCity(city)"
             >
-              {{ city.name }}{{ city.region && city.region.name ? ` (${city.region.name})` : '' }}
+              {{ city.name
+              }}{{
+                city.region && city.region.name ? ` (${city.region.name})` : ""
+              }}
             </div>
-            <div 
+            <div
               v-if="allowNewCity"
               class="dropdown-item dropdown-item-new"
               @mousedown.prevent="selectNewCity"
             >
               + Создать новый город
             </div>
-            <div v-if="filteredCitiesList.length === 0 && citySearch" class="dropdown-empty">
+            <div
+              v-if="filteredCitiesList.length === 0 && citySearch"
+              class="dropdown-empty"
+            >
               Города не найдены
             </div>
           </div>
         </div>
-        
+
         <!-- Новый город -->
         <div v-if="formData.city_id === 'new'" class="form-group">
           <label>Название нового города *</label>
-          <input 
-            v-model="formData.newCityName" 
-            type="text" 
+          <input
+            v-model="formData.newCityName"
+            type="text"
             required
             class="form-input"
             placeholder="Введите название города"
@@ -92,47 +110,50 @@
         </div>
 
         <!-- Площадка -->
-        <div v-if="formData.city_id && formData.city_id !== 'new'" class="form-group">
+        <div
+          v-if="formData.city_id && formData.city_id !== 'new'"
+          class="form-group"
+        >
           <label>Площадка (опционально)</label>
-          <select 
-            v-model="formData.venue_id"
-            class="form-input"
-          >
+          <select v-model="formData.venue_id" class="form-input">
             <option :value="null">Не указана</option>
-            <option 
-              v-for="venue in venuesList" 
-              :key="venue.id" 
+            <option
+              v-for="venue in venuesList"
+              :key="venue.id"
               :value="venue.id"
             >
               {{ venue.name }}
             </option>
           </select>
         </div>
-        
+
         <!-- Дата начала и окончания -->
         <div class="form-row">
           <div class="form-group half">
-            <label>Дата начала * <span class="format-hint">(дд/мм/гггг)</span></label>
+            <label
+              >Дата начала *
+              <span class="format-hint">(дд/мм/гггг)</span></label
+            >
             <div class="date-picker-wrapper">
-              <input 
+              <input
                 :value="formattedDateStart"
                 @input="handleDateStartInput"
                 @blur="validateDates"
-                type="text" 
+                type="text"
                 required
                 class="form-input date-input"
                 placeholder="дд/мм/гггг"
                 maxlength="10"
               />
-              <input 
+              <input
                 ref="dateStartPickerInput"
                 type="date"
                 class="date-picker-native"
                 :value="formData.date_start"
                 @change="handleDateStartPickerChange"
               />
-              <button 
-                type="button" 
+              <button
+                type="button"
                 class="date-picker-btn"
                 @click="openDateStartPicker"
                 title="Открыть календарь"
@@ -141,21 +162,24 @@
               </button>
             </div>
           </div>
-          
+
           <div class="form-group half">
-            <label>Дата окончания * <span class="format-hint">(дд/мм/гггг)</span></label>
+            <label
+              >Дата окончания *
+              <span class="format-hint">(дд/мм/гггг)</span></label
+            >
             <div class="date-picker-wrapper">
-              <input 
+              <input
                 :value="formattedDateEnd"
                 @input="handleDateEndInput"
                 @blur="validateDates"
-                type="text" 
+                type="text"
                 required
                 class="form-input date-input"
                 placeholder="дд/мм/гггг"
                 maxlength="10"
               />
-              <input 
+              <input
                 ref="dateEndPickerInput"
                 type="date"
                 class="date-picker-native"
@@ -163,8 +187,8 @@
                 :min="formData.date_start"
                 @change="handleDateEndPickerChange"
               />
-              <button 
-                type="button" 
+              <button
+                type="button"
                 class="date-picker-btn"
                 @click="openDateEndPicker"
                 title="Открыть календарь"
@@ -174,29 +198,29 @@
             </div>
           </div>
         </div>
-        
+
         <!-- Настройки регистрации участников -->
         <div class="registration-settings">
           <div class="settings-header">
             <span class="settings-icon">📝</span>
             <span class="settings-label">Регистрация участников</span>
           </div>
-          
+
           <div class="form-row">
             <div class="form-group half">
               <label>
-                <input 
-                  type="checkbox" 
+                <input
+                  type="checkbox"
                   v-model="formData.registration_open"
                   class="form-checkbox"
                 />
                 Регистрация открыта
               </label>
             </div>
-            
+
             <div class="form-group half">
               <label>Лимит участников</label>
-              <input 
+              <input
                 v-model.number="formData.capacity"
                 type="number"
                 min="1"
@@ -205,52 +229,65 @@
               />
             </div>
           </div>
-          
-          <div v-if="mode === 'edit' && conventionEvent" class="registration-stats">
+
+          <div
+            v-if="mode === 'edit' && conventionEvent"
+            class="registration-stats"
+          >
             <span class="stat-item">
               ✅ Подтверждено: {{ conventionEvent.registrations_count || 0 }}
             </span>
-            <span v-if="conventionEvent.pending_registrations_count > 0" class="stat-item stat-pending">
+            <span
+              v-if="conventionEvent.pending_registrations_count > 0"
+              class="stat-item stat-pending"
+            >
               ⏳ Ожидает: {{ conventionEvent.pending_registrations_count }}
             </span>
           </div>
         </div>
-        
+
         <!-- Секция управления регистрациями (только в режиме редактирования) -->
-        <div v-if="mode === 'edit' && conventionEvent && canEdit" class="registrations-section">
+        <div
+          v-if="mode === 'edit' && conventionEvent && canEdit"
+          class="registrations-section"
+        >
           <div class="registrations-header">
             <span class="registrations-icon">👥</span>
             <span class="registrations-label">Заявки участников</span>
-            <button 
-              type="button" 
+            <button
+              type="button"
               class="refresh-btn"
               @click="fetchRegistrations"
               :disabled="registrationsLoading"
             >
-              {{ registrationsLoading ? '...' : '🔄' }}
+              {{ registrationsLoading ? "..." : "🔄" }}
             </button>
           </div>
-          
+
           <div v-if="registrations.length === 0" class="no-registrations">
             Заявок пока нет
           </div>
-          
+
           <div v-else class="registrations-list">
-            <div 
-              v-for="reg in registrations" 
-              :key="reg.id" 
+            <div
+              v-for="reg in registrations"
+              :key="reg.id"
               class="registration-item"
               :class="'status-' + reg.status"
             >
               <div class="reg-user">
                 <span class="reg-user-name">{{ reg.user.display_name }}</span>
-                <span class="reg-date">{{ formatRegDate(reg.created_at) }}</span>
+                <span class="reg-date">{{
+                  formatRegDate(reg.created_at)
+                }}</span>
               </div>
-              
+
               <div class="reg-status">
-                <select 
+                <select
                   :value="reg.status"
-                  @change="updateRegistrationStatus(reg.id, $event.target.value)"
+                  @change="
+                    updateRegistrationStatus(reg.id, $event.target.value)
+                  "
                   class="status-select"
                   :disabled="registrationsLoading"
                 >
@@ -260,32 +297,37 @@
                   <option value="cancelled">🚫 Отменена</option>
                 </select>
               </div>
-              
+
               <div v-if="reg.comment" class="reg-comment">
                 💬 {{ reg.comment }}
               </div>
             </div>
           </div>
-          
+
           <div v-if="registrationsError" class="registrations-error">
             {{ registrationsError }}
           </div>
         </div>
 
         <!-- Секция управления организаторами (только в режиме редактирования) -->
-        <div v-if="mode === 'edit' && conventionEvent" class="organizers-section">
+        <div
+          v-if="mode === 'edit' && conventionEvent"
+          class="organizers-section"
+        >
           <div class="organizers-header">
             <span class="organizers-icon">👤</span>
-            <span class="organizers-label">{{ organizers.length > 1 ? 'Организаторы:' : 'Организатор:' }}</span>
+            <span class="organizers-label">{{
+              organizers.length > 1 ? "Организаторы:" : "Организатор:"
+            }}</span>
           </div>
           <div v-if="organizers.length > 0" class="organizers-list">
-            <div 
-              v-for="organizer in organizers" 
-              :key="organizer.id" 
+            <div
+              v-for="organizer in organizers"
+              :key="organizer.id"
               class="organizer-item"
             >
               <span class="organizer-name">{{ organizer.display_name }}</span>
-              <button 
+              <button
                 v-if="canEdit"
                 class="organizer-remove-btn"
                 @click="removeOrganizer(organizer)"
@@ -295,13 +337,11 @@
               </button>
             </div>
           </div>
-          <div v-else class="no-organizers">
-            Организаторы не назначены
-          </div>
+          <div v-else class="no-organizers">Организаторы не назначены</div>
           <!-- Форма добавления организатора с автодополнением -->
           <div v-if="canEdit" class="add-organizer-form">
             <div class="autocomplete-wrapper">
-              <input 
+              <input
                 v-model="newOrganizerUsername"
                 type="text"
                 class="add-organizer-input"
@@ -314,12 +354,14 @@
                 @keydown.down.prevent="highlightNextOrganizer"
                 @keydown.up.prevent="highlightPrevOrganizer"
               />
-              <div 
-                v-if="showOrganizerDropdown && organizerSearchResults.length > 0" 
+              <div
+                v-if="
+                  showOrganizerDropdown && organizerSearchResults.length > 0
+                "
                 class="user-dropdown"
               >
-                <div 
-                  v-for="(user, idx) in organizerSearchResults" 
+                <div
+                  v-for="(user, idx) in organizerSearchResults"
                   :key="user.id"
                   class="user-dropdown-item"
                   :class="{ highlighted: highlightedOrganizerIndex === idx }"
@@ -329,31 +371,51 @@
                   <span class="user-username">@{{ user.username }}</span>
                 </div>
               </div>
-              <div 
-                v-if="showOrganizerDropdown && newOrganizerUsername && newOrganizerUsername.length >= 2 && organizerSearchResults.length === 0 && !organizerSearchLoading" 
+              <div
+                v-if="
+                  showOrganizerDropdown &&
+                  newOrganizerUsername &&
+                  newOrganizerUsername.length >= 2 &&
+                  organizerSearchResults.length === 0 &&
+                  !organizerSearchLoading
+                "
                 class="user-dropdown user-dropdown-empty"
               >
                 Пользователи не найдены
               </div>
             </div>
-            <button 
+            <button
               class="add-organizer-btn"
               type="button"
               @click="addOrganizerFromSelected"
               :disabled="!selectedOrganizer || organizerLoading"
             >
-              {{ organizerLoading ? '...' : '+' }}
+              {{ organizerLoading ? "..." : "+" }}
             </button>
           </div>
-          <div v-if="organizerError" class="organizer-error">{{ organizerError }}</div>
+          <div v-if="organizerError" class="organizer-error">
+            {{ organizerError }}
+          </div>
         </div>
 
         <div v-if="error" class="form-error">{{ error }}</div>
-        
+
         <div class="form-actions">
-          <button type="button" @click="$emit('cancel')" class="btn btn-secondary">Отмена</button>
+          <button
+            type="button"
+            @click="$emit('cancel')"
+            class="btn btn-secondary"
+          >
+            Отмена
+          </button>
           <button type="submit" class="btn btn-primary" :disabled="loading">
-            {{ loading ? 'Сохранение...' : (mode === 'add' ? 'Добавить' : 'Сохранить') }}
+            {{
+              loading
+                ? "Сохранение..."
+                : mode === "add"
+                ? "Добавить"
+                : "Сохранить"
+            }}
           </button>
         </div>
       </form>
@@ -363,79 +425,80 @@
 
 <script>
 export default {
-  name: 'ConventionEventEditor',
+  name: "ConventionEventEditor",
   props: {
     // Режим: 'add' или 'edit'
     mode: {
       type: String,
-      default: 'add',
-      validator: v => ['add', 'edit'].includes(v)
+      default: "add",
+      validator: (v) => ["add", "edit"].includes(v),
     },
     // Данные существующего проведения для редактирования
     conventionEvent: {
       type: Object,
-      default: null
+      default: null,
     },
     // ID конвента (если добавляем из контекста конвента)
     conventionId: {
       type: [Number, String],
-      default: null
+      default: null,
     },
     // Заблокировать выбор конвента
     lockConvention: {
       type: Boolean,
-      default: false
+      default: false,
     },
     // Название конвента для отображения (если lockConvention)
     conventionName: {
       type: String,
-      default: ''
+      default: "",
     },
     // Список конвентов
     conventions: {
       type: Array,
-      default: () => []
+      default: () => [],
     },
     // Список городов
     cities: {
       type: Array,
-      default: () => []
+      default: () => [],
     },
     // Разрешить создание нового города
     allowNewCity: {
       type: Boolean,
-      default: true
+      default: true,
     },
     // CSRF токен
     csrfToken: {
       type: String,
-      default: ''
-    }
+      default: "",
+    },
   },
-  emits: ['save', 'cancel', 'error', 'city-created', 'organizer-changed'],
+  emits: ["save", "cancel", "error", "city-created", "organizer-changed"],
   data() {
     return {
+      savedScrollY: 0,
       formData: {
         convention_id: null,
         city_id: null,
-        newCityName: '',
+        newCityName: "",
         venue_id: null,
-        date_start: '',
-        date_end: '',
+        date_start: "",
+        date_end: "",
         // Настройки регистрации
         capacity: null,
-        registration_open: false
+        registration_open: false,
       },
       loading: false,
       error: null,
-      conventionSearch: '',
-      citySearch: '',
+      conventionSearch: "",
+      citySearch: "",
       showConventionDropdown: false,
       showCityDropdown: false,
       venuesList: [],
       // Управление организаторами
       organizers: [],
-      newOrganizerUsername: '',
+      newOrganizerUsername: "",
       organizerLoading: false,
       organizerError: null,
       // Автодополнение организаторов
@@ -448,340 +511,385 @@ export default {
       // Управление регистрациями
       registrations: [],
       registrationsLoading: false,
-      registrationsError: null
-    }
+      registrationsError: null,
+    };
+  },
+  mounted() {
+    // Сохраняем позицию прокрутки и блокируем прокрутку body
+    this.savedScrollY = window.scrollY;
+    document.body.classList.add("modal-open");
+    document.body.style.top = `-${this.savedScrollY}px`;
+  },
+  beforeUnmount() {
+    // Восстанавливаем прокрутку body
+    document.body.classList.remove("modal-open");
+    document.body.style.top = "";
+    window.scrollTo(0, this.savedScrollY);
   },
   computed: {
     sortedConventions() {
-      return this.conventions.slice().sort((a, b) => a.name.localeCompare(b.name, 'ru'))
+      return this.conventions
+        .slice()
+        .sort((a, b) => a.name.localeCompare(b.name, "ru"));
     },
     filteredConventionsList() {
       if (!this.conventionSearch) {
-        return this.sortedConventions
+        return this.sortedConventions;
       }
-      const query = this.conventionSearch.toLowerCase()
-      return this.sortedConventions.filter(c => c.name.toLowerCase().includes(query))
+      const query = this.conventionSearch.toLowerCase();
+      return this.sortedConventions.filter((c) =>
+        c.name.toLowerCase().includes(query)
+      );
     },
     filteredCitiesList() {
-      const sortedCities = this.cities.slice().sort((a, b) => a.name.localeCompare(b.name, 'ru'))
+      const sortedCities = this.cities
+        .slice()
+        .sort((a, b) => a.name.localeCompare(b.name, "ru"));
       if (!this.citySearch) {
-        return sortedCities
+        return sortedCities;
       }
-      const query = this.citySearch.toLowerCase()
-      return sortedCities.filter(c => c.name.toLowerCase().includes(query))
+      const query = this.citySearch.toLowerCase();
+      return sortedCities.filter((c) => c.name.toLowerCase().includes(query));
     },
     selectedConventionName() {
-      if (!this.formData.convention_id) return ''
-      const conv = this.conventions.find(c => c.id === this.formData.convention_id)
-      return conv ? conv.name : ''
+      if (!this.formData.convention_id) return "";
+      const conv = this.conventions.find(
+        (c) => c.id === this.formData.convention_id
+      );
+      return conv ? conv.name : "";
     },
     selectedCityName() {
-      if (!this.formData.city_id || this.formData.city_id === 'new') return ''
-      const city = this.cities.find(c => c.id === this.formData.city_id)
-      if (!city) return ''
-      const regionName = city.region && city.region.name ? city.region.name : ''
-      return regionName ? `${city.name} (${regionName})` : city.name
+      if (!this.formData.city_id || this.formData.city_id === "new") return "";
+      const city = this.cities.find((c) => c.id === this.formData.city_id);
+      if (!city) return "";
+      const regionName =
+        city.region && city.region.name ? city.region.name : "";
+      return regionName ? `${city.name} (${regionName})` : city.name;
     },
     // Форматированная дата начала для отображения (дд/мм/гггг)
     formattedDateStart() {
-      if (!this.formData.date_start) return ''
-      const parts = this.formData.date_start.split('-')
+      if (!this.formData.date_start) return "";
+      const parts = this.formData.date_start.split("-");
       if (parts.length === 3) {
-        return `${parts[2]}/${parts[1]}/${parts[0]}`
+        return `${parts[2]}/${parts[1]}/${parts[0]}`;
       }
-      return this.formData.date_start
+      return this.formData.date_start;
     },
     // Форматированная дата окончания для отображения (дд/мм/гггг)
     formattedDateEnd() {
-      if (!this.formData.date_end) return ''
-      const parts = this.formData.date_end.split('-')
+      if (!this.formData.date_end) return "";
+      const parts = this.formData.date_end.split("-");
       if (parts.length === 3) {
-        return `${parts[2]}/${parts[1]}/${parts[0]}`
+        return `${parts[2]}/${parts[1]}/${parts[0]}`;
       }
-      return this.formData.date_end
+      return this.formData.date_end;
     },
     // Может ли текущий пользователь редактировать организаторов
     canEdit() {
-      return this.conventionEvent && this.conventionEvent.can_edit
-    }
+      return this.conventionEvent && this.conventionEvent.can_edit;
+    },
   },
   watch: {
     conventionEvent: {
       immediate: true,
       handler(newVal) {
-        if (newVal && this.mode === 'edit') {
-          this.initFromEvent(newVal)
+        if (newVal && this.mode === "edit") {
+          this.initFromEvent(newVal);
         }
-      }
+      },
     },
     conventionId: {
       immediate: true,
       handler(newVal) {
-        if (newVal && this.mode === 'add') {
-          this.formData.convention_id = parseInt(newVal, 10)
+        if (newVal && this.mode === "add") {
+          this.formData.convention_id = parseInt(newVal, 10);
           // Устанавливаем название конвента в поиске
-          const conv = this.conventions.find(c => c.id === this.formData.convention_id)
+          const conv = this.conventions.find(
+            (c) => c.id === this.formData.convention_id
+          );
           if (conv) {
-            this.conventionSearch = conv.name
+            this.conventionSearch = conv.name;
           } else if (this.conventionName) {
-            this.conventionSearch = this.conventionName
+            this.conventionSearch = this.conventionName;
           }
         }
-      }
+      },
     },
     conventionName: {
       immediate: true,
       handler(newVal) {
         if (newVal && this.lockConvention) {
-          this.conventionSearch = newVal
+          this.conventionSearch = newVal;
         }
-      }
+      },
     },
     conventions: {
       handler() {
         // Обновляем название конвента если оно ещё не установлено
         if (this.formData.convention_id && !this.conventionSearch) {
-          const conv = this.conventions.find(c => c.id === this.formData.convention_id)
+          const conv = this.conventions.find(
+            (c) => c.id === this.formData.convention_id
+          );
           if (conv) {
-            this.conventionSearch = conv.name
+            this.conventionSearch = conv.name;
           }
         }
-      }
-    }
+      },
+    },
   },
   methods: {
     initFromEvent(event) {
       // Определяем city_id
-      let cityId = null
-      let cityName = ''
-      
+      let cityId = null;
+      let cityName = "";
+
       if (event.city_id) {
-        cityId = event.city_id
+        cityId = event.city_id;
       } else if (event.city) {
-        cityId = event.city.id
-        const regionName = event.city.region && event.city.region.name ? event.city.region.name : ''
-        cityName = regionName ? `${event.city.name} (${regionName})` : event.city.name
+        cityId = event.city.id;
+        const regionName =
+          event.city.region && event.city.region.name
+            ? event.city.region.name
+            : "";
+        cityName = regionName
+          ? `${event.city.name} (${regionName})`
+          : event.city.name;
       }
-      
+
       this.formData = {
         convention_id: event.convention_id || event.convention || null,
         city_id: cityId,
-        newCityName: '',
+        newCityName: "",
         venue_id: event.venue_id || (event.venue && event.venue.id) || null,
-        date_start: event.date_start || '',
-        date_end: event.date_end || '',
+        date_start: event.date_start || "",
+        date_end: event.date_end || "",
         // Настройки регистрации
         capacity: event.capacity || null,
-        registration_open: event.registration_open || false
-      }
-      
+        registration_open: event.registration_open || false,
+      };
+
       // Устанавливаем поисковые поля
       if (event.convention_name) {
-        this.conventionSearch = event.convention_name
+        this.conventionSearch = event.convention_name;
       } else {
-        const conv = this.conventions.find(c => c.id === this.formData.convention_id)
+        const conv = this.conventions.find(
+          (c) => c.id === this.formData.convention_id
+        );
         if (conv) {
-          this.conventionSearch = conv.name
+          this.conventionSearch = conv.name;
         }
       }
-      
-      this.citySearch = cityName || this.selectedCityName
-      
+
+      this.citySearch = cityName || this.selectedCityName;
+
       // Загружаем площадки для города
       if (cityId) {
-        this.fetchVenuesByCity(cityId)
+        this.fetchVenuesByCity(cityId);
       }
-      
+
       // Инициализируем организаторов
-      this.organizers = event.organizers || []
-      this.newOrganizerUsername = ''
-      this.organizerError = null
-      
+      this.organizers = event.organizers || [];
+      this.newOrganizerUsername = "";
+      this.organizerError = null;
+
       // Загружаем регистрации если в режиме редактирования
-      if (this.mode === 'edit' && event.id) {
-        this.fetchRegistrations()
+      if (this.mode === "edit" && event.id) {
+        this.fetchRegistrations();
       }
     },
-    
+
     selectConvention(conv) {
-      this.formData.convention_id = conv.id
-      this.conventionSearch = conv.name
-      this.showConventionDropdown = false
+      this.formData.convention_id = conv.id;
+      this.conventionSearch = conv.name;
+      this.showConventionDropdown = false;
     },
-    
+
     selectCity(city) {
-      this.formData.city_id = city.id
-      const regionName = city.region && city.region.name ? city.region.name : ''
-      this.citySearch = regionName ? `${city.name} (${regionName})` : city.name
-      this.showCityDropdown = false
+      this.formData.city_id = city.id;
+      const regionName =
+        city.region && city.region.name ? city.region.name : "";
+      this.citySearch = regionName ? `${city.name} (${regionName})` : city.name;
+      this.showCityDropdown = false;
       // Сбрасываем площадку
-      this.formData.venue_id = null
-      this.fetchVenuesByCity(city.id)
+      this.formData.venue_id = null;
+      this.fetchVenuesByCity(city.id);
     },
-    
+
     selectNewCity() {
-      this.formData.city_id = 'new'
-      this.citySearch = ''
-      this.showCityDropdown = false
-      this.formData.venue_id = null
-      this.venuesList = []
+      this.formData.city_id = "new";
+      this.citySearch = "";
+      this.showCityDropdown = false;
+      this.formData.venue_id = null;
+      this.venuesList = [];
     },
-    
+
     onConventionInputBlur() {
       setTimeout(() => {
-        this.showConventionDropdown = false
-        if (this.formData.convention_id && this.conventionSearch !== this.selectedConventionName) {
-          this.conventionSearch = this.selectedConventionName
+        this.showConventionDropdown = false;
+        if (
+          this.formData.convention_id &&
+          this.conventionSearch !== this.selectedConventionName
+        ) {
+          this.conventionSearch = this.selectedConventionName;
         }
-      }, 200)
+      }, 200);
     },
-    
+
     onCityInputBlur() {
       setTimeout(() => {
-        this.showCityDropdown = false
-        if (this.formData.city_id && this.formData.city_id !== 'new' && this.citySearch !== this.selectedCityName) {
-          this.citySearch = this.selectedCityName
+        this.showCityDropdown = false;
+        if (
+          this.formData.city_id &&
+          this.formData.city_id !== "new" &&
+          this.citySearch !== this.selectedCityName
+        ) {
+          this.citySearch = this.selectedCityName;
         }
-      }, 200)
+      }, 200);
     },
-    
+
     async fetchVenuesByCity(cityId) {
-      if (!cityId) return
+      if (!cityId) return;
       try {
-        const response = await fetch(`/api/venues/?city=${cityId}`)
+        const response = await fetch(`/api/venues/?city=${cityId}`);
         if (response.ok) {
-          this.venuesList = await response.json()
+          this.venuesList = await response.json();
         }
       } catch (err) {
-        console.error('Ошибка загрузки площадок:', err)
+        console.error("Ошибка загрузки площадок:", err);
       }
     },
-    
+
     parseDateInput(value) {
       // Парсим дд/мм/гггг в yyyy-mm-dd
-      const parts = value.split('/')
-      if (parts.length === 3 && parts[0].length === 2 && parts[1].length === 2 && parts[2].length === 4) {
-        const day = parts[0]
-        const month = parts[1]
-        const year = parts[2]
-        return `${year}-${month}-${day}`
+      const parts = value.split("/");
+      if (
+        parts.length === 3 &&
+        parts[0].length === 2 &&
+        parts[1].length === 2 &&
+        parts[2].length === 4
+      ) {
+        const day = parts[0];
+        const month = parts[1];
+        const year = parts[2];
+        return `${year}-${month}-${day}`;
       }
-      return null
+      return null;
     },
-    
+
     formatDateInputValue(event) {
-      let value = event.target.value
+      let value = event.target.value;
       // Оставляем только цифры и слэши
-      value = value.replace(/[^\d/]/g, '')
-      
+      value = value.replace(/[^\d/]/g, "");
+
       // Автоматически добавляем слэши
-      if (value.length === 2 && !value.includes('/')) {
-        value += '/'
-      } else if (value.length === 5 && value.split('/').length === 2) {
-        value += '/'
+      if (value.length === 2 && !value.includes("/")) {
+        value += "/";
+      } else if (value.length === 5 && value.split("/").length === 2) {
+        value += "/";
       }
-      
+
       // Ограничиваем длину
       if (value.length > 10) {
-        value = value.slice(0, 10)
+        value = value.slice(0, 10);
       }
-      
-      event.target.value = value
-      return value
+
+      event.target.value = value;
+      return value;
     },
-    
+
     handleDateStartInput(event) {
-      const value = this.formatDateInputValue(event)
-      const date = this.parseDateInput(value)
+      const value = this.formatDateInputValue(event);
+      const date = this.parseDateInput(value);
       if (date) {
-        this.formData.date_start = date
+        this.formData.date_start = date;
       }
     },
-    
+
     handleDateEndInput(event) {
-      const value = this.formatDateInputValue(event)
-      const date = this.parseDateInput(value)
+      const value = this.formatDateInputValue(event);
+      const date = this.parseDateInput(value);
       if (date) {
-        this.formData.date_end = date
+        this.formData.date_end = date;
       }
     },
-    
+
     validateDates() {
       if (this.formData.date_start && this.formData.date_end) {
         if (this.formData.date_end < this.formData.date_start) {
-          this.formData.date_end = this.formData.date_start
+          this.formData.date_end = this.formData.date_start;
         }
       }
     },
-    
+
     openDateStartPicker() {
       if (this.$refs.dateStartPickerInput) {
-        this.$refs.dateStartPickerInput.showPicker()
+        this.$refs.dateStartPickerInput.showPicker();
       }
     },
-    
+
     openDateEndPicker() {
       if (this.$refs.dateEndPickerInput) {
-        this.$refs.dateEndPickerInput.showPicker()
+        this.$refs.dateEndPickerInput.showPicker();
       }
     },
-    
+
     handleDateStartPickerChange(event) {
-      const value = event.target.value
+      const value = event.target.value;
       if (value) {
-        this.formData.date_start = value
-        this.validateDates()
+        this.formData.date_start = value;
+        this.validateDates();
       }
     },
-    
+
     handleDateEndPickerChange(event) {
-      const value = event.target.value
+      const value = event.target.value;
       if (value) {
-        this.formData.date_end = value
-        this.validateDates()
+        this.formData.date_end = value;
+        this.validateDates();
       }
     },
-    
+
     async submitForm() {
-      this.loading = true
-      this.error = null
-      
+      this.loading = true;
+      this.error = null;
+
       try {
         // Валидация
         if (!this.formData.convention_id) {
-          throw new Error('Выберите конвент из списка')
+          throw new Error("Выберите конвент из списка");
         }
-        
+
         if (!this.formData.date_start || !this.formData.date_end) {
-          throw new Error('Укажите даты начала и окончания')
+          throw new Error("Укажите даты начала и окончания");
         }
-        
-        let cityId = this.formData.city_id
-        
+
+        let cityId = this.formData.city_id;
+
         // Создание нового города если нужно
-        if (cityId === 'new' && this.formData.newCityName.trim()) {
-          const cityResponse = await fetch('/api/cities/', {
-            method: 'POST',
+        if (cityId === "new" && this.formData.newCityName.trim()) {
+          const cityResponse = await fetch("/api/cities/", {
+            method: "POST",
             headers: {
-              'Content-Type': 'application/json',
-              'X-CSRFToken': this.csrfToken
+              "Content-Type": "application/json",
+              "X-CSRFToken": this.csrfToken,
             },
-            body: JSON.stringify({ name: this.formData.newCityName.trim() })
-          })
-          
+            body: JSON.stringify({ name: this.formData.newCityName.trim() }),
+          });
+
           if (!cityResponse.ok) {
-            throw new Error('Ошибка при создании города')
+            throw new Error("Ошибка при создании города");
           }
-          
-          const newCity = await cityResponse.json()
-          cityId = newCity.id
-          this.$emit('city-created', newCity)
+
+          const newCity = await cityResponse.json();
+          cityId = newCity.id;
+          this.$emit("city-created", newCity);
         }
-        
-        if (!cityId || cityId === 'new') {
-          throw new Error('Выберите или создайте город')
+
+        if (!cityId || cityId === "new") {
+          throw new Error("Выберите или создайте город");
         }
-        
+
         // Формируем данные для API
         const eventData = {
           convention_id: this.formData.convention_id,
@@ -790,274 +898,297 @@ export default {
           date_end: this.formData.date_end,
           // Настройки регистрации
           capacity: this.formData.capacity || null,
-          registration_open: this.formData.registration_open
-        }
-        
+          registration_open: this.formData.registration_open,
+        };
+
         if (this.formData.venue_id) {
-          eventData.venue_id = this.formData.venue_id
+          eventData.venue_id = this.formData.venue_id;
         }
-        
+
         // Добавляем ID для редактирования
-        if (this.mode === 'edit' && this.conventionEvent) {
-          eventData.id = this.conventionEvent.id
+        if (this.mode === "edit" && this.conventionEvent) {
+          eventData.id = this.conventionEvent.id;
         }
-        
+
         // Эмитим событие с данными
-        this.$emit('save', eventData)
+        this.$emit("save", eventData);
       } catch (err) {
-        this.error = err.message
-        this.$emit('error', err.message)
+        this.error = err.message;
+        this.$emit("error", err.message);
       } finally {
-        this.loading = false
+        this.loading = false;
       }
     },
-    
+
     // === Управление организаторами с автодополнением ===
-    
+
     // Поиск пользователей с debounce
     searchOrganizers() {
-      const query = this.newOrganizerUsername
-      
+      const query = this.newOrganizerUsername;
+
       // Сбрасываем выбранного пользователя при изменении ввода
-      this.selectedOrganizer = null
-      this.highlightedOrganizerIndex = 0
-      
+      this.selectedOrganizer = null;
+      this.highlightedOrganizerIndex = 0;
+
       // Очищаем предыдущий таймер
       if (this.organizerSearchDebounceTimer) {
-        clearTimeout(this.organizerSearchDebounceTimer)
+        clearTimeout(this.organizerSearchDebounceTimer);
       }
-      
+
       if (!query || query.length < 2) {
-        this.organizerSearchResults = []
-        return
+        this.organizerSearchResults = [];
+        return;
       }
-      
+
       // Debounce 300ms
       this.organizerSearchDebounceTimer = setTimeout(() => {
-        this.fetchOrganizers(query)
-      }, 300)
+        this.fetchOrganizers(query);
+      }, 300);
     },
-    
+
     async fetchOrganizers(query) {
-      this.organizerSearchLoading = true
-      
+      this.organizerSearchLoading = true;
+
       try {
-        const response = await fetch(`/api/users/search/?q=${encodeURIComponent(query)}`)
+        const response = await fetch(
+          `/api/users/search/?q=${encodeURIComponent(query)}`
+        );
         if (response.ok) {
-          const users = await response.json()
+          const users = await response.json();
           // Фильтруем уже добавленных организаторов
-          const existingIds = (this.organizers || []).map(o => o.id)
-          this.organizerSearchResults = users.filter(u => !existingIds.includes(u.id))
+          const existingIds = (this.organizers || []).map((o) => o.id);
+          this.organizerSearchResults = users.filter(
+            (u) => !existingIds.includes(u.id)
+          );
         }
       } catch (err) {
-        console.error('Ошибка поиска пользователей:', err)
+        console.error("Ошибка поиска пользователей:", err);
       } finally {
-        this.organizerSearchLoading = false
+        this.organizerSearchLoading = false;
       }
     },
-    
+
     hideOrganizerDropdownDelayed() {
       setTimeout(() => {
-        this.showOrganizerDropdown = false
-      }, 200)
+        this.showOrganizerDropdown = false;
+      }, 200);
     },
-    
+
     selectOrganizer(user) {
-      this.newOrganizerUsername = user.display_name
-      this.selectedOrganizer = user
-      this.showOrganizerDropdown = false
-      this.organizerSearchResults = []
+      this.newOrganizerUsername = user.display_name;
+      this.selectedOrganizer = user;
+      this.showOrganizerDropdown = false;
+      this.organizerSearchResults = [];
       // Автоматически добавляем
-      this.addOrganizerFromSelected()
+      this.addOrganizerFromSelected();
     },
-    
+
     selectFirstOrganizer() {
       if (this.organizerSearchResults.length > 0) {
-        const idx = this.highlightedOrganizerIndex || 0
-        this.selectOrganizer(this.organizerSearchResults[idx])
+        const idx = this.highlightedOrganizerIndex || 0;
+        this.selectOrganizer(this.organizerSearchResults[idx]);
       }
     },
-    
+
     highlightNextOrganizer() {
-      if (this.organizerSearchResults.length === 0) return
+      if (this.organizerSearchResults.length === 0) return;
       this.highlightedOrganizerIndex = Math.min(
-        this.highlightedOrganizerIndex + 1, 
+        this.highlightedOrganizerIndex + 1,
         this.organizerSearchResults.length - 1
-      )
+      );
     },
-    
+
     highlightPrevOrganizer() {
-      this.highlightedOrganizerIndex = Math.max(this.highlightedOrganizerIndex - 1, 0)
+      this.highlightedOrganizerIndex = Math.max(
+        this.highlightedOrganizerIndex - 1,
+        0
+      );
     },
-    
+
     async addOrganizerFromSelected() {
-      const user = this.selectedOrganizer
+      const user = this.selectedOrganizer;
       if (!user || !this.conventionEvent) {
-        this.organizerError = 'Выберите пользователя из списка'
-        return
+        this.organizerError = "Выберите пользователя из списка";
+        return;
       }
-      
-      this.organizerLoading = true
-      this.organizerError = null
-      
+
+      this.organizerLoading = true;
+      this.organizerError = null;
+
       try {
-        const response = await fetch(`/api/convention-events/${this.conventionEvent.id}/add_organizer/`, {
-          method: 'POST',
-          headers: {
-            'Content-Type': 'application/json',
-            'X-CSRFToken': this.csrfToken
-          },
-          body: JSON.stringify({ username: user.username })
-        })
-        
+        const response = await fetch(
+          `/api/convention-events/${this.conventionEvent.id}/add_organizer/`,
+          {
+            method: "POST",
+            headers: {
+              "Content-Type": "application/json",
+              "X-CSRFToken": this.csrfToken,
+            },
+            body: JSON.stringify({ username: user.username }),
+          }
+        );
+
         if (!response.ok) {
-          const data = await response.json()
-          throw new Error(data.error || 'Ошибка при добавлении организатора')
+          const data = await response.json();
+          throw new Error(data.error || "Ошибка при добавлении организатора");
         }
-        
-        const updatedEvent = await response.json()
-        this.organizers = updatedEvent.organizers || []
-        this.newOrganizerUsername = ''
-        this.selectedOrganizer = null
-        this.$emit('organizer-changed', updatedEvent)
+
+        const updatedEvent = await response.json();
+        this.organizers = updatedEvent.organizers || [];
+        this.newOrganizerUsername = "";
+        this.selectedOrganizer = null;
+        this.$emit("organizer-changed", updatedEvent);
       } catch (err) {
-        this.organizerError = err.message
+        this.organizerError = err.message;
       } finally {
-        this.organizerLoading = false
+        this.organizerLoading = false;
       }
     },
-    
+
     // Для обратной совместимости
     async addOrganizer() {
-      if (!this.newOrganizerUsername.trim() || !this.conventionEvent) return
-      
-      this.organizerLoading = true
-      this.organizerError = null
-      
+      if (!this.newOrganizerUsername.trim() || !this.conventionEvent) return;
+
+      this.organizerLoading = true;
+      this.organizerError = null;
+
       try {
-        const response = await fetch(`/api/convention-events/${this.conventionEvent.id}/add_organizer/`, {
-          method: 'POST',
-          headers: {
-            'Content-Type': 'application/json',
-            'X-CSRFToken': this.csrfToken
-          },
-          body: JSON.stringify({ username: this.newOrganizerUsername.trim() })
-        })
-        
+        const response = await fetch(
+          `/api/convention-events/${this.conventionEvent.id}/add_organizer/`,
+          {
+            method: "POST",
+            headers: {
+              "Content-Type": "application/json",
+              "X-CSRFToken": this.csrfToken,
+            },
+            body: JSON.stringify({
+              username: this.newOrganizerUsername.trim(),
+            }),
+          }
+        );
+
         if (!response.ok) {
-          const data = await response.json()
-          throw new Error(data.error || 'Ошибка при добавлении организатора')
+          const data = await response.json();
+          throw new Error(data.error || "Ошибка при добавлении организатора");
         }
-        
-        const updatedEvent = await response.json()
-        this.organizers = updatedEvent.organizers || []
-        this.newOrganizerUsername = ''
-        this.$emit('organizer-changed', updatedEvent)
+
+        const updatedEvent = await response.json();
+        this.organizers = updatedEvent.organizers || [];
+        this.newOrganizerUsername = "";
+        this.$emit("organizer-changed", updatedEvent);
       } catch (err) {
-        this.organizerError = err.message
+        this.organizerError = err.message;
       } finally {
-        this.organizerLoading = false
+        this.organizerLoading = false;
       }
     },
-    
+
     async removeOrganizer(organizer) {
-      if (!this.conventionEvent) return
-      
-      this.organizerLoading = true
-      this.organizerError = null
-      
+      if (!this.conventionEvent) return;
+
+      this.organizerLoading = true;
+      this.organizerError = null;
+
       try {
-        const response = await fetch(`/api/convention-events/${this.conventionEvent.id}/remove_organizer/`, {
-          method: 'POST',
-          headers: {
-            'Content-Type': 'application/json',
-            'X-CSRFToken': this.csrfToken
-          },
-          body: JSON.stringify({ user_id: organizer.id })
-        })
-        
+        const response = await fetch(
+          `/api/convention-events/${this.conventionEvent.id}/remove_organizer/`,
+          {
+            method: "POST",
+            headers: {
+              "Content-Type": "application/json",
+              "X-CSRFToken": this.csrfToken,
+            },
+            body: JSON.stringify({ user_id: organizer.id }),
+          }
+        );
+
         if (!response.ok) {
-          const data = await response.json()
-          throw new Error(data.error || 'Ошибка при удалении организатора')
+          const data = await response.json();
+          throw new Error(data.error || "Ошибка при удалении организатора");
         }
-        
-        const updatedEvent = await response.json()
-        this.organizers = updatedEvent.organizers || []
-        this.$emit('organizer-changed', updatedEvent)
+
+        const updatedEvent = await response.json();
+        this.organizers = updatedEvent.organizers || [];
+        this.$emit("organizer-changed", updatedEvent);
       } catch (err) {
-        this.organizerError = err.message
+        this.organizerError = err.message;
       } finally {
-        this.organizerLoading = false
+        this.organizerLoading = false;
       }
     },
-    
+
     // === Управление регистрациями ===
     async fetchRegistrations() {
-      if (!this.conventionEvent) return
-      
-      this.registrationsLoading = true
-      this.registrationsError = null
-      
+      if (!this.conventionEvent) return;
+
+      this.registrationsLoading = true;
+      this.registrationsError = null;
+
       try {
-        const response = await fetch(`/api/convention-events/${this.conventionEvent.id}/registrations/`)
-        
+        const response = await fetch(
+          `/api/convention-events/${this.conventionEvent.id}/registrations/`
+        );
+
         if (!response.ok) {
-          throw new Error('Ошибка при загрузке регистраций')
+          throw new Error("Ошибка при загрузке регистраций");
         }
-        
-        this.registrations = await response.json()
+
+        this.registrations = await response.json();
       } catch (err) {
-        this.registrationsError = err.message
+        this.registrationsError = err.message;
       } finally {
-        this.registrationsLoading = false
+        this.registrationsLoading = false;
       }
     },
-    
+
     async updateRegistrationStatus(registrationId, newStatus) {
-      if (!this.conventionEvent) return
-      
-      this.registrationsLoading = true
-      this.registrationsError = null
-      
+      if (!this.conventionEvent) return;
+
+      this.registrationsLoading = true;
+      this.registrationsError = null;
+
       try {
-        const response = await fetch(`/api/convention-events/${this.conventionEvent.id}/update_registration/`, {
-          method: 'POST',
-          headers: {
-            'Content-Type': 'application/json',
-            'X-CSRFToken': this.csrfToken
-          },
-          body: JSON.stringify({
-            registration_id: registrationId,
-            status: newStatus
-          })
-        })
-        
+        const response = await fetch(
+          `/api/convention-events/${this.conventionEvent.id}/update_registration/`,
+          {
+            method: "POST",
+            headers: {
+              "Content-Type": "application/json",
+              "X-CSRFToken": this.csrfToken,
+            },
+            body: JSON.stringify({
+              registration_id: registrationId,
+              status: newStatus,
+            }),
+          }
+        );
+
         if (!response.ok) {
-          const data = await response.json()
-          throw new Error(data.error || 'Ошибка при обновлении статуса')
+          const data = await response.json();
+          throw new Error(data.error || "Ошибка при обновлении статуса");
         }
-        
+
         // Обновляем список регистраций
-        await this.fetchRegistrations()
+        await this.fetchRegistrations();
       } catch (err) {
-        this.registrationsError = err.message
+        this.registrationsError = err.message;
       } finally {
-        this.registrationsLoading = false
+        this.registrationsLoading = false;
       }
     },
-    
+
     formatRegDate(dateStr) {
-      const date = new Date(dateStr)
-      return date.toLocaleDateString('ru-RU', {
-        day: '2-digit',
-        month: '2-digit',
-        year: 'numeric',
-        hour: '2-digit',
-        minute: '2-digit'
-      })
-    }
-  }
-}
+      const date = new Date(dateStr);
+      return date.toLocaleDateString("ru-RU", {
+        day: "2-digit",
+        month: "2-digit",
+        year: "numeric",
+        hour: "2-digit",
+        minute: "2-digit",
+      });
+    },
+  },
+};
 </script>
 
 <style scoped>
@@ -1106,7 +1237,7 @@ export default {
 }
 
 .modal-content h2 {
-  font-family: 'JetBrains Mono', monospace;
+  font-family: "JetBrains Mono", monospace;
   color: #e0e0e0;
   font-size: 1.5rem;
   margin-bottom: 24px;
@@ -1329,7 +1460,7 @@ export default {
 }
 
 .date-input {
-  font-family: 'JetBrains Mono', monospace;
+  font-family: "JetBrains Mono", monospace;
   letter-spacing: 0.05em;
 }
 
@@ -1752,11 +1883,11 @@ export default {
     flex-direction: column;
     gap: 20px;
   }
-  
+
   .form-actions {
     flex-direction: column-reverse;
   }
-  
+
   .btn {
     width: 100%;
     text-align: center;

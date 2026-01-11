@@ -8,9 +8,9 @@
     <!-- Панель управления -->
     <div class="controls-bar">
       <div class="controls-filters">
-        <input 
-          v-model="searchQuery" 
-          type="text" 
+        <input
+          v-model="searchQuery"
+          type="text"
           placeholder="Поиск..."
           class="control-search"
         />
@@ -26,26 +26,26 @@
         Добавить площадку
       </button>
     </div>
-    
+
     <div v-if="loading" class="loading">
       <div class="loading-spinner"></div>
       <p>Загрузка...</p>
     </div>
-    
+
     <div v-else-if="error" class="error">
       <p>{{ error }}</p>
       <button @click="fetchVenues" class="retry-btn">Повторить</button>
     </div>
-    
+
     <div v-else-if="filteredVenues.length === 0" class="empty">
       <p v-if="searchQuery || selectedCity">Площадки не найдены</p>
       <p v-else>Площадки пока не добавлены</p>
     </div>
-    
+
     <div v-else class="venues-grid">
-      <div 
-        v-for="venue in filteredVenues" 
-        :key="venue.id" 
+      <div
+        v-for="venue in filteredVenues"
+        :key="venue.id"
         class="venue-card"
         @click="openVenueModal(venue)"
       >
@@ -73,93 +73,106 @@
     </div>
 
     <!-- Модальное окно с деталями площадки -->
-    <div v-if="selectedVenue" class="modal-overlay" @click.self="closeVenueModal">
+    <div
+      v-if="selectedVenue"
+      class="modal-overlay"
+      @click.self="closeVenueModal"
+    >
       <div class="modal-content">
         <button class="modal-close" @click="closeVenueModal">×</button>
-        
+
         <div class="modal-body">
           <div class="modal-header-row">
             <h2>{{ selectedVenue.name }}</h2>
             <div class="header-actions">
-              <button 
-                v-if="isAuthenticated" 
-                class="edit-btn" 
+              <button
+                v-if="isAuthenticated"
+                class="edit-btn"
                 @click="startEditingVenue"
                 title="Редактировать"
               >
                 ✏️
               </button>
-              <button 
-                v-if="isAuthenticated" 
-                class="delete-btn" 
+              <button
+                v-if="isAuthenticated"
+                class="delete-btn"
                 @click="showDeleteConfirm = true"
                 title="Удалить"
               >
                 🗑️
               </button>
-              <button class="copy-link-btn" @click="copyVenueLink" :title="linkCopied ? 'Скопировано!' : 'Скопировать ссылку'">
+              <button
+                class="copy-link-btn"
+                @click="copyVenueLink"
+                :title="linkCopied ? 'Скопировано!' : 'Скопировать ссылку'"
+              >
                 <span v-if="linkCopied">✓</span>
                 <span v-else>🔗</span>
               </button>
             </div>
           </div>
-          
+
           <div class="modal-city">
             <span class="city-icon">📍</span>
             <span class="city-name">{{ selectedVenue.city?.name }}</span>
           </div>
-          
+
           <div class="modal-section" v-if="selectedVenue.address">
             <h3>Адрес</h3>
             <p>{{ selectedVenue.address }}</p>
           </div>
-          
+
           <div class="modal-section" v-if="selectedVenue.description">
             <h3>Описание</h3>
             <p>{{ selectedVenue.description }}</p>
           </div>
-          
+
           <div class="modal-stats" v-if="selectedVenue.capacity">
             <div class="modal-stat">
               <span class="modal-stat-label">Вместимость</span>
               <span class="modal-stat-value">{{ selectedVenue.capacity }}</span>
             </div>
           </div>
-          
+
           <!-- Секция помещений -->
           <div class="modal-section rooms-section">
             <div class="rooms-header">
               <h3>Помещения</h3>
-              <button 
-                v-if="isAuthenticated" 
-                @click="openAddRoomModal" 
+              <button
+                v-if="isAuthenticated"
+                @click="openAddRoomModal"
                 class="add-room-btn"
                 title="Добавить помещение"
               >
                 +
               </button>
             </div>
-            
-            <div v-if="selectedVenue.rooms && selectedVenue.rooms.length > 0" class="rooms-list">
-              <div 
-                v-for="room in selectedVenue.rooms" 
-                :key="room.id" 
+
+            <div
+              v-if="selectedVenue.rooms && selectedVenue.rooms.length > 0"
+              class="rooms-list"
+            >
+              <div
+                v-for="room in selectedVenue.rooms"
+                :key="room.id"
                 class="room-item"
               >
                 <div class="room-info">
                   <span class="room-name">{{ room.name }}</span>
-                  <span v-if="room.blackbox" class="room-badge blackbox">blackbox</span>
+                  <span v-if="room.blackbox" class="room-badge blackbox"
+                    >blackbox</span
+                  >
                 </div>
                 <div v-if="isAuthenticated" class="room-actions">
-                  <button 
-                    class="room-edit-btn" 
+                  <button
+                    class="room-edit-btn"
                     @click="startEditingRoom(room)"
                     title="Редактировать"
                   >
                     ✏️
                   </button>
-                  <button 
-                    class="room-delete-btn" 
+                  <button
+                    class="room-delete-btn"
                     @click="confirmDeleteRoom(room)"
                     title="Удалить"
                   >
@@ -175,29 +188,33 @@
     </div>
 
     <!-- Модальное окно добавления помещения -->
-    <div v-if="showAddRoomModal && isAuthenticated" class="modal-overlay" @click.self="closeAddRoomModal">
+    <div
+      v-if="showAddRoomModal && isAuthenticated"
+      class="modal-overlay"
+      @click.self="closeAddRoomModal"
+    >
       <div class="modal-content add-room-modal">
         <button class="modal-close" @click="closeAddRoomModal">×</button>
-        
+
         <div class="modal-body">
           <h2>Добавить помещение</h2>
-          
+
           <form @submit.prevent="submitRoom" class="add-room-form">
             <div class="form-group">
               <label for="room-name">Название *</label>
-              <input 
+              <input
                 id="room-name"
-                v-model="newRoom.name" 
-                type="text" 
+                v-model="newRoom.name"
+                type="text"
                 required
                 class="form-input"
                 placeholder="Например: Зал 1, Комната А"
               />
             </div>
-            
+
             <div class="form-group checkbox-group">
               <label class="checkbox-label">
-                <input 
+                <input
                   type="checkbox"
                   v-model="newRoom.blackbox"
                   class="checkbox-input"
@@ -206,12 +223,22 @@
                 <span class="checkbox-text">Blackbox</span>
               </label>
             </div>
-            
+
             <div v-if="addRoomError" class="form-error">{{ addRoomError }}</div>
-            
+
             <div class="form-actions">
-              <button type="button" @click="closeAddRoomModal" class="btn btn-secondary">Отмена</button>
-              <button type="submit" class="btn btn-primary" :disabled="addRoomLoading">
+              <button
+                type="button"
+                @click="closeAddRoomModal"
+                class="btn btn-secondary"
+              >
+                Отмена
+              </button>
+              <button
+                type="submit"
+                class="btn btn-primary"
+                :disabled="addRoomLoading"
+              >
                 <span v-if="addRoomLoading">Сохранение...</span>
                 <span v-else>Добавить</span>
               </button>
@@ -222,29 +249,33 @@
     </div>
 
     <!-- Модальное окно редактирования помещения -->
-    <div v-if="isEditingRoom" class="modal-overlay" @click.self="cancelEditingRoom">
+    <div
+      v-if="isEditingRoom"
+      class="modal-overlay"
+      @click.self="cancelEditingRoom"
+    >
       <div class="modal-content add-room-modal">
         <button class="modal-close" @click="cancelEditingRoom">×</button>
-        
+
         <div class="modal-body">
           <h2>Редактировать помещение</h2>
-          
+
           <form @submit.prevent="submitEditRoom" class="add-room-form">
             <div class="form-group">
               <label for="edit-room-name">Название *</label>
-              <input 
+              <input
                 id="edit-room-name"
-                v-model="editRoom.name" 
-                type="text" 
+                v-model="editRoom.name"
+                type="text"
                 required
                 class="form-input"
                 placeholder="Например: Зал 1, Комната А"
               />
             </div>
-            
+
             <div class="form-group checkbox-group">
               <label class="checkbox-label">
-                <input 
+                <input
                   type="checkbox"
                   v-model="editRoom.blackbox"
                   class="checkbox-input"
@@ -253,12 +284,24 @@
                 <span class="checkbox-text">Blackbox</span>
               </label>
             </div>
-            
-            <div v-if="editRoomError" class="form-error">{{ editRoomError }}</div>
-            
+
+            <div v-if="editRoomError" class="form-error">
+              {{ editRoomError }}
+            </div>
+
             <div class="form-actions">
-              <button type="button" @click="cancelEditingRoom" class="btn btn-secondary">Отмена</button>
-              <button type="submit" class="btn btn-primary" :disabled="editRoomLoading">
+              <button
+                type="button"
+                @click="cancelEditingRoom"
+                class="btn btn-secondary"
+              >
+                Отмена
+              </button>
+              <button
+                type="submit"
+                class="btn btn-primary"
+                :disabled="editRoomLoading"
+              >
                 <span v-if="editRoomLoading">Сохранение...</span>
                 <span v-else>Сохранить</span>
               </button>
@@ -310,21 +353,21 @@
 </template>
 
 <script>
-import DeleteConfirmModal from './DeleteConfirmModal.vue'
-import VenueEditor from './VenueEditor.vue'
+import DeleteConfirmModal from "./DeleteConfirmModal.vue";
+import VenueEditor from "./VenueEditor.vue";
 
 export default {
-  name: 'VenuesPage',
+  name: "VenuesPage",
   components: {
     DeleteConfirmModal,
-    VenueEditor
+    VenueEditor,
   },
-  inject: ['getUser'],
+  inject: ["getUser"],
   props: {
     venueId: {
       type: [String, Number],
-      default: null
-    }
+      default: null,
+    },
   },
   data() {
     return {
@@ -332,11 +375,13 @@ export default {
       cities: [],
       loading: true,
       error: null,
-      searchQuery: '',
-      selectedCity: '',
+      searchQuery: "",
+      selectedCity: "",
       selectedVenue: null,
       showAddModal: false,
       linkCopied: false,
+      // Сохранение позиции прокрутки
+      savedScrollY: 0,
       // Редактирование площадки
       isEditingVenue: false,
       // Удаление площадки
@@ -353,370 +398,446 @@ export default {
       editRoom: this.getEmptyRoom(),
       showDeleteRoomConfirm: false,
       deleteRoomLoading: false,
-      roomToDelete: null
-    }
+      roomToDelete: null,
+    };
   },
   watch: {
     venueId: {
       handler(newId, oldId) {
         // Не реагируем если значение не изменилось или площадка уже выбрана
-        if (!newId || newId === oldId) return
-        if (this.selectedVenue && this.selectedVenue.id === parseInt(newId, 10)) return
+        if (!newId || newId === oldId) return;
+        if (this.selectedVenue && this.selectedVenue.id === parseInt(newId, 10))
+          return;
         if (this.venues.length > 0) {
-          this.openVenueById(newId)
+          this.openVenueById(newId);
         }
       },
-      immediate: false
+      immediate: false,
     },
     venues: {
       handler(newVal, oldVal) {
         // Открываем модальное окно только при первичной загрузке
-        const wasEmpty = !oldVal || oldVal.length === 0
-        if (wasEmpty && this.venueId && this.venues.length > 0 && !this.selectedVenue) {
-          this.openVenueById(this.venueId)
+        const wasEmpty = !oldVal || oldVal.length === 0;
+        if (
+          wasEmpty &&
+          this.venueId &&
+          this.venues.length > 0 &&
+          !this.selectedVenue
+        ) {
+          this.openVenueById(this.venueId);
         }
+      },
+    },
+    // Блокировка прокрутки при открытии модальных окон
+    selectedVenue(newVal, oldVal) {
+      if (newVal && !oldVal) {
+        this.lockBodyScroll();
+      } else if (!newVal && oldVal) {
+        this.unlockBodyScroll();
       }
-    }
+    },
+    showAddModal(newVal, oldVal) {
+      if (newVal && !oldVal) {
+        this.lockBodyScroll();
+      } else if (!newVal && oldVal) {
+        this.unlockBodyScroll();
+      }
+    },
+    showAddRoomModal(newVal, oldVal) {
+      if (newVal && !oldVal) {
+        this.lockBodyScroll();
+      } else if (!newVal && oldVal) {
+        this.unlockBodyScroll();
+      }
+    },
+    isEditingRoom(newVal, oldVal) {
+      if (newVal && !oldVal) {
+        this.lockBodyScroll();
+      } else if (!newVal && oldVal) {
+        this.unlockBodyScroll();
+      }
+    },
+    isEditingVenue(newVal, oldVal) {
+      if (newVal && !oldVal) {
+        this.lockBodyScroll();
+      } else if (!newVal && oldVal) {
+        this.unlockBodyScroll();
+      }
+    },
   },
   computed: {
     isAuthenticated() {
-      const user = this.getUser()
-      return user && user.is_authenticated
+      const user = this.getUser();
+      return user && user.is_authenticated;
     },
     csrfToken() {
-      const match = document.cookie.match(/csrftoken=([^;]+)/)
-      return match ? match[1] : ''
+      const match = document.cookie.match(/csrftoken=([^;]+)/);
+      return match ? match[1] : "";
     },
     filteredVenues() {
-      let result = this.venues
-      
+      let result = this.venues;
+
       if (this.selectedCity) {
-        result = result.filter(v => v.city?.id === parseInt(this.selectedCity))
+        result = result.filter(
+          (v) => v.city?.id === parseInt(this.selectedCity)
+        );
       }
-      
+
       if (this.searchQuery) {
-        const query = this.searchQuery.toLowerCase()
-        result = result.filter(v => 
-          v.name.toLowerCase().includes(query) ||
-          (v.address && v.address.toLowerCase().includes(query)) ||
-          (v.description && v.description.toLowerCase().includes(query))
-        )
+        const query = this.searchQuery.toLowerCase();
+        result = result.filter(
+          (v) =>
+            v.name.toLowerCase().includes(query) ||
+            (v.address && v.address.toLowerCase().includes(query)) ||
+            (v.description && v.description.toLowerCase().includes(query))
+        );
       }
-      
-      return result.slice().sort((a, b) => a.name.localeCompare(b.name, 'ru'))
-    }
+
+      return result.slice().sort((a, b) => a.name.localeCompare(b.name, "ru"));
+    },
   },
   mounted() {
-    this.fetchData()
+    this.fetchData();
   },
   methods: {
+    // === Блокировка прокрутки ===
+    lockBodyScroll() {
+      this.savedScrollY = window.scrollY;
+      document.body.classList.add("modal-open");
+      document.body.style.top = `-${this.savedScrollY}px`;
+    },
+    unlockBodyScroll() {
+      document.body.classList.remove("modal-open");
+      document.body.style.top = "";
+      window.scrollTo(0, this.savedScrollY);
+    },
+
     async fetchData() {
-      await Promise.all([this.fetchVenues(), this.fetchCities()])
+      await Promise.all([this.fetchVenues(), this.fetchCities()]);
     },
     async fetchVenues() {
-      this.loading = true
-      this.error = null
+      this.loading = true;
+      this.error = null;
       try {
-        const response = await fetch('/api/venues/')
+        const response = await fetch("/api/venues/");
         if (!response.ok) {
-          throw new Error('Ошибка загрузки данных')
+          throw new Error("Ошибка загрузки данных");
         }
-        this.venues = await response.json()
+        this.venues = await response.json();
       } catch (err) {
-        this.error = err.message
+        this.error = err.message;
       } finally {
-        this.loading = false
+        this.loading = false;
       }
     },
     async fetchCities() {
       try {
-        const response = await fetch('/api/cities/')
+        const response = await fetch("/api/cities/");
         if (response.ok) {
-          this.cities = await response.json()
+          this.cities = await response.json();
         }
       } catch (err) {
-        console.error('Failed to fetch cities:', err)
+        console.error("Failed to fetch cities:", err);
       }
     },
     getEmptyRoom() {
       return {
-        name: '',
-        blackbox: false
-      }
+        name: "",
+        blackbox: false,
+      };
     },
     openVenueById(id) {
-      const venueId = parseInt(id, 10)
-      const venue = this.venues.find(v => v.id === venueId)
+      const venueId = parseInt(id, 10);
+      const venue = this.venues.find((v) => v.id === venueId);
       if (venue) {
-        this.selectedVenue = venue
-        this.updateUrlWithVenue(venue.id)
+        this.selectedVenue = venue;
+        this.updateUrlWithVenue(venue.id);
       }
     },
     openVenueModal(venue) {
-      this.selectedVenue = venue
-      this.updateUrlWithVenue(venue.id)
+      this.selectedVenue = venue;
+      this.updateUrlWithVenue(venue.id);
     },
     closeVenueModal() {
-      this.selectedVenue = null
-      this.linkCopied = false
-      this.updateUrlWithVenue(null)
+      this.selectedVenue = null;
+      this.linkCopied = false;
+      this.updateUrlWithVenue(null);
     },
     updateUrlWithVenue(venueId) {
-      const query = { ...this.$route.query }
+      const query = { ...this.$route.query };
       if (venueId) {
-        query.id = venueId
+        query.id = venueId;
       } else {
-        delete query.id
+        delete query.id;
       }
-      this.$router.replace({ query }).catch(() => {})
+      this.$router.replace({ query }).catch(() => {});
     },
     copyVenueLink() {
-      if (!this.selectedVenue) return
-      const url = `${window.location.origin}/venues?id=${this.selectedVenue.id}`
-      navigator.clipboard.writeText(url).then(() => {
-        this.linkCopied = true
-        setTimeout(() => {
-          this.linkCopied = false
-        }, 2000)
-      }).catch(err => {
-        console.error('Ошибка копирования:', err)
-      })
+      if (!this.selectedVenue) return;
+      const url = `${window.location.origin}/venues?id=${this.selectedVenue.id}`;
+      navigator.clipboard
+        .writeText(url)
+        .then(() => {
+          this.linkCopied = true;
+          setTimeout(() => {
+            this.linkCopied = false;
+          }, 2000);
+        })
+        .catch((err) => {
+          console.error("Ошибка копирования:", err);
+        });
     },
     openAddModal() {
-      this.showAddModal = true
+      this.showAddModal = true;
     },
     closeAddModal() {
-      this.showAddModal = false
+      this.showAddModal = false;
     },
     onVenueAdded(savedVenue) {
-      this.venues.unshift(savedVenue)
-      this.closeAddModal()
+      this.venues.unshift(savedVenue);
+      this.closeAddModal();
     },
-    
+
     // === Редактирование ===
     startEditingVenue() {
-      if (!this.selectedVenue) return
-      this.isEditingVenue = true
+      if (!this.selectedVenue) return;
+      this.isEditingVenue = true;
     },
     cancelEditingVenue() {
-      this.isEditingVenue = false
+      this.isEditingVenue = false;
     },
     onVenueEdited(updatedVenue) {
-      const index = this.venues.findIndex(v => v.id === updatedVenue.id)
+      const index = this.venues.findIndex((v) => v.id === updatedVenue.id);
       if (index !== -1) {
-        this.venues.splice(index, 1, updatedVenue)
+        this.venues.splice(index, 1, updatedVenue);
       }
-      this.selectedVenue = updatedVenue
-      this.isEditingVenue = false
+      this.selectedVenue = updatedVenue;
+      this.isEditingVenue = false;
     },
-    
+
     // === Удаление площадки ===
     async deleteVenue() {
-      if (!this.selectedVenue) return
-      
-      this.deleteLoading = true
-      
+      if (!this.selectedVenue) return;
+
+      this.deleteLoading = true;
+
       try {
         const response = await fetch(`/api/venues/${this.selectedVenue.id}/`, {
-          method: 'DELETE',
+          method: "DELETE",
           headers: {
-            'X-CSRFToken': this.csrfToken
-          }
-        })
-        
+            "X-CSRFToken": this.csrfToken,
+          },
+        });
+
         if (!response.ok) {
           if (response.status === 401 || response.status === 403) {
-            throw new Error('Нет прав для удаления')
+            throw new Error("Нет прав для удаления");
           }
-          throw new Error('Ошибка при удалении')
+          throw new Error("Ошибка при удалении");
         }
-        
-        const index = this.venues.findIndex(v => v.id === this.selectedVenue.id)
+
+        const index = this.venues.findIndex(
+          (v) => v.id === this.selectedVenue.id
+        );
         if (index !== -1) {
-          this.venues.splice(index, 1)
+          this.venues.splice(index, 1);
         }
-        
-        this.showDeleteConfirm = false
-        this.closeVenueModal()
+
+        this.showDeleteConfirm = false;
+        this.closeVenueModal();
       } catch (err) {
-        alert(err.message)
+        alert(err.message);
       } finally {
-        this.deleteLoading = false
+        this.deleteLoading = false;
       }
     },
-    
+
     // === Помещения ===
     openAddRoomModal() {
-      this.newRoom = this.getEmptyRoom()
-      this.addRoomError = null
-      this.showAddRoomModal = true
+      this.newRoom = this.getEmptyRoom();
+      this.addRoomError = null;
+      this.showAddRoomModal = true;
     },
     closeAddRoomModal() {
-      this.showAddRoomModal = false
-      this.addRoomError = null
+      this.showAddRoomModal = false;
+      this.addRoomError = null;
     },
     async submitRoom() {
-      if (!this.selectedVenue) return
-      
-      this.addRoomLoading = true
-      this.addRoomError = null
-      
+      if (!this.selectedVenue) return;
+
+      this.addRoomLoading = true;
+      this.addRoomError = null;
+
       try {
-        const response = await fetch('/api/rooms/', {
-          method: 'POST',
+        const response = await fetch("/api/rooms/", {
+          method: "POST",
           headers: {
-            'Content-Type': 'application/json',
-            'X-CSRFToken': this.csrfToken
+            "Content-Type": "application/json",
+            "X-CSRFToken": this.csrfToken,
           },
           body: JSON.stringify({
             venue_id: this.selectedVenue.id,
             name: this.newRoom.name,
-            blackbox: this.newRoom.blackbox
-          })
-        })
-        
+            blackbox: this.newRoom.blackbox,
+          }),
+        });
+
         if (!response.ok) {
           if (response.status === 401 || response.status === 403) {
-            throw new Error('Необходима авторизация')
+            throw new Error("Необходима авторизация");
           }
-          const data = await response.json()
-          throw new Error(data.detail || data.name?.[0] || 'Ошибка при сохранении')
+          const data = await response.json();
+          throw new Error(
+            data.detail || data.name?.[0] || "Ошибка при сохранении"
+          );
         }
-        
-        const createdRoom = await response.json()
-        
+
+        const createdRoom = await response.json();
+
         // Добавляем комнату в текущую площадку
         if (!this.selectedVenue.rooms) {
-          this.selectedVenue.rooms = []
+          this.selectedVenue.rooms = [];
         }
-        this.selectedVenue.rooms.push(createdRoom)
-        
+        this.selectedVenue.rooms.push(createdRoom);
+
         // Обновляем площадку в общем списке
-        const venueIndex = this.venues.findIndex(v => v.id === this.selectedVenue.id)
+        const venueIndex = this.venues.findIndex(
+          (v) => v.id === this.selectedVenue.id
+        );
         if (venueIndex !== -1) {
-          this.venues[venueIndex] = { ...this.selectedVenue }
+          this.venues[venueIndex] = { ...this.selectedVenue };
         }
-        
-        this.closeAddRoomModal()
+
+        this.closeAddRoomModal();
       } catch (err) {
-        this.addRoomError = err.message
+        this.addRoomError = err.message;
       } finally {
-        this.addRoomLoading = false
+        this.addRoomLoading = false;
       }
     },
-    
+
     // Редактирование помещения
     startEditingRoom(room) {
       this.editRoom = {
         id: room.id,
         name: room.name,
-        blackbox: room.blackbox
-      }
-      this.editRoomError = null
-      this.isEditingRoom = true
+        blackbox: room.blackbox,
+      };
+      this.editRoomError = null;
+      this.isEditingRoom = true;
     },
     cancelEditingRoom() {
-      this.isEditingRoom = false
-      this.editRoomError = null
+      this.isEditingRoom = false;
+      this.editRoomError = null;
     },
     async submitEditRoom() {
-      this.editRoomLoading = true
-      this.editRoomError = null
-      
+      this.editRoomLoading = true;
+      this.editRoomError = null;
+
       try {
         const response = await fetch(`/api/rooms/${this.editRoom.id}/`, {
-          method: 'PATCH',
+          method: "PATCH",
           headers: {
-            'Content-Type': 'application/json',
-            'X-CSRFToken': this.csrfToken
+            "Content-Type": "application/json",
+            "X-CSRFToken": this.csrfToken,
           },
           body: JSON.stringify({
             name: this.editRoom.name,
-            blackbox: this.editRoom.blackbox
-          })
-        })
-        
+            blackbox: this.editRoom.blackbox,
+          }),
+        });
+
         if (!response.ok) {
           if (response.status === 401 || response.status === 403) {
-            throw new Error('Нет прав для редактирования')
+            throw new Error("Нет прав для редактирования");
           }
-          const data = await response.json()
-          throw new Error(data.detail || data.name?.[0] || 'Ошибка при сохранении')
+          const data = await response.json();
+          throw new Error(
+            data.detail || data.name?.[0] || "Ошибка при сохранении"
+          );
         }
-        
-        const updatedRoom = await response.json()
-        
+
+        const updatedRoom = await response.json();
+
         // Обновляем комнату в списке
         if (this.selectedVenue && this.selectedVenue.rooms) {
-          const roomIndex = this.selectedVenue.rooms.findIndex(r => r.id === updatedRoom.id)
+          const roomIndex = this.selectedVenue.rooms.findIndex(
+            (r) => r.id === updatedRoom.id
+          );
           if (roomIndex !== -1) {
-            this.selectedVenue.rooms.splice(roomIndex, 1, updatedRoom)
+            this.selectedVenue.rooms.splice(roomIndex, 1, updatedRoom);
           }
         }
-        
+
         // Обновляем площадку в общем списке
-        const venueIndex = this.venues.findIndex(v => v.id === this.selectedVenue.id)
+        const venueIndex = this.venues.findIndex(
+          (v) => v.id === this.selectedVenue.id
+        );
         if (venueIndex !== -1) {
-          this.venues[venueIndex] = { ...this.selectedVenue }
+          this.venues[venueIndex] = { ...this.selectedVenue };
         }
-        
-        this.isEditingRoom = false
+
+        this.isEditingRoom = false;
       } catch (err) {
-        this.editRoomError = err.message
+        this.editRoomError = err.message;
       } finally {
-        this.editRoomLoading = false
+        this.editRoomLoading = false;
       }
     },
-    
+
     // Удаление помещения
     confirmDeleteRoom(room) {
-      this.roomToDelete = room
-      this.showDeleteRoomConfirm = true
+      this.roomToDelete = room;
+      this.showDeleteRoomConfirm = true;
     },
     async deleteRoom() {
-      if (!this.roomToDelete) return
-      
-      this.deleteRoomLoading = true
-      
+      if (!this.roomToDelete) return;
+
+      this.deleteRoomLoading = true;
+
       try {
         const response = await fetch(`/api/rooms/${this.roomToDelete.id}/`, {
-          method: 'DELETE',
+          method: "DELETE",
           headers: {
-            'X-CSRFToken': this.csrfToken
-          }
-        })
-        
+            "X-CSRFToken": this.csrfToken,
+          },
+        });
+
         if (!response.ok) {
           if (response.status === 401 || response.status === 403) {
-            throw new Error('Нет прав для удаления')
+            throw new Error("Нет прав для удаления");
           }
-          throw new Error('Ошибка при удалении')
+          throw new Error("Ошибка при удалении");
         }
-        
+
         // Удаляем комнату из списка
         if (this.selectedVenue && this.selectedVenue.rooms) {
-          const roomIndex = this.selectedVenue.rooms.findIndex(r => r.id === this.roomToDelete.id)
+          const roomIndex = this.selectedVenue.rooms.findIndex(
+            (r) => r.id === this.roomToDelete.id
+          );
           if (roomIndex !== -1) {
-            this.selectedVenue.rooms.splice(roomIndex, 1)
+            this.selectedVenue.rooms.splice(roomIndex, 1);
           }
         }
-        
+
         // Обновляем площадку в общем списке
-        const venueIndex = this.venues.findIndex(v => v.id === this.selectedVenue.id)
+        const venueIndex = this.venues.findIndex(
+          (v) => v.id === this.selectedVenue.id
+        );
         if (venueIndex !== -1) {
-          this.venues[venueIndex] = { ...this.selectedVenue }
+          this.venues[venueIndex] = { ...this.selectedVenue };
         }
-        
-        this.showDeleteRoomConfirm = false
-        this.roomToDelete = null
+
+        this.showDeleteRoomConfirm = false;
+        this.roomToDelete = null;
       } catch (err) {
-        alert(err.message)
+        alert(err.message);
       } finally {
-        this.deleteRoomLoading = false
+        this.deleteRoomLoading = false;
       }
-    }
-  }
-}
+    },
+  },
+};
 </script>
 
 <style scoped>
@@ -734,7 +855,7 @@ export default {
 }
 
 .page-header h1 {
-  font-family: 'JetBrains Mono', monospace;
+  font-family: "JetBrains Mono", monospace;
   font-size: 3rem;
   color: #ff6b35;
   text-shadow: 0 0 20px rgba(255, 107, 53, 0.5);
@@ -863,7 +984,9 @@ export default {
 }
 
 @keyframes spin {
-  to { transform: rotate(360deg); }
+  to {
+    transform: rotate(360deg);
+  }
 }
 
 .error {
@@ -917,13 +1040,18 @@ export default {
 }
 
 .venue-card::before {
-  content: '';
+  content: "";
   position: absolute;
   top: 0;
   left: -100%;
   width: 100%;
   height: 100%;
-  background: linear-gradient(90deg, transparent, rgba(255, 107, 53, 0.1), transparent);
+  background: linear-gradient(
+    90deg,
+    transparent,
+    rgba(255, 107, 53, 0.1),
+    transparent
+  );
   transition: left 0.5s;
   z-index: 1;
   pointer-events: none;
@@ -945,7 +1073,7 @@ export default {
 }
 
 .venue-title {
-  font-family: 'JetBrains Mono', monospace;
+  font-family: "JetBrains Mono", monospace;
   font-size: 1.4rem;
   color: #ff6b35;
   margin-bottom: 12px;
@@ -995,7 +1123,7 @@ export default {
 
 .stat-value {
   color: #00ccff;
-  font-family: 'JetBrains Mono', monospace;
+  font-family: "JetBrains Mono", monospace;
   font-weight: bold;
 }
 
@@ -1068,7 +1196,7 @@ export default {
 }
 
 .modal-content h2 {
-  font-family: 'JetBrains Mono', monospace;
+  font-family: "JetBrains Mono", monospace;
   color: #ff6b35;
   font-size: 1.8rem;
   margin-bottom: 24px;
@@ -1198,7 +1326,7 @@ export default {
 
 .modal-stat-value {
   color: #00ccff;
-  font-family: 'JetBrains Mono', monospace;
+  font-family: "JetBrains Mono", monospace;
   font-size: 1.2rem;
   font-weight: bold;
 }
@@ -1498,7 +1626,7 @@ export default {
 }
 
 .checkbox-input:checked + .checkbox-custom::after {
-  content: '✓';
+  content: "✓";
   position: absolute;
   top: 50%;
   left: 50%;
@@ -1518,41 +1646,41 @@ export default {
   .page-header h1 {
     font-size: 2rem;
   }
-  
+
   .controls-bar {
     flex-direction: column;
     gap: 16px;
   }
-  
+
   .controls-filters {
     width: 100%;
     flex-direction: column;
   }
-  
+
   .control-search,
   .control-select {
     width: 100%;
     min-width: 100%;
   }
-  
+
   .add-btn {
     width: 100%;
     justify-content: center;
   }
-  
+
   .venues-grid {
     grid-template-columns: 1fr;
   }
-  
+
   .modal-stats {
     grid-template-columns: 1fr;
     gap: 12px;
   }
-  
+
   .form-actions {
     flex-direction: column-reverse;
   }
-  
+
   .btn {
     width: 100%;
     text-align: center;

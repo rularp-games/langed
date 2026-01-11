@@ -75,6 +75,14 @@ body {
   padding: 0;
 }
 
+/* Блокировка прокрутки при открытом модальном окне */
+body.modal-open {
+  overflow: hidden;
+  position: fixed;
+  width: 100%;
+  height: 100%;
+}
+
 #app {
   font-family: 'JetBrains Mono', monospace;
   -webkit-font-smoothing: antialiased;

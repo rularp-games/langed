@@ -2,27 +2,29 @@
   <div class="modal-overlay" @click.self="$emit('cancel')">
     <div class="modal-content convention-editor-modal">
       <button class="modal-close" @click="$emit('cancel')">×</button>
-      
-      <h2>{{ mode === 'add' ? 'Добавить конвент' : 'Редактировать конвент' }}</h2>
-      
+
+      <h2>
+        {{ mode === "add" ? "Добавить конвент" : "Редактировать конвент" }}
+      </h2>
+
       <form @submit.prevent="submitForm" class="convention-form">
         <!-- Название -->
         <div class="form-group">
           <label for="conv-name">Название *</label>
-          <input 
+          <input
             id="conv-name"
-            v-model="formData.name" 
-            type="text" 
+            v-model="formData.name"
+            type="text"
             required
             class="form-input"
             placeholder="Введите название конвента"
           />
         </div>
-        
+
         <!-- Описание -->
         <div class="form-group">
           <label for="conv-description">Описание</label>
-          <textarea 
+          <textarea
             id="conv-description"
             v-model="formData.description"
             class="form-input form-textarea"
@@ -30,13 +32,25 @@
             rows="3"
           ></textarea>
         </div>
-        
+
         <div v-if="error" class="form-error">{{ error }}</div>
-        
+
         <div class="form-actions">
-          <button type="button" @click="$emit('cancel')" class="btn btn-secondary">Отмена</button>
+          <button
+            type="button"
+            @click="$emit('cancel')"
+            class="btn btn-secondary"
+          >
+            Отмена
+          </button>
           <button type="submit" class="btn btn-primary" :disabled="loading">
-            {{ loading ? 'Сохранение...' : (mode === 'add' ? 'Добавить' : 'Сохранить') }}
+            {{
+              loading
+                ? "Сохранение..."
+                : mode === "add"
+                ? "Добавить"
+                : "Сохранить"
+            }}
           </button>
         </div>
       </form>
@@ -46,108 +60,121 @@
 
 <script>
 export default {
-  name: 'ConventionEditor',
+  name: "ConventionEditor",
   props: {
     // Режим: 'add' или 'edit'
     mode: {
       type: String,
-      default: 'add',
-      validator: v => ['add', 'edit'].includes(v)
+      default: "add",
+      validator: (v) => ["add", "edit"].includes(v),
     },
     // Данные существующего конвента для редактирования
     convention: {
       type: Object,
-      default: null
+      default: null,
     },
     // CSRF токен
     csrfToken: {
       type: String,
-      default: ''
-    }
+      default: "",
+    },
   },
-  emits: ['save', 'cancel', 'error'],
+  emits: ["save", "cancel", "error"],
   data() {
     return {
+      savedScrollY: 0,
       formData: {
         id: null,
-        name: '',
-        description: ''
+        name: "",
+        description: "",
       },
       loading: false,
-      error: null
-    }
+      error: null,
+    };
+  },
+  mounted() {
+    // Сохраняем позицию прокрутки и блокируем прокрутку body
+    this.savedScrollY = window.scrollY;
+    document.body.classList.add("modal-open");
+    document.body.style.top = `-${this.savedScrollY}px`;
+  },
+  beforeUnmount() {
+    // Восстанавливаем прокрутку body
+    document.body.classList.remove("modal-open");
+    document.body.style.top = "";
+    window.scrollTo(0, this.savedScrollY);
   },
   watch: {
     convention: {
       immediate: true,
       handler(newVal) {
-        if (newVal && this.mode === 'edit') {
-          this.initFromConvention(newVal)
+        if (newVal && this.mode === "edit") {
+          this.initFromConvention(newVal);
         }
-      }
+      },
     },
     mode: {
       immediate: true,
       handler(newVal) {
-        if (newVal === 'add') {
-          this.resetForm()
-        } else if (newVal === 'edit' && this.convention) {
-          this.initFromConvention(this.convention)
+        if (newVal === "add") {
+          this.resetForm();
+        } else if (newVal === "edit" && this.convention) {
+          this.initFromConvention(this.convention);
         }
-      }
-    }
+      },
+    },
   },
   methods: {
     initFromConvention(convention) {
       this.formData = {
         id: convention.id,
-        name: convention.name || '',
-        description: convention.description || ''
-      }
-      this.error = null
+        name: convention.name || "",
+        description: convention.description || "",
+      };
+      this.error = null;
     },
-    
+
     resetForm() {
       this.formData = {
         id: null,
-        name: '',
-        description: ''
-      }
-      this.error = null
+        name: "",
+        description: "",
+      };
+      this.error = null;
     },
-    
+
     async submitForm() {
-      this.loading = true
-      this.error = null
-      
+      this.loading = true;
+      this.error = null;
+
       try {
         // Валидация
         if (!this.formData.name.trim()) {
-          throw new Error('Введите название конвента')
+          throw new Error("Введите название конвента");
         }
-        
+
         // Формируем данные для API
         const conventionData = {
           name: this.formData.name.trim(),
-          description: this.formData.description.trim()
-        }
-        
+          description: this.formData.description.trim(),
+        };
+
         // Добавляем ID для редактирования
-        if (this.mode === 'edit' && this.formData.id) {
-          conventionData.id = this.formData.id
+        if (this.mode === "edit" && this.formData.id) {
+          conventionData.id = this.formData.id;
         }
-        
+
         // Эмитим событие с данными
-        this.$emit('save', conventionData)
+        this.$emit("save", conventionData);
       } catch (err) {
-        this.error = err.message
-        this.$emit('error', err.message)
+        this.error = err.message;
+        this.$emit("error", err.message);
       } finally {
-        this.loading = false
+        this.loading = false;
       }
-    }
-  }
-}
+    },
+  },
+};
 </script>
 
 <style scoped>
@@ -196,7 +223,7 @@ export default {
 }
 
 .modal-content h2 {
-  font-family: 'JetBrains Mono', monospace;
+  font-family: "JetBrains Mono", monospace;
   color: #e0e0e0;
   font-size: 1.5rem;
   margin-bottom: 24px;
@@ -320,7 +347,7 @@ export default {
   .form-actions {
     flex-direction: column-reverse;
   }
-  
+
   .btn {
     width: 100%;
     text-align: center;

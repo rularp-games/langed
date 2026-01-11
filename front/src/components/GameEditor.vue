@@ -2,17 +2,17 @@
   <div class="modal-overlay" @click.self="$emit('cancel')">
     <div class="modal-content game-editor-modal">
       <button class="modal-close" @click="$emit('cancel')">×</button>
-      
+
       <div class="modal-body">
-        <h2>{{ mode === 'add' ? 'Добавить игру' : 'Редактировать игру' }}</h2>
-        
+        <h2>{{ mode === "add" ? "Добавить игру" : "Редактировать игру" }}</h2>
+
         <form @submit.prevent="submitForm" class="game-form">
           <div class="form-group">
             <label for="game-name">Название *</label>
-            <input 
+            <input
               id="game-name"
-              v-model="formData.name" 
-              type="text" 
+              v-model="formData.name"
+              type="text"
               required
               class="form-input"
               placeholder="Введите название игры"
@@ -22,16 +22,30 @@
           <div class="form-group">
             <label>Постер</label>
             <div class="poster-upload">
-              <div v-if="posterPreview || (game && game.poster_url && !posterRemoved)" class="poster-preview">
-                <img :src="posterPreview || game.poster_url" alt="Превью постера" />
-                <button type="button" @click="removePoster" class="poster-remove">×</button>
+              <div
+                v-if="
+                  posterPreview || (game && game.poster_url && !posterRemoved)
+                "
+                class="poster-preview"
+              >
+                <img
+                  :src="posterPreview || game.poster_url"
+                  alt="Превью постера"
+                />
+                <button
+                  type="button"
+                  @click="removePoster"
+                  class="poster-remove"
+                >
+                  ×
+                </button>
               </div>
               <label v-else class="poster-dropzone" for="game-poster-input">
                 <span class="poster-icon">🖼</span>
                 <span class="poster-text">Нажмите для выбора изображения</span>
                 <span class="poster-hint">JPG, PNG до 5 МБ</span>
               </label>
-              <input 
+              <input
                 id="game-poster-input"
                 type="file"
                 accept="image/jpeg,image/png,image/webp"
@@ -40,10 +54,10 @@
               />
             </div>
           </div>
-          
+
           <div class="form-group">
             <label for="game-announcement">Анонс</label>
-            <textarea 
+            <textarea
               id="game-announcement"
               v-model="formData.announcement"
               class="form-input form-textarea"
@@ -51,10 +65,10 @@
               rows="3"
             ></textarea>
           </div>
-          
+
           <div class="form-group">
             <label for="game-red-flags">Красные флаги</label>
-            <textarea 
+            <textarea
               id="game-red-flags"
               v-model="formData.red_flags"
               class="form-input form-textarea"
@@ -62,22 +76,22 @@
               rows="2"
             ></textarea>
           </div>
-          
+
           <div class="form-row">
             <div class="form-group half">
               <label>Игроки</label>
               <div class="range-inputs">
-                <input 
-                  v-model.number="formData.players_min" 
-                  type="number" 
+                <input
+                  v-model.number="formData.players_min"
+                  type="number"
                   min="1"
                   class="form-input small"
                   placeholder="Мин"
                 />
                 <span class="range-separator">–</span>
-                <input 
-                  v-model.number="formData.players_max" 
-                  type="number" 
+                <input
+                  v-model.number="formData.players_max"
+                  type="number"
                   min="1"
                   class="form-input small"
                   placeholder="Макс"
@@ -85,43 +99,43 @@
               </div>
             </div>
           </div>
-          
+
           <div class="form-row">
             <div class="form-group half">
               <label>Женские роли</label>
               <div class="range-inputs">
-                <input 
-                  v-model.number="formData.female_roles_min" 
-                  type="number" 
+                <input
+                  v-model.number="formData.female_roles_min"
+                  type="number"
                   min="0"
                   class="form-input small"
                   placeholder="Мин"
                 />
                 <span class="range-separator">–</span>
-                <input 
-                  v-model.number="formData.female_roles_max" 
-                  type="number" 
+                <input
+                  v-model.number="formData.female_roles_max"
+                  type="number"
                   min="0"
                   class="form-input small"
                   placeholder="Макс"
                 />
               </div>
             </div>
-            
+
             <div class="form-group half">
               <label>Мужские роли</label>
               <div class="range-inputs">
-                <input 
-                  v-model.number="formData.male_roles_min" 
-                  type="number" 
+                <input
+                  v-model.number="formData.male_roles_min"
+                  type="number"
                   min="0"
                   class="form-input small"
                   placeholder="Мин"
                 />
                 <span class="range-separator">–</span>
-                <input 
-                  v-model.number="formData.male_roles_max" 
-                  type="number" 
+                <input
+                  v-model.number="formData.male_roles_max"
+                  type="number"
                   min="0"
                   class="form-input small"
                   placeholder="Макс"
@@ -129,27 +143,35 @@
               </div>
             </div>
           </div>
-          
+
           <div class="form-row">
             <div class="form-group half">
               <label>Игротехники</label>
-              <input 
-                v-model.number="formData.technicians" 
-                type="number" 
+              <input
+                v-model.number="formData.technicians"
+                type="number"
                 min="0"
                 class="form-input small"
                 placeholder="0"
               />
             </div>
           </div>
-          
+
           <div v-if="error" class="form-error">{{ error }}</div>
-          
+
           <div class="form-actions">
-            <button type="button" @click="$emit('cancel')" class="btn btn-secondary">Отмена</button>
+            <button
+              type="button"
+              @click="$emit('cancel')"
+              class="btn btn-secondary"
+            >
+              Отмена
+            </button>
             <button type="submit" class="btn btn-primary" :disabled="loading">
               <span v-if="loading">Сохранение...</span>
-              <span v-else>{{ mode === 'add' ? 'Добавить' : 'Сохранить' }}</span>
+              <span v-else>{{
+                mode === "add" ? "Добавить" : "Сохранить"
+              }}</span>
             </button>
           </div>
         </form>
@@ -160,162 +182,178 @@
 
 <script>
 export default {
-  name: 'GameEditor',
+  name: "GameEditor",
   props: {
     game: {
       type: Object,
-      default: null
+      default: null,
     },
     mode: {
       type: String,
-      default: 'add',
-      validator: (value) => ['add', 'edit'].includes(value)
-    }
+      default: "add",
+      validator: (value) => ["add", "edit"].includes(value),
+    },
   },
-  emits: ['saved', 'cancel'],
+  emits: ["saved", "cancel"],
   data() {
     return {
+      savedScrollY: 0,
       formData: this.getEmptyGame(),
       posterFile: null,
       posterPreview: null,
       posterRemoved: false,
       loading: false,
-      error: null
-    }
+      error: null,
+    };
+  },
+  mounted() {
+    // Сохраняем позицию прокрутки и блокируем прокрутку body
+    this.savedScrollY = window.scrollY;
+    document.body.classList.add("modal-open");
+    document.body.style.top = `-${this.savedScrollY}px`;
   },
   computed: {
     csrfToken() {
-      const match = document.cookie.match(/csrftoken=([^;]+)/)
-      return match ? match[1] : ''
-    }
+      const match = document.cookie.match(/csrftoken=([^;]+)/);
+      return match ? match[1] : "";
+    },
   },
   watch: {
     game: {
       handler(newGame) {
-        if (newGame && this.mode === 'edit') {
+        if (newGame && this.mode === "edit") {
           this.formData = {
             id: newGame.id,
-            name: newGame.name || '',
-            announcement: newGame.announcement || '',
-            red_flags: newGame.red_flags || '',
+            name: newGame.name || "",
+            announcement: newGame.announcement || "",
+            red_flags: newGame.red_flags || "",
             players_min: newGame.players_min || 1,
             players_max: newGame.players_max || 10,
             female_roles_min: newGame.female_roles_min || 0,
             female_roles_max: newGame.female_roles_max || 0,
             male_roles_min: newGame.male_roles_min || 0,
             male_roles_max: newGame.male_roles_max || 0,
-            technicians: newGame.technicians || 0
-          }
+            technicians: newGame.technicians || 0,
+          };
         }
       },
-      immediate: true
-    }
+      immediate: true,
+    },
   },
   methods: {
     getEmptyGame() {
       return {
-        name: '',
-        announcement: '',
-        red_flags: '',
+        name: "",
+        announcement: "",
+        red_flags: "",
         players_min: 1,
         players_max: 10,
         female_roles_min: 0,
         female_roles_max: 0,
         male_roles_min: 0,
         male_roles_max: 0,
-        technicians: 0
-      }
+        technicians: 0,
+      };
     },
     onPosterChange(event) {
-      const file = event.target.files[0]
-      if (!file) return
-      
+      const file = event.target.files[0];
+      if (!file) return;
+
       // Проверка размера (5 МБ)
       if (file.size > 5 * 1024 * 1024) {
-        this.error = 'Файл слишком большой. Максимум 5 МБ'
-        event.target.value = ''
-        return
+        this.error = "Файл слишком большой. Максимум 5 МБ";
+        event.target.value = "";
+        return;
       }
-      
-      this.posterFile = file
-      this.posterPreview = URL.createObjectURL(file)
-      this.posterRemoved = false
+
+      this.posterFile = file;
+      this.posterPreview = URL.createObjectURL(file);
+      this.posterRemoved = false;
     },
     removePoster() {
       if (this.posterPreview) {
-        URL.revokeObjectURL(this.posterPreview)
+        URL.revokeObjectURL(this.posterPreview);
       }
-      this.posterFile = null
-      this.posterPreview = null
-      this.posterRemoved = true
+      this.posterFile = null;
+      this.posterPreview = null;
+      this.posterRemoved = true;
       // Сбросить input
-      const input = document.getElementById('game-poster-input')
-      if (input) input.value = ''
+      const input = document.getElementById("game-poster-input");
+      if (input) input.value = "";
     },
     async submitForm() {
-      this.loading = true
-      this.error = null
-      
+      this.loading = true;
+      this.error = null;
+
       try {
-        const formData = new FormData()
-        formData.append('name', this.formData.name)
-        formData.append('announcement', this.formData.announcement || '')
-        formData.append('red_flags', this.formData.red_flags || '')
-        formData.append('players_min', this.formData.players_min)
-        formData.append('players_max', this.formData.players_max)
-        formData.append('female_roles_min', this.formData.female_roles_min)
-        formData.append('female_roles_max', this.formData.female_roles_max)
-        formData.append('male_roles_min', this.formData.male_roles_min)
-        formData.append('male_roles_max', this.formData.male_roles_max)
-        formData.append('technicians', this.formData.technicians)
-        
+        const formData = new FormData();
+        formData.append("name", this.formData.name);
+        formData.append("announcement", this.formData.announcement || "");
+        formData.append("red_flags", this.formData.red_flags || "");
+        formData.append("players_min", this.formData.players_min);
+        formData.append("players_max", this.formData.players_max);
+        formData.append("female_roles_min", this.formData.female_roles_min);
+        formData.append("female_roles_max", this.formData.female_roles_max);
+        formData.append("male_roles_min", this.formData.male_roles_min);
+        formData.append("male_roles_max", this.formData.male_roles_max);
+        formData.append("technicians", this.formData.technicians);
+
         if (this.posterFile) {
-          formData.append('poster', this.posterFile)
+          formData.append("poster", this.posterFile);
         } else if (this.posterRemoved) {
-          formData.append('poster', '')
+          formData.append("poster", "");
         }
-        
-        let url = '/api/games/'
-        let method = 'POST'
-        
-        if (this.mode === 'edit' && this.formData.id) {
-          url = `/api/games/${this.formData.id}/`
-          method = 'PATCH'
+
+        let url = "/api/games/";
+        let method = "POST";
+
+        if (this.mode === "edit" && this.formData.id) {
+          url = `/api/games/${this.formData.id}/`;
+          method = "PATCH";
         }
-        
+
         const response = await fetch(url, {
           method,
           headers: {
-            'X-CSRFToken': this.csrfToken
+            "X-CSRFToken": this.csrfToken,
           },
-          body: formData
-        })
-        
+          body: formData,
+        });
+
         if (!response.ok) {
           if (response.status === 401 || response.status === 403) {
-            throw new Error(this.mode === 'add' 
-              ? 'Необходима авторизация для добавления игры'
-              : 'Нет прав для редактирования этой игры')
+            throw new Error(
+              this.mode === "add"
+                ? "Необходима авторизация для добавления игры"
+                : "Нет прав для редактирования этой игры"
+            );
           }
-          const data = await response.json()
-          throw new Error(data.detail || data.name?.[0] || 'Ошибка при сохранении')
+          const data = await response.json();
+          throw new Error(
+            data.detail || data.name?.[0] || "Ошибка при сохранении"
+          );
         }
-        
-        const savedGame = await response.json()
-        this.$emit('saved', savedGame)
+
+        const savedGame = await response.json();
+        this.$emit("saved", savedGame);
       } catch (err) {
-        this.error = err.message
+        this.error = err.message;
       } finally {
-        this.loading = false
+        this.loading = false;
       }
-    }
+    },
   },
   beforeUnmount() {
+    // Восстанавливаем прокрутку body
+    document.body.classList.remove("modal-open");
+    document.body.style.top = "";
+    window.scrollTo(0, this.savedScrollY);
+
     if (this.posterPreview) {
-      URL.revokeObjectURL(this.posterPreview)
+      URL.revokeObjectURL(this.posterPreview);
     }
-  }
-}
+  },
+};
 </script>
 
 <style scoped>
@@ -375,7 +413,7 @@ export default {
 }
 
 .game-editor-modal h2 {
-  font-family: 'JetBrains Mono', monospace;
+  font-family: "JetBrains Mono", monospace;
   color: #ff6b35;
   font-size: 1.8rem;
   margin-bottom: 20px;
@@ -610,11 +648,11 @@ export default {
     flex-direction: column;
     gap: 20px;
   }
-  
+
   .form-actions {
     flex-direction: column-reverse;
   }
-  
+
   .btn {
     width: 100%;
     text-align: center;

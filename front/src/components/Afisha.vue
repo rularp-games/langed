@@ -653,6 +653,8 @@ export default {
       error: null,
       selectedRun: null,
       runLinkCopied: false,
+      // Сохранение позиции прокрутки
+      savedScrollY: 0,
       // Конвенты
       conventions: [],
       conventionCities: [],
@@ -803,6 +805,28 @@ export default {
           this.openEventById(this.eventId)
         }
       }
+    },
+    // Блокировка прокрутки при открытии модальных окон
+    selectedRun(newVal, oldVal) {
+      if (newVal && !oldVal) {
+        this.lockBodyScroll()
+      } else if (!newVal && oldVal) {
+        this.unlockBodyScroll()
+      }
+    },
+    showAddEventModal(newVal, oldVal) {
+      if (newVal && !oldVal) {
+        this.lockBodyScroll()
+      } else if (!newVal && oldVal) {
+        this.unlockBodyScroll()
+      }
+    },
+    showRunEditor(newVal, oldVal) {
+      if (newVal && !oldVal) {
+        this.lockBodyScroll()
+      } else if (!newVal && oldVal) {
+        this.unlockBodyScroll()
+      }
     }
   },
   mounted() {
@@ -817,6 +841,18 @@ export default {
     this.fetchAllConventionEvents()
   },
   methods: {
+    // === Блокировка прокрутки ===
+    lockBodyScroll() {
+      this.savedScrollY = window.scrollY
+      document.body.classList.add('modal-open')
+      document.body.style.top = `-${this.savedScrollY}px`
+    },
+    unlockBodyScroll() {
+      document.body.classList.remove('modal-open')
+      document.body.style.top = ''
+      window.scrollTo(0, this.savedScrollY)
+    },
+    
     // === Работа с URL ===
     async openRunById(id) {
       const runId = parseInt(id, 10)
