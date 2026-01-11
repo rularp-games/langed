@@ -467,7 +467,10 @@
     <ConventionEventModal
       v-if="selectedConvention"
       :event="selectedConvention"
+      :is-authenticated="isAuthenticated"
+      :csrf-token="csrfToken"
       @close="closeConventionModal"
+      @registration-changed="fetchConventions"
     />
 
     <!-- Модальное окно добавления проведения конвента -->

@@ -9,13 +9,25 @@ from .models import Game, City, Region, Convention, ConventionEvent, Run, Conven
 
 User = get_user_model()
 
+
+def get_user_display_name(user):
+    """Возвращает отображаемое имя пользователя: first_name + last_name или username"""
+    full_name = f'{user.first_name} {user.last_name}'.strip()
+    return full_name if full_name else user.username
+
+
 # Перерегистрируем UserAdmin с поддержкой autocomplete
 admin.site.unregister(User)
 
 
 @admin.register(User)
 class UserAdmin(BaseUserAdmin):
+    list_display = ('username', 'get_display_name', 'email', 'is_staff', 'is_active')
     search_fields = ('username', 'first_name', 'last_name', 'email')
+    
+    def get_display_name(self, obj):
+        return get_user_display_name(obj)
+    get_display_name.short_description = 'Имя'
 
 
 class ConventionEventForm(forms.ModelForm):
@@ -78,7 +90,7 @@ class GameAdmin(admin.ModelAdmin):
     )
     
     def get_creators(self, obj):
-        return ', '.join([str(c) for c in obj.creators.all()])
+        return ', '.join([get_user_display_name(c) for c in obj.creators.all()])
     get_creators.short_description = 'Создатели'
 
 
@@ -103,7 +115,7 @@ class ConventionAdmin(admin.ModelAdmin):
     )
     
     def get_organizers(self, obj):
-        return ', '.join([str(o) for o in obj.organizers.all()])
+        return ', '.join([get_user_display_name(o) for o in obj.organizers.all()])
     get_organizers.short_description = 'Организаторы'
     
     def links_count(self, obj):
@@ -254,7 +266,7 @@ class RunAdmin(admin.ModelAdmin):
     )
     
     def get_masters(self, obj):
-        return ', '.join([str(m) for m in obj.masters.all()])
+        return ', '.join([get_user_display_name(m) for m in obj.masters.all()])
     get_masters.short_description = 'Мастера'
     
     def get_rooms(self, obj):

@@ -1120,6 +1120,7 @@ export default {
   flex: 1;
   display: flex;
   flex-direction: column;
+  align-items: flex-start;
   overflow-x: auto;
   padding-bottom: 20px;
 }
@@ -1132,6 +1133,7 @@ export default {
   z-index: 2;
   background: linear-gradient(135deg, #0a0a0a 0%, #1a1a2e 50%, #0a0a0a 100%);
   padding-bottom: 8px;
+  width: fit-content;
 }
 
 .room-header {
