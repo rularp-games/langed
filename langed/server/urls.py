@@ -2,7 +2,8 @@ from django.urls import path, include
 from rest_framework.routers import DefaultRouter
 from .views import (
     GameViewSet, RunViewSet, ConventionViewSet, ConventionEventViewSet,
-    CityViewSet, ConventionLinkViewSet, VenueViewSet, RoomViewSet, current_user, auth_urls
+    CityViewSet, ConventionLinkViewSet, VenueViewSet, RoomViewSet, 
+    current_user, auth_urls, search_users
 )
 
 router = DefaultRouter()
@@ -19,4 +20,5 @@ urlpatterns = [
     path('', include(router.urls)),
     path('auth/user/', current_user, name='current-user'),
     path('auth/urls/', auth_urls, name='auth-urls'),
+    path('users/search/', search_users, name='search-users'),
 ]

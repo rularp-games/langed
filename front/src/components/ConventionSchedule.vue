@@ -1165,6 +1165,7 @@ export default {
 
 .timeline-rooms-content {
   position: relative;
+  width: fit-content;
 }
 
 .timeline-common-event {

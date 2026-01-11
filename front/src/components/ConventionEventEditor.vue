@@ -298,20 +298,49 @@
           <div v-else class="no-organizers">
             Организаторы не назначены
           </div>
-          <!-- Форма добавления организатора -->
+          <!-- Форма добавления организатора с автодополнением -->
           <div v-if="canEdit" class="add-organizer-form">
-            <input 
-              v-model="newOrganizerUsername"
-              type="text"
-              class="add-organizer-input"
-              placeholder="Имя пользователя..."
-              @keydown.enter.prevent="addOrganizer"
-            />
+            <div class="autocomplete-wrapper">
+              <input 
+                v-model="newOrganizerUsername"
+                type="text"
+                class="add-organizer-input"
+                placeholder="Начните вводить имя..."
+                autocomplete="off"
+                @input="searchOrganizers"
+                @focus="showOrganizerDropdown = true"
+                @blur="hideOrganizerDropdownDelayed"
+                @keydown.enter.prevent="selectFirstOrganizer"
+                @keydown.down.prevent="highlightNextOrganizer"
+                @keydown.up.prevent="highlightPrevOrganizer"
+              />
+              <div 
+                v-if="showOrganizerDropdown && organizerSearchResults.length > 0" 
+                class="user-dropdown"
+              >
+                <div 
+                  v-for="(user, idx) in organizerSearchResults" 
+                  :key="user.id"
+                  class="user-dropdown-item"
+                  :class="{ highlighted: highlightedOrganizerIndex === idx }"
+                  @mousedown.prevent="selectOrganizer(user)"
+                >
+                  <span class="user-display-name">{{ user.display_name }}</span>
+                  <span class="user-username">@{{ user.username }}</span>
+                </div>
+              </div>
+              <div 
+                v-if="showOrganizerDropdown && newOrganizerUsername && newOrganizerUsername.length >= 2 && organizerSearchResults.length === 0 && !organizerSearchLoading" 
+                class="user-dropdown user-dropdown-empty"
+              >
+                Пользователи не найдены
+              </div>
+            </div>
             <button 
               class="add-organizer-btn"
               type="button"
-              @click="addOrganizer"
-              :disabled="!newOrganizerUsername.trim() || organizerLoading"
+              @click="addOrganizerFromSelected"
+              :disabled="!selectedOrganizer || organizerLoading"
             >
               {{ organizerLoading ? '...' : '+' }}
             </button>
@@ -409,6 +438,13 @@ export default {
       newOrganizerUsername: '',
       organizerLoading: false,
       organizerError: null,
+      // Автодополнение организаторов
+      organizerSearchResults: [],
+      organizerSearchLoading: false,
+      showOrganizerDropdown: false,
+      selectedOrganizer: null,
+      highlightedOrganizerIndex: 0,
+      organizerSearchDebounceTimer: null,
       // Управление регистрациями
       registrations: [],
       registrationsLoading: false,
@@ -776,7 +812,122 @@ export default {
       }
     },
     
-    // === Управление организаторами ===
+    // === Управление организаторами с автодополнением ===
+    
+    // Поиск пользователей с debounce
+    searchOrganizers() {
+      const query = this.newOrganizerUsername
+      
+      // Сбрасываем выбранного пользователя при изменении ввода
+      this.selectedOrganizer = null
+      this.highlightedOrganizerIndex = 0
+      
+      // Очищаем предыдущий таймер
+      if (this.organizerSearchDebounceTimer) {
+        clearTimeout(this.organizerSearchDebounceTimer)
+      }
+      
+      if (!query || query.length < 2) {
+        this.organizerSearchResults = []
+        return
+      }
+      
+      // Debounce 300ms
+      this.organizerSearchDebounceTimer = setTimeout(() => {
+        this.fetchOrganizers(query)
+      }, 300)
+    },
+    
+    async fetchOrganizers(query) {
+      this.organizerSearchLoading = true
+      
+      try {
+        const response = await fetch(`/api/users/search/?q=${encodeURIComponent(query)}`)
+        if (response.ok) {
+          const users = await response.json()
+          // Фильтруем уже добавленных организаторов
+          const existingIds = (this.organizers || []).map(o => o.id)
+          this.organizerSearchResults = users.filter(u => !existingIds.includes(u.id))
+        }
+      } catch (err) {
+        console.error('Ошибка поиска пользователей:', err)
+      } finally {
+        this.organizerSearchLoading = false
+      }
+    },
+    
+    hideOrganizerDropdownDelayed() {
+      setTimeout(() => {
+        this.showOrganizerDropdown = false
+      }, 200)
+    },
+    
+    selectOrganizer(user) {
+      this.newOrganizerUsername = user.display_name
+      this.selectedOrganizer = user
+      this.showOrganizerDropdown = false
+      this.organizerSearchResults = []
+      // Автоматически добавляем
+      this.addOrganizerFromSelected()
+    },
+    
+    selectFirstOrganizer() {
+      if (this.organizerSearchResults.length > 0) {
+        const idx = this.highlightedOrganizerIndex || 0
+        this.selectOrganizer(this.organizerSearchResults[idx])
+      }
+    },
+    
+    highlightNextOrganizer() {
+      if (this.organizerSearchResults.length === 0) return
+      this.highlightedOrganizerIndex = Math.min(
+        this.highlightedOrganizerIndex + 1, 
+        this.organizerSearchResults.length - 1
+      )
+    },
+    
+    highlightPrevOrganizer() {
+      this.highlightedOrganizerIndex = Math.max(this.highlightedOrganizerIndex - 1, 0)
+    },
+    
+    async addOrganizerFromSelected() {
+      const user = this.selectedOrganizer
+      if (!user || !this.conventionEvent) {
+        this.organizerError = 'Выберите пользователя из списка'
+        return
+      }
+      
+      this.organizerLoading = true
+      this.organizerError = null
+      
+      try {
+        const response = await fetch(`/api/convention-events/${this.conventionEvent.id}/add_organizer/`, {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+            'X-CSRFToken': this.csrfToken
+          },
+          body: JSON.stringify({ username: user.username })
+        })
+        
+        if (!response.ok) {
+          const data = await response.json()
+          throw new Error(data.error || 'Ошибка при добавлении организатора')
+        }
+        
+        const updatedEvent = await response.json()
+        this.organizers = updatedEvent.organizers || []
+        this.newOrganizerUsername = ''
+        this.selectedOrganizer = null
+        this.$emit('organizer-changed', updatedEvent)
+      } catch (err) {
+        this.organizerError = err.message
+      } finally {
+        this.organizerLoading = false
+      }
+    },
+    
+    // Для обратной совместимости
     async addOrganizer() {
       if (!this.newOrganizerUsername.trim() || !this.conventionEvent) return
       
@@ -1284,6 +1435,62 @@ export default {
   display: flex;
   gap: 8px;
   margin-top: 8px;
+}
+
+.autocomplete-wrapper {
+  position: relative;
+  flex: 1;
+}
+
+.user-dropdown {
+  position: absolute;
+  top: 100%;
+  left: 0;
+  right: 0;
+  background: #0a0a0a;
+  border: 1px solid #00ccff;
+  border-radius: 0 0 6px 6px;
+  z-index: 100;
+  max-height: 200px;
+  overflow-y: auto;
+  box-shadow: 0 8px 24px rgba(0, 0, 0, 0.5);
+}
+
+.user-dropdown-item {
+  padding: 10px 12px;
+  cursor: pointer;
+  border-bottom: 1px solid #00ccff22;
+  transition: background 0.15s ease;
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+
+.user-dropdown-item:last-child {
+  border-bottom: none;
+}
+
+.user-dropdown-item:hover,
+.user-dropdown-item.highlighted {
+  background: rgba(0, 204, 255, 0.15);
+}
+
+.user-display-name {
+  color: #e0e0e0;
+  font-weight: 600;
+  font-size: 0.9rem;
+}
+
+.user-username {
+  color: #00ccff;
+  font-size: 0.8rem;
+}
+
+.user-dropdown-empty {
+  padding: 12px;
+  color: #666;
+  text-align: center;
+  font-size: 0.85rem;
 }
 
 .add-organizer-input {

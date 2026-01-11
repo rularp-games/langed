@@ -142,16 +142,45 @@
             </div>
           </div>
           <div v-if="isManagingOrganizers" class="add-organizer-form">
-            <input 
-              v-model="newOrganizerUsername"
-              type="text"
-              class="form-input"
-              placeholder="Имя пользователя"
-              @keydown.enter.prevent="addOrganizer"
-            />
+            <div class="autocomplete-wrapper">
+              <input 
+                v-model="newOrganizerUsername"
+                type="text"
+                class="form-input"
+                placeholder="Начните вводить имя..."
+                autocomplete="off"
+                @input="searchOrganizers"
+                @focus="showOrganizerDropdown = true"
+                @blur="hideOrganizerDropdownDelayed"
+                @keydown.enter.prevent="selectFirstOrganizer"
+                @keydown.down.prevent="highlightNextOrganizer"
+                @keydown.up.prevent="highlightPrevOrganizer"
+              />
+              <div 
+                v-if="showOrganizerDropdown && organizerSearchResults.length > 0" 
+                class="user-dropdown"
+              >
+                <div 
+                  v-for="(user, idx) in organizerSearchResults" 
+                  :key="user.id"
+                  class="user-dropdown-item"
+                  :class="{ highlighted: highlightedOrganizerIndex === idx }"
+                  @mousedown.prevent="selectOrganizer(user)"
+                >
+                  <span class="user-display-name">{{ user.display_name }}</span>
+                  <span class="user-username">@{{ user.username }}</span>
+                </div>
+              </div>
+              <div 
+                v-if="showOrganizerDropdown && newOrganizerUsername && newOrganizerUsername.length >= 2 && organizerSearchResults.length === 0 && !organizerSearchLoading" 
+                class="user-dropdown user-dropdown-empty"
+              >
+                Пользователи не найдены
+              </div>
+            </div>
             <div class="add-organizer-actions">
-              <button @click="isManagingOrganizers = false" class="btn btn-secondary btn-sm">Отмена</button>
-              <button @click="addOrganizer" class="btn btn-primary btn-sm" :disabled="!newOrganizerUsername || addOrganizerLoading">
+              <button @click="cancelAddOrganizer" class="btn btn-secondary btn-sm">Отмена</button>
+              <button @click="addOrganizerFromSelected" class="btn btn-primary btn-sm" :disabled="!selectedOrganizer || addOrganizerLoading">
                 {{ addOrganizerLoading ? '...' : 'Добавить' }}
               </button>
             </div>
@@ -509,6 +538,13 @@ export default {
       newOrganizerUsername: '',
       addOrganizerLoading: false,
       addOrganizerError: null,
+      // Автодополнение организаторов
+      organizerSearchResults: [],
+      organizerSearchLoading: false,
+      showOrganizerDropdown: false,
+      selectedOrganizer: null,
+      highlightedOrganizerIndex: 0,
+      organizerSearchDebounceTimer: null,
       // Управление ссылками
       isManagingLinks: false,
       newLink: {
@@ -1053,7 +1089,135 @@ export default {
       }
     },
     
-    // === Управление организаторами ===
+    // === Управление организаторами с автодополнением ===
+    
+    // Поиск пользователей с debounce
+    searchOrganizers() {
+      const query = this.newOrganizerUsername
+      
+      // Сбрасываем выбранного пользователя при изменении ввода
+      this.selectedOrganizer = null
+      this.highlightedOrganizerIndex = 0
+      
+      // Очищаем предыдущий таймер
+      if (this.organizerSearchDebounceTimer) {
+        clearTimeout(this.organizerSearchDebounceTimer)
+      }
+      
+      if (!query || query.length < 2) {
+        this.organizerSearchResults = []
+        return
+      }
+      
+      // Debounce 300ms
+      this.organizerSearchDebounceTimer = setTimeout(() => {
+        this.fetchOrganizers(query)
+      }, 300)
+    },
+    
+    async fetchOrganizers(query) {
+      this.organizerSearchLoading = true
+      
+      try {
+        const response = await fetch(`/api/users/search/?q=${encodeURIComponent(query)}`)
+        if (response.ok) {
+          const users = await response.json()
+          // Фильтруем уже добавленных организаторов
+          const existingIds = (this.selectedConvention?.organizers || []).map(o => o.id)
+          this.organizerSearchResults = users.filter(u => !existingIds.includes(u.id))
+        }
+      } catch (err) {
+        console.error('Ошибка поиска пользователей:', err)
+      } finally {
+        this.organizerSearchLoading = false
+      }
+    },
+    
+    hideOrganizerDropdownDelayed() {
+      setTimeout(() => {
+        this.showOrganizerDropdown = false
+      }, 200)
+    },
+    
+    selectOrganizer(user) {
+      this.newOrganizerUsername = user.display_name
+      this.selectedOrganizer = user
+      this.showOrganizerDropdown = false
+      this.organizerSearchResults = []
+    },
+    
+    selectFirstOrganizer() {
+      if (this.organizerSearchResults.length > 0) {
+        const idx = this.highlightedOrganizerIndex || 0
+        this.selectOrganizer(this.organizerSearchResults[idx])
+        // Автоматически добавляем
+        this.addOrganizerFromSelected()
+      }
+    },
+    
+    highlightNextOrganizer() {
+      if (this.organizerSearchResults.length === 0) return
+      this.highlightedOrganizerIndex = Math.min(
+        this.highlightedOrganizerIndex + 1, 
+        this.organizerSearchResults.length - 1
+      )
+    },
+    
+    highlightPrevOrganizer() {
+      this.highlightedOrganizerIndex = Math.max(this.highlightedOrganizerIndex - 1, 0)
+    },
+    
+    cancelAddOrganizer() {
+      this.isManagingOrganizers = false
+      this.newOrganizerUsername = ''
+      this.selectedOrganizer = null
+      this.organizerSearchResults = []
+      this.addOrganizerError = null
+    },
+    
+    async addOrganizerFromSelected() {
+      const user = this.selectedOrganizer
+      if (!user || !this.selectedConvention) {
+        this.addOrganizerError = 'Выберите пользователя из списка'
+        return
+      }
+      
+      this.addOrganizerLoading = true
+      this.addOrganizerError = null
+      
+      try {
+        const response = await fetch(`/api/conventions/${this.selectedConvention.id}/add_organizer/`, {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+            'X-CSRFToken': this.csrfToken
+          },
+          body: JSON.stringify({ username: user.username })
+        })
+        
+        if (!response.ok) {
+          const data = await response.json()
+          throw new Error(data.error || 'Ошибка при добавлении организатора')
+        }
+        
+        const updatedConvention = await response.json()
+        this.selectedConvention = updatedConvention
+        
+        // Обновляем список конвентов
+        const index = this.conventions.findIndex(c => c.id === updatedConvention.id)
+        if (index !== -1) {
+          this.conventions.splice(index, 1, updatedConvention)
+        }
+        
+        this.cancelAddOrganizer()
+      } catch (err) {
+        this.addOrganizerError = err.message
+      } finally {
+        this.addOrganizerLoading = false
+      }
+    },
+    
+    // Для обратной совместимости
     async addOrganizer() {
       if (!this.newOrganizerUsername || !this.selectedConvention) return
       
@@ -1875,6 +2039,63 @@ export default {
   background: rgba(0, 0, 0, 0.3);
   border-radius: 8px;
   border: 1px solid #ff6b3533;
+}
+
+/* Автодополнение пользователей */
+.autocomplete-wrapper {
+  position: relative;
+  margin-bottom: 12px;
+}
+
+.user-dropdown {
+  position: absolute;
+  top: 100%;
+  left: 0;
+  right: 0;
+  background: #0a0a0a;
+  border: 1px solid #00ccff;
+  border-radius: 0 0 8px 8px;
+  z-index: 100;
+  max-height: 200px;
+  overflow-y: auto;
+  box-shadow: 0 8px 24px rgba(0, 0, 0, 0.5);
+}
+
+.user-dropdown-item {
+  padding: 10px 14px;
+  cursor: pointer;
+  border-bottom: 1px solid #00ccff22;
+  transition: background 0.15s ease;
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+
+.user-dropdown-item:last-child {
+  border-bottom: none;
+}
+
+.user-dropdown-item:hover,
+.user-dropdown-item.highlighted {
+  background: rgba(0, 204, 255, 0.15);
+}
+
+.user-display-name {
+  color: #e0e0e0;
+  font-weight: 600;
+  font-size: 0.95rem;
+}
+
+.user-username {
+  color: #00ccff;
+  font-size: 0.85rem;
+}
+
+.user-dropdown-empty {
+  padding: 14px;
+  color: #666;
+  text-align: center;
+  font-size: 0.9rem;
 }
 
 .add-organizer-form .form-input {

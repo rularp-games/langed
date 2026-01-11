@@ -168,19 +168,48 @@
                       Нет мастеров
                     </div>
                   </div>
-                  <!-- Форма добавления мастера -->
+                  <!-- Форма добавления мастера с автодополнением -->
                   <div class="add-master-form" @click.stop>
-                    <input 
-                      v-model="masterInputs[run.id]"
-                      type="text"
-                      class="add-master-input"
-                      placeholder="Имя пользователя..."
-                      @keydown.enter.prevent="addMaster(run)"
-                    />
+                    <div class="autocomplete-wrapper">
+                      <input 
+                        v-model="masterInputs[run.id]"
+                        type="text"
+                        class="add-master-input"
+                        placeholder="Начните вводить имя..."
+                        autocomplete="off"
+                        @input="searchUsers(run.id)"
+                        @focus="showUserDropdown[run.id] = true"
+                        @blur="hideUserDropdownDelayed(run.id)"
+                        @keydown.enter.prevent="selectFirstUser(run)"
+                        @keydown.down.prevent="highlightNextUser(run.id)"
+                        @keydown.up.prevent="highlightPrevUser(run.id)"
+                      />
+                      <div 
+                        v-if="showUserDropdown[run.id] && userSearchResults[run.id] && userSearchResults[run.id].length > 0" 
+                        class="user-dropdown"
+                      >
+                        <div 
+                          v-for="(user, idx) in userSearchResults[run.id]" 
+                          :key="user.id"
+                          class="user-dropdown-item"
+                          :class="{ highlighted: highlightedUserIndex[run.id] === idx }"
+                          @mousedown.prevent="selectUser(run, user)"
+                        >
+                          <span class="user-display-name">{{ user.display_name }}</span>
+                          <span class="user-username">@{{ user.username }}</span>
+                        </div>
+                      </div>
+                      <div 
+                        v-if="showUserDropdown[run.id] && masterInputs[run.id] && masterInputs[run.id].length >= 2 && (!userSearchResults[run.id] || userSearchResults[run.id].length === 0) && !userSearchLoading[run.id]" 
+                        class="user-dropdown user-dropdown-empty"
+                      >
+                        Пользователи не найдены
+                      </div>
+                    </div>
                     <button 
                       class="add-master-btn"
-                      @click.stop="addMaster(run)"
-                      :disabled="!masterInputs[run.id] || masterLoading[run.id]"
+                      @click.stop="addMasterFromSelected(run)"
+                      :disabled="!selectedUsers[run.id] || masterLoading[run.id]"
                     >
                       {{ masterLoading[run.id] ? '...' : '+' }}
                     </button>
@@ -403,6 +432,14 @@ export default {
       masterInputs: {},
       masterLoading: {},
       masterErrors: {},
+      
+      // Автодополнение пользователей
+      userSearchResults: {},
+      userSearchLoading: {},
+      showUserDropdown: {},
+      selectedUsers: {},
+      highlightedUserIndex: {},
+      searchDebounceTimers: {},
       
       // Редактор общих событий
       showCommonEventEditor: false,
@@ -744,7 +781,124 @@ export default {
       console.error('RunEditor error:', errorMessage)
     },
     
-    // === Управление мастерами ===
+    // === Управление мастерами с автодополнением ===
+    
+    // Поиск пользователей с debounce
+    searchUsers(runId) {
+      const query = this.masterInputs[runId]
+      
+      // Сбрасываем выбранного пользователя при изменении ввода
+      this.selectedUsers[runId] = null
+      this.highlightedUserIndex[runId] = 0
+      
+      // Очищаем предыдущий таймер
+      if (this.searchDebounceTimers[runId]) {
+        clearTimeout(this.searchDebounceTimers[runId])
+      }
+      
+      if (!query || query.length < 2) {
+        this.userSearchResults[runId] = []
+        return
+      }
+      
+      // Debounce 300ms
+      this.searchDebounceTimers[runId] = setTimeout(() => {
+        this.fetchUsers(runId, query)
+      }, 300)
+    },
+    
+    async fetchUsers(runId, query) {
+      this.userSearchLoading[runId] = true
+      
+      try {
+        const response = await fetch(`/api/users/search/?q=${encodeURIComponent(query)}`)
+        if (response.ok) {
+          const users = await response.json()
+          // Фильтруем уже добавленных мастеров
+          const run = this.schedule.runs.find(r => r.id === runId)
+          const existingMasterIds = (run?.masters || []).map(m => m.id)
+          this.userSearchResults[runId] = users.filter(u => !existingMasterIds.includes(u.id))
+        }
+      } catch (err) {
+        console.error('Ошибка поиска пользователей:', err)
+      } finally {
+        this.userSearchLoading[runId] = false
+      }
+    },
+    
+    hideUserDropdownDelayed(runId) {
+      // Задержка для обработки клика по выпадающему списку
+      setTimeout(() => {
+        this.showUserDropdown[runId] = false
+      }, 200)
+    },
+    
+    selectUser(run, user) {
+      this.masterInputs[run.id] = user.display_name
+      this.selectedUsers[run.id] = user
+      this.showUserDropdown[run.id] = false
+      this.userSearchResults[run.id] = []
+      // Автоматически добавляем мастера
+      this.addMasterFromSelected(run)
+    },
+    
+    selectFirstUser(run) {
+      const users = this.userSearchResults[run.id]
+      if (users && users.length > 0) {
+        const idx = this.highlightedUserIndex[run.id] || 0
+        this.selectUser(run, users[idx])
+      }
+    },
+    
+    highlightNextUser(runId) {
+      const users = this.userSearchResults[runId]
+      if (!users || users.length === 0) return
+      const current = this.highlightedUserIndex[runId] || 0
+      this.highlightedUserIndex[runId] = Math.min(current + 1, users.length - 1)
+    },
+    
+    highlightPrevUser(runId) {
+      const current = this.highlightedUserIndex[runId] || 0
+      this.highlightedUserIndex[runId] = Math.max(current - 1, 0)
+    },
+    
+    async addMasterFromSelected(run) {
+      const user = this.selectedUsers[run.id]
+      if (!user) {
+        this.masterErrors[run.id] = 'Выберите пользователя из списка'
+        return
+      }
+      
+      this.masterLoading[run.id] = true
+      this.masterErrors[run.id] = null
+      
+      try {
+        const response = await fetch(`/api/runs/${run.id}/add_master/`, {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+            'X-CSRFToken': this.csrfToken
+          },
+          body: JSON.stringify({ username: user.username })
+        })
+        
+        if (!response.ok) {
+          const data = await response.json()
+          throw new Error(data.error || 'Ошибка при добавлении мастера')
+        }
+        
+        // Обновляем расписание
+        await this.fetchSchedule()
+        this.masterInputs[run.id] = ''
+        this.selectedUsers[run.id] = null
+      } catch (err) {
+        this.masterErrors[run.id] = err.message
+      } finally {
+        this.masterLoading[run.id] = false
+      }
+    },
+    
+    // Для обратной совместимости (если вызывается старый метод)
     async addMaster(run) {
       const username = this.masterInputs[run.id]
       if (!username || !username.trim()) return
@@ -1480,6 +1634,62 @@ export default {
   display: flex;
   gap: 6px;
   margin-top: 6px;
+}
+
+.autocomplete-wrapper {
+  position: relative;
+  flex: 1;
+}
+
+.user-dropdown {
+  position: absolute;
+  top: 100%;
+  left: 0;
+  right: 0;
+  background: #0a0a0a;
+  border: 1px solid #00ccff;
+  border-radius: 0 0 6px 6px;
+  z-index: 100;
+  max-height: 200px;
+  overflow-y: auto;
+  box-shadow: 0 8px 24px rgba(0, 0, 0, 0.5);
+}
+
+.user-dropdown-item {
+  padding: 10px 12px;
+  cursor: pointer;
+  border-bottom: 1px solid #00ccff22;
+  transition: background 0.15s ease;
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+
+.user-dropdown-item:last-child {
+  border-bottom: none;
+}
+
+.user-dropdown-item:hover,
+.user-dropdown-item.highlighted {
+  background: rgba(0, 204, 255, 0.15);
+}
+
+.user-display-name {
+  color: #e0e0e0;
+  font-weight: 600;
+  font-size: 0.9rem;
+}
+
+.user-username {
+  color: #00ccff;
+  font-size: 0.8rem;
+}
+
+.user-dropdown-empty {
+  padding: 12px;
+  color: #666;
+  text-align: center;
+  font-size: 0.85rem;
 }
 
 .add-master-input {

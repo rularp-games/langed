@@ -27,6 +27,10 @@ from .serializers import (
 def current_user(request):
     """Возвращает информацию о текущем пользователе"""
     if request.user.is_authenticated:
+        # Формируем display_name
+        display_name = f'{request.user.first_name} {request.user.last_name}'.strip()
+        if not display_name:
+            display_name = request.user.username
         return Response({
             'is_authenticated': True,
             'id': request.user.id,
@@ -34,11 +38,52 @@ def current_user(request):
             'email': request.user.email,
             'first_name': request.user.first_name,
             'last_name': request.user.last_name,
+            'display_name': display_name,
             'is_staff': request.user.is_staff,
         })
     return Response({
         'is_authenticated': False,
     })
+
+
+@api_view(['GET'])
+@permission_classes([IsAuthenticated])
+def search_users(request):
+    """Поиск пользователей по имени/username для автодополнения"""
+    query = request.query_params.get('q', '').strip()
+    if len(query) < 2:
+        return Response([])
+    
+    from django.contrib.auth import get_user_model
+    from django.db.models import Q, Value, CharField
+    from django.db.models.functions import Concat
+    
+    User = get_user_model()
+    
+    # Ищем по username, first_name, last_name и email
+    users = User.objects.annotate(
+        full_name=Concat('first_name', Value(' '), 'last_name', output_field=CharField())
+    ).filter(
+        Q(username__icontains=query) |
+        Q(first_name__icontains=query) |
+        Q(last_name__icontains=query) |
+        Q(email__icontains=query) |
+        Q(full_name__icontains=query)
+    ).distinct()[:10]
+    
+    results = []
+    for user in users:
+        display_name = f'{user.first_name} {user.last_name}'.strip()
+        if not display_name:
+            display_name = user.username
+        results.append({
+            'id': user.id,
+            'username': user.username,
+            'display_name': display_name,
+            'email': user.email,
+        })
+    
+    return Response(results)
 
 
 @api_view(['GET'])
@@ -637,12 +682,14 @@ class ConventionViewSet(viewsets.ModelViewSet):
                 ).exists()
                 
                 if not event_exists:
-                    ConventionEvent.objects.create(
+                    new_event = ConventionEvent.objects.create(
                         convention=convention,
                         city=city,
                         date_start=date_start,
                         date_end=date_end
                     )
+                    # Наследуем организаторов от конвента
+                    new_event.organizers.set(convention.organizers.all())
                     events_created += 1
                 else:
                     events_skipped += 1
@@ -724,6 +771,13 @@ class ConventionEventViewSet(viewsets.ModelViewSet):
             return queryset.order_by('-date_start')  # Недавно прошедшие первыми
         
         return queryset.order_by('-date_start')
+    
+    def perform_create(self, serializer):
+        """При создании проведения конвента наследуем организаторов от конвента"""
+        event = serializer.save()
+        # Копируем организаторов из конвента
+        convention_organizers = event.convention.organizers.all()
+        event.organizers.set(convention_organizers)
     
     @action(detail=False, methods=['get'])
     def cities(self, request):
