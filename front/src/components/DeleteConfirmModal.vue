@@ -49,9 +49,12 @@ export default {
   },
   beforeUnmount() {
     // Восстанавливаем прокрутку body
+    const scrollY = this.savedScrollY
     document.body.classList.remove('modal-open')
     document.body.style.top = ''
-    window.scrollTo(0, this.savedScrollY)
+    requestAnimationFrame(() => {
+      window.scrollTo(0, scrollY)
+    })
   }
 }
 </script>
