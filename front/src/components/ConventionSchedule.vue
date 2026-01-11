@@ -154,7 +154,7 @@
                 </div>
               </div>
               <!-- Контейнер для колонок с прогонами и общих событий -->
-              <div class="timeline-rooms-content" :style="{ height: getTimelineHeightForDay(day) + 'px' }">
+              <div class="timeline-rooms-content" :class="{ 'no-rooms': allRooms.length === 0 }" :style="{ height: getTimelineHeightForDay(day) + 'px' }">
                 <!-- Общие события (на всю ширину) -->
                 <div 
                   v-for="commonEvent in getCommonEventsForDay(day)" 
@@ -1149,7 +1149,7 @@ export default {
 .timeline-rooms-columns {
   display: flex;
   gap: 16px;
-  min-width: 200px;
+  width: fit-content;
 }
 
 .timeline-room {
@@ -1161,6 +1161,9 @@ export default {
 .timeline-rooms-content {
   position: relative;
   width: fit-content;
+}
+
+.timeline-rooms-content.no-rooms {
   min-width: 300px;
 }
 
