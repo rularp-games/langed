@@ -1113,7 +1113,6 @@ export default {
   flex: 1;
   display: flex;
   flex-direction: column;
-  align-items: flex-start;
   overflow-x: auto;
   padding-bottom: 20px;
 }
@@ -1126,13 +1125,11 @@ export default {
   z-index: 2;
   background: linear-gradient(135deg, #0a0a0a 0%, #1a1a2e 50%, #0a0a0a 100%);
   padding-bottom: 8px;
-  width: fit-content;
 }
 
 .room-header {
   flex: 1;
   min-width: 200px;
-  max-width: 300px;
   background: rgba(26, 26, 46, 0.95);
   padding: 12px 16px;
   border-radius: 8px;
@@ -1149,18 +1146,15 @@ export default {
 .timeline-rooms-columns {
   display: flex;
   gap: 16px;
-  width: fit-content;
 }
 
 .timeline-room {
   flex: 1;
   min-width: 200px;
-  max-width: 300px;
 }
 
 .timeline-rooms-content {
   position: relative;
-  width: fit-content;
 }
 
 .timeline-rooms-content.no-rooms {
