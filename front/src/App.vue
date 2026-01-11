@@ -5,6 +5,7 @@
         <router-link to="/">Афиша</router-link>
         <router-link to="/games">Игры</router-link>
         <router-link to="/conventions">Конвенты</router-link>
+        <router-link to="/venues">Площадки</router-link>
       </div>
       <div class="user-info">
         <template v-if="user && user.is_authenticated">
@@ -60,7 +61,7 @@ export default {
 </script>
 
 <style>
-@import url('https://fonts.googleapis.com/css2?family=Orbitron:wght@400;700&display=swap');
+@import url('https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;500;600;700&display=swap');
 
 * {
   margin: 0;
@@ -75,7 +76,7 @@ body {
 }
 
 #app {
-  font-family: 'Orbitron', 'Courier New', monospace;
+  font-family: 'JetBrains Mono', monospace;
   -webkit-font-smoothing: antialiased;
   -moz-osx-font-smoothing: grayscale;
   min-height: 100vh;
@@ -178,7 +179,7 @@ nav {
   border: 1px solid #ff4444;
   color: #ff4444;
   cursor: pointer;
-  font-family: 'Orbitron', 'Courier New', monospace;
+  font-family: 'JetBrains Mono', monospace;
 }
 
 .logout-btn:hover {

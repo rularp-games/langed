@@ -1,8 +1,17 @@
 from rest_framework import serializers
 from django.contrib.auth import get_user_model
-from .models import Game, Run, Convention, ConventionEvent, City, ConventionLink, Region
+from .models import Game, Run, Convention, ConventionEvent, City, ConventionLink, Region, Venue, Room, Registration, CommonEvent, ConventionEventRegistration
 
 User = get_user_model()
+
+
+class NaiveDateTimeField(serializers.DateTimeField):
+    """
+    DateTimeField, который не добавляет таймзону автоматически.
+    Позволяет обработать таймзону вручную в validate методе сериализатора.
+    """
+    def default_timezone(self):
+        return None
 
 
 class UserBriefSerializer(serializers.ModelSerializer):
@@ -32,6 +41,53 @@ class CitySerializer(serializers.ModelSerializer):
     class Meta:
         model = City
         fields = ['id', 'name', 'region', 'timezone']
+
+
+class RoomSerializer(serializers.ModelSerializer):
+    """Сериализатор помещения"""
+    venue_id = serializers.PrimaryKeyRelatedField(
+        queryset=Venue.objects.all(),
+        source='venue',
+        write_only=True
+    )
+    venue_name = serializers.CharField(source='venue.name', read_only=True)
+    
+    class Meta:
+        model = Room
+        fields = ['id', 'venue_id', 'venue_name', 'name', 'blackbox', 'created_at', 'updated_at']
+        read_only_fields = ['id', 'created_at', 'updated_at']
+
+
+class RoomBriefSerializer(serializers.ModelSerializer):
+    """Краткий сериализатор помещения"""
+    venue_id = serializers.IntegerField(source='venue.id', read_only=True)
+    
+    class Meta:
+        model = Room
+        fields = ['id', 'name', 'blackbox', 'venue_id']
+
+
+class VenueSerializer(serializers.ModelSerializer):
+    """Сериализатор площадки"""
+    city = CitySerializer(read_only=True)
+    city_id = serializers.PrimaryKeyRelatedField(
+        queryset=City.objects.all(),
+        source='city',
+        write_only=True
+    )
+    rooms = RoomBriefSerializer(many=True, read_only=True)
+    
+    class Meta:
+        model = Venue
+        fields = ['id', 'name', 'address', 'city', 'city_id', 'description', 'capacity', 'rooms', 'created_at', 'updated_at']
+        read_only_fields = ['id', 'created_at', 'updated_at']
+
+
+class VenueBriefSerializer(serializers.ModelSerializer):
+    """Краткий сериализатор площадки"""
+    class Meta:
+        model = Venue
+        fields = ['id', 'name', 'address']
 
 
 class GameSerializer(serializers.ModelSerializer):
@@ -129,6 +185,351 @@ class RunBriefSerializer(serializers.ModelSerializer):
         fields = ['id', 'game_name', 'date']
 
 
+class ScheduleRunSerializer(serializers.ModelSerializer):
+    """Сериализатор прогона для расписания конвента"""
+    game = GameBriefSerializer(read_only=True)
+    game_id = serializers.PrimaryKeyRelatedField(
+        queryset=Game.objects.all(),
+        source='game',
+        write_only=True
+    )
+    game_name = serializers.CharField(source='game.name', read_only=True)
+    masters = UserBriefSerializer(many=True, read_only=True)
+    rooms = RoomBriefSerializer(many=True, read_only=True)
+    room_ids = serializers.PrimaryKeyRelatedField(
+        queryset=Room.objects.all(),
+        source='rooms',
+        write_only=True,
+        many=True,
+        required=False
+    )
+    city_timezone = serializers.CharField(source='city.timezone', read_only=True)
+    date_local = serializers.SerializerMethodField()
+    # Используем NaiveDateTimeField чтобы DRF не добавлял UTC автоматически
+    date = NaiveDateTimeField()
+    registered_count = serializers.SerializerMethodField()
+    available_slots = serializers.SerializerMethodField()
+    is_full = serializers.SerializerMethodField()
+    effective_max_players = serializers.SerializerMethodField()
+    can_edit = serializers.SerializerMethodField()
+    
+    class Meta:
+        model = Run
+        fields = [
+            'id', 'game', 'game_id', 'game_name', 'masters', 
+            'date', 'date_local', 'duration', 'city_timezone',
+            'rooms', 'room_ids',
+            'max_players', 'registration_open',
+            'registered_count', 'available_slots', 'is_full', 
+            'effective_max_players', 'can_edit'
+        ]
+        read_only_fields = ['id', 'masters', 'can_edit']
+    
+    def get_date_local(self, obj):
+        """Возвращает дату и время в локальной таймзоне города"""
+        import pytz
+        if obj.date and obj.city and obj.city.timezone:
+            try:
+                tz = pytz.timezone(obj.city.timezone)
+                local_dt = obj.date.astimezone(tz)
+                return local_dt.strftime('%Y-%m-%dT%H:%M:%S')
+            except Exception:
+                pass
+        return obj.date.isoformat() if obj.date else None
+    
+    def validate_date(self, value):
+        """
+        Конвертирует локальное время в UTC с учётом таймзоны города.
+        Дата приходит с фронтенда в формате без таймзоны (например 2026-01-15T14:00:00),
+        интерпретируется как локальное время в таймзоне города конвента.
+        """
+        import pytz
+        from django.utils import timezone as django_timezone
+        
+        # Если дата уже aware (с таймзоной), возвращаем как есть
+        if django_timezone.is_aware(value):
+            return value
+        
+        # Получаем таймзону из контекста (передаётся явно из view)
+        city_timezone = self.context.get('city_timezone')
+        
+        # Если нет в контексте, пробуем из существующего прогона
+        if not city_timezone and self.instance and self.instance.city:
+            city_timezone = self.instance.city.timezone
+        
+        if city_timezone:
+            try:
+                tz = pytz.timezone(city_timezone)
+                # Интерпретируем naive datetime как локальное время в этой таймзоне
+                local_dt = tz.localize(value)
+                # Конвертируем в UTC
+                return local_dt.astimezone(pytz.UTC)
+            except Exception:
+                pass
+        
+        # Если не удалось определить таймзону, используем дефолтную (Москва)
+        try:
+            default_tz = pytz.timezone('Europe/Moscow')
+            local_dt = default_tz.localize(value)
+            return local_dt.astimezone(pytz.UTC)
+        except Exception:
+            return value
+    
+    def validate(self, attrs):
+        """Проверяем, что дата прогона попадает в даты проведения конвента"""
+        # Получаем convention_event из контекста view (add_run передаёт его при save)
+        # Для update_run проверяем существующий instance
+        convention_event = None
+        if self.instance and self.instance.convention_event:
+            convention_event = self.instance.convention_event
+        
+        date_value = attrs.get('date')
+        if convention_event and date_value:
+            run_date = date_value.date()
+            if run_date < convention_event.date_start or run_date > convention_event.date_end:
+                raise serializers.ValidationError({
+                    'date': f'Дата прогона ({run_date.strftime("%d.%m.%Y")}) должна быть в пределах дат '
+                            f'проведения конвента ({convention_event.date_start.strftime("%d.%m.%Y")} — '
+                            f'{convention_event.date_end.strftime("%d.%m.%Y")})'
+                })
+        
+        return attrs
+    
+    def get_registered_count(self, obj):
+        return obj.get_registered_count()
+    
+    def get_available_slots(self, obj):
+        return obj.get_available_slots()
+    
+    def get_is_full(self, obj):
+        return obj.is_full()
+    
+    def get_effective_max_players(self, obj):
+        return obj.get_max_players()
+    
+    def get_can_edit(self, obj):
+        request = self.context.get('request')
+        if not request or not request.user.is_authenticated:
+            return False
+        if request.user.is_staff:
+            return True
+        # Может редактировать мастер прогона или организатор конвента
+        if request.user in obj.masters.all():
+            return True
+        if obj.convention_event:
+            if request.user in obj.convention_event.organizers.all():
+                return True
+            if request.user in obj.convention_event.convention.organizers.all():
+                return True
+        return False
+
+
+class CommonEventSerializer(serializers.ModelSerializer):
+    """Сериализатор общего события расписания"""
+    convention_event_id = serializers.PrimaryKeyRelatedField(
+        queryset=ConventionEvent.objects.all(),
+        source='convention_event',
+        write_only=True,
+        required=False
+    )
+    date_local = serializers.SerializerMethodField()
+    # Используем NaiveDateTimeField чтобы DRF не добавлял UTC автоматически
+    date = NaiveDateTimeField()
+    can_edit = serializers.SerializerMethodField()
+    
+    class Meta:
+        model = CommonEvent
+        fields = [
+            'id', 'convention_event_id', 'name', 'date', 'date_local', 
+            'duration', 'description', 'can_edit', 'created_at', 'updated_at'
+        ]
+        read_only_fields = ['id', 'created_at', 'updated_at', 'can_edit']
+    
+    def get_date_local(self, obj):
+        """Возвращает дату и время в локальной таймзоне города"""
+        import pytz
+        city = obj.convention_event.city if obj.convention_event else None
+        if obj.date and city and city.timezone:
+            try:
+                tz = pytz.timezone(city.timezone)
+                local_dt = obj.date.astimezone(tz)
+                return local_dt.strftime('%Y-%m-%dT%H:%M:%S')
+            except Exception:
+                pass
+        return obj.date.isoformat() if obj.date else None
+    
+    def validate_date(self, value):
+        """
+        Конвертирует локальное время в UTC с учётом таймзоны города.
+        """
+        import pytz
+        from django.utils import timezone as django_timezone
+        
+        # Если дата уже aware (с таймзоной), возвращаем как есть
+        if django_timezone.is_aware(value):
+            return value
+        
+        # Получаем таймзону из контекста (передаётся явно из view)
+        city_timezone = self.context.get('city_timezone')
+        
+        # Если нет в контексте, пробуем из существующего события
+        if not city_timezone and self.instance and self.instance.convention_event:
+            city_timezone = self.instance.convention_event.city.timezone
+        
+        if city_timezone:
+            try:
+                tz = pytz.timezone(city_timezone)
+                # Интерпретируем naive datetime как локальное время в этой таймзоне
+                local_dt = tz.localize(value)
+                # Конвертируем в UTC
+                return local_dt.astimezone(pytz.UTC)
+            except Exception:
+                pass
+        
+        # Если не удалось определить таймзону, используем дефолтную (Москва)
+        try:
+            default_tz = pytz.timezone('Europe/Moscow')
+            local_dt = default_tz.localize(value)
+            return local_dt.astimezone(pytz.UTC)
+        except Exception:
+            return value
+    
+    def validate(self, attrs):
+        """Проверяем, что дата события попадает в даты проведения конвента"""
+        convention_event = attrs.get('convention_event')
+        if not convention_event and self.instance:
+            convention_event = self.instance.convention_event
+        
+        date_value = attrs.get('date')
+        if convention_event and date_value:
+            event_date = date_value.date()
+            if event_date < convention_event.date_start or event_date > convention_event.date_end:
+                raise serializers.ValidationError({
+                    'date': f'Дата события ({event_date.strftime("%d.%m.%Y")}) должна быть в пределах дат '
+                            f'проведения конвента ({convention_event.date_start.strftime("%d.%m.%Y")} — '
+                            f'{convention_event.date_end.strftime("%d.%m.%Y")})'
+                })
+        
+        return attrs
+    
+    def get_can_edit(self, obj):
+        request = self.context.get('request')
+        if not request or not request.user.is_authenticated:
+            return False
+        if request.user.is_staff:
+            return True
+        # Может редактировать организатор проведения или конвента
+        if obj.convention_event:
+            if request.user in obj.convention_event.organizers.all():
+                return True
+            if request.user in obj.convention_event.convention.organizers.all():
+                return True
+        return False
+
+
+class ConventionScheduleSerializer(serializers.ModelSerializer):
+    """Сериализатор расписания проведения конвента"""
+    convention = serializers.PrimaryKeyRelatedField(read_only=True)
+    convention_name = serializers.CharField(source='convention.name', read_only=True)
+    convention_description = serializers.CharField(source='convention.description', read_only=True)
+    city = CitySerializer(read_only=True)
+    city_name = serializers.CharField(source='city.name', read_only=True)
+    city_timezone = serializers.CharField(source='city.timezone', read_only=True)
+    venue = VenueBriefSerializer(read_only=True)
+    venue_name = serializers.CharField(source='venue.name', read_only=True, allow_null=True)
+    venue_rooms = serializers.SerializerMethodField()
+    organizers = UserBriefSerializer(many=True, read_only=True)
+    convention_organizers = UserBriefSerializer(source='convention.organizers', many=True, read_only=True)
+    links = serializers.SerializerMethodField()
+    runs = ScheduleRunSerializer(source='scheduled_runs', many=True, read_only=True)
+    common_events = CommonEventSerializer(many=True, read_only=True)
+    venues = serializers.SerializerMethodField()
+    games = serializers.SerializerMethodField()
+    can_edit = serializers.SerializerMethodField()
+    
+    # Поля регистрации на конвент
+    registration_open = serializers.BooleanField(read_only=True)
+    capacity = serializers.IntegerField(read_only=True, allow_null=True)
+    registrations_count = serializers.SerializerMethodField()
+    pending_registrations_count = serializers.SerializerMethodField()
+    available_slots = serializers.SerializerMethodField()
+    is_full = serializers.SerializerMethodField()
+    current_user_registration = serializers.SerializerMethodField()
+    
+    class Meta:
+        model = ConventionEvent
+        fields = [
+            'id', 'convention', 'convention_name', 'convention_description',
+            'city', 'city_name', 'city_timezone', 'date_start', 'date_end',
+            'venue', 'venue_name', 'venue_rooms',
+            'organizers', 'convention_organizers', 'links',
+            'runs', 'common_events', 'venues', 'games', 'can_edit',
+            # Поля регистрации
+            'registration_open', 'capacity', 'registrations_count', 
+            'pending_registrations_count', 'available_slots', 'is_full',
+            'current_user_registration'
+        ]
+    
+    def get_links(self, obj):
+        return ConventionLinkSerializer(obj.convention.links.all(), many=True, context=self.context).data
+    
+    def get_venue_rooms(self, obj):
+        """Получить помещения площадки конвента"""
+        if obj.venue:
+            return RoomBriefSerializer(obj.venue.rooms.all(), many=True, context=self.context).data
+        return []
+    
+    def get_venues(self, obj):
+        """Получить уникальные площадки из всех прогонов конвента (через помещения)"""
+        venues = set()
+        for run in obj.scheduled_runs.all():
+            for room in run.rooms.all():
+                venues.add(room.venue)
+        return VenueBriefSerializer(list(venues), many=True, context=self.context).data
+    
+    def get_games(self, obj):
+        """Получить уникальные игры из всех прогонов конвента"""
+        games = {run.game for run in obj.scheduled_runs.all()}
+        return GameBriefSerializer(list(games), many=True, context=self.context).data
+    
+    def get_can_edit(self, obj):
+        request = self.context.get('request')
+        if not request or not request.user.is_authenticated:
+            return False
+        if request.user.is_staff:
+            return True
+        is_event_organizer = request.user in obj.organizers.all()
+        is_convention_organizer = request.user in obj.convention.organizers.all()
+        return is_event_organizer or is_convention_organizer
+    
+    def get_registrations_count(self, obj):
+        """Количество подтверждённых регистраций"""
+        return obj.get_confirmed_registrations_count()
+    
+    def get_pending_registrations_count(self, obj):
+        """Количество ожидающих регистраций"""
+        return obj.get_pending_registrations_count()
+    
+    def get_available_slots(self, obj):
+        """Количество свободных мест (None если без ограничений)"""
+        return obj.get_available_slots()
+    
+    def get_is_full(self, obj):
+        """Заполнен ли конвент"""
+        return obj.is_full()
+    
+    def get_current_user_registration(self, obj):
+        """Регистрация текущего пользователя на этот конвент"""
+        request = self.context.get('request')
+        if not request or not request.user.is_authenticated:
+            return None
+        try:
+            registration = obj.event_registrations.get(user=request.user)
+            return ConventionEventRegistrationBriefSerializer(registration, context=self.context).data
+        except ConventionEventRegistration.DoesNotExist:
+            return None
+
+
 class ConventionEventSerializer(serializers.ModelSerializer):
     """Сериализатор проведения конвента"""
     convention = serializers.PrimaryKeyRelatedField(read_only=True)
@@ -146,6 +547,15 @@ class ConventionEventSerializer(serializers.ModelSerializer):
         write_only=True,
         required=False
     )
+    venue = VenueBriefSerializer(read_only=True)
+    venue_name = serializers.CharField(source='venue.name', read_only=True, allow_null=True)
+    venue_id = serializers.PrimaryKeyRelatedField(
+        queryset=Venue.objects.all(),
+        source='venue',
+        write_only=True,
+        required=False,
+        allow_null=True
+    )
     organizers = UserBriefSerializer(many=True, read_only=True)
     games = serializers.SerializerMethodField()
     runs = RunBriefSerializer(source='scheduled_runs', many=True, read_only=True)
@@ -154,6 +564,13 @@ class ConventionEventSerializer(serializers.ModelSerializer):
     city = CitySerializer(read_only=True)
     links = serializers.SerializerMethodField()
     can_edit = serializers.SerializerMethodField()
+    
+    # Поля регистрации
+    registrations_count = serializers.SerializerMethodField()
+    pending_registrations_count = serializers.SerializerMethodField()
+    available_slots = serializers.SerializerMethodField()
+    is_full = serializers.SerializerMethodField()
+    current_user_registration = serializers.SerializerMethodField()
 
     def get_games(self, obj):
         """Получить уникальные игры из всех прогонов конвента"""
@@ -174,17 +591,109 @@ class ConventionEventSerializer(serializers.ModelSerializer):
         is_event_organizer = request.user in obj.organizers.all()
         is_convention_organizer = request.user in obj.convention.organizers.all()
         return is_event_organizer or is_convention_organizer
+    
+    def get_registrations_count(self, obj):
+        """Количество подтверждённых регистраций"""
+        return obj.get_confirmed_registrations_count()
+    
+    def get_pending_registrations_count(self, obj):
+        """Количество ожидающих регистраций"""
+        return obj.get_pending_registrations_count()
+    
+    def get_available_slots(self, obj):
+        """Количество свободных мест (None если без ограничений)"""
+        return obj.get_available_slots()
+    
+    def get_is_full(self, obj):
+        """Заполнен ли конвент"""
+        return obj.is_full()
+    
+    def get_current_user_registration(self, obj):
+        """Регистрация текущего пользователя на этот конвент"""
+        request = self.context.get('request')
+        if not request or not request.user.is_authenticated:
+            return None
+        try:
+            registration = obj.event_registrations.get(user=request.user)
+            return ConventionEventRegistrationBriefSerializer(registration, context=self.context).data
+        except ConventionEventRegistration.DoesNotExist:
+            return None
 
     class Meta:
         model = ConventionEvent
         fields = [
             'id', 'convention', 'convention_id', 'convention_name', 
             'city', 'city_name', 'city_id',
+            'venue', 'venue_name', 'venue_id',
             'date_start', 'date_end', 'description', 'links',
+            'capacity', 'registration_open',
             'organizers', 'games', 'runs', 'runs_count',
+            'registrations_count', 'pending_registrations_count', 
+            'available_slots', 'is_full', 'current_user_registration',
             'can_edit', 'created_at', 'updated_at'
         ]
         read_only_fields = ['id', 'organizers', 'created_at', 'updated_at', 'can_edit']
+
+
+class RegistrationSerializer(serializers.ModelSerializer):
+    """Сериализатор регистрации на прогон"""
+    user = UserBriefSerializer(read_only=True)
+    run_id = serializers.PrimaryKeyRelatedField(
+        queryset=Run.objects.all(),
+        source='run',
+        write_only=True
+    )
+    role_preference_display = serializers.CharField(source='get_role_preference_display', read_only=True)
+    status_display = serializers.CharField(source='get_status_display', read_only=True)
+    
+    class Meta:
+        model = Registration
+        fields = [
+            'id', 'run_id', 'user', 'role_preference', 'role_preference_display',
+            'is_technician', 'status', 'status_display', 'comment',
+            'created_at', 'updated_at'
+        ]
+        read_only_fields = ['id', 'user', 'created_at', 'updated_at']
+
+
+class RegistrationBriefSerializer(serializers.ModelSerializer):
+    """Краткий сериализатор регистрации для списка участников"""
+    user = UserBriefSerializer(read_only=True)
+    
+    class Meta:
+        model = Registration
+        fields = ['id', 'user', 'role_preference', 'is_technician', 'status']
+
+
+class ConventionEventRegistrationSerializer(serializers.ModelSerializer):
+    """Полный сериализатор регистрации на проведение конвента"""
+    user = UserBriefSerializer(read_only=True)
+    convention_event_id = serializers.PrimaryKeyRelatedField(
+        queryset=ConventionEvent.objects.all(),
+        source='convention_event',
+        write_only=True
+    )
+    status_display = serializers.CharField(source='get_status_display', read_only=True)
+    
+    class Meta:
+        model = ConventionEventRegistration
+        fields = [
+            'id', 'convention_event_id', 'user', 
+            'status', 'status_display', 
+            'comment', 'admin_comment',
+            'created_at', 'updated_at'
+        ]
+        read_only_fields = ['id', 'user', 'created_at', 'updated_at']
+
+
+class ConventionEventRegistrationBriefSerializer(serializers.ModelSerializer):
+    """Краткий сериализатор регистрации на конвент для списков"""
+    user = UserBriefSerializer(read_only=True)
+    status_display = serializers.CharField(source='get_status_display', read_only=True)
+    
+    class Meta:
+        model = ConventionEventRegistration
+        fields = ['id', 'user', 'status', 'status_display', 'created_at']
 
 
 class RunSerializer(serializers.ModelSerializer):
@@ -202,6 +711,15 @@ class RunSerializer(serializers.ModelSerializer):
         source='city',
         write_only=True
     )
+    rooms = RoomBriefSerializer(many=True, read_only=True)
+    room_ids = serializers.PrimaryKeyRelatedField(
+        queryset=Room.objects.all(),
+        source='rooms',
+        write_only=True,
+        many=True,
+        required=False
+    )
+    venue_name = serializers.SerializerMethodField()
     convention_event = serializers.PrimaryKeyRelatedField(read_only=True)
     convention_event_id = serializers.PrimaryKeyRelatedField(
         queryset=ConventionEvent.objects.all(),
@@ -212,19 +730,118 @@ class RunSerializer(serializers.ModelSerializer):
     )
     convention_name = serializers.SerializerMethodField()
     can_edit = serializers.SerializerMethodField()
+    date_local = serializers.SerializerMethodField()
+    # Используем NaiveDateTimeField чтобы DRF не добавлял UTC автоматически
+    date = NaiveDateTimeField()
+    
+    # Поля регистрации
+    registrations = RegistrationBriefSerializer(many=True, read_only=True)
+    registered_count = serializers.SerializerMethodField()
+    available_slots = serializers.SerializerMethodField()
+    is_full = serializers.SerializerMethodField()
+    current_user_registration = serializers.SerializerMethodField()
+    effective_max_players = serializers.SerializerMethodField()
     
     class Meta:
         model = Run
         fields = [
-            'id', 'game', 'game_id', 'masters', 'date', 'city', 'city_id', 'city_timezone',
+            'id', 'game', 'game_id', 'masters', 'date', 'date_local', 'duration',
+            'city', 'city_id', 'city_timezone',
+            'rooms', 'room_ids', 'venue_name',
             'convention_event', 'convention_event_id', 'convention_name',
+            'max_players', 'registration_open',
+            'registrations', 'registered_count', 'available_slots', 'is_full',
+            'current_user_registration', 'effective_max_players',
             'can_edit', 'created_at', 'updated_at'
         ]
         read_only_fields = ['id', 'masters', 'created_at', 'updated_at', 'can_edit']
     
+    def get_date_local(self, obj):
+        """Возвращает дату и время в локальной таймзоне города"""
+        import pytz
+        if obj.date and obj.city and obj.city.timezone:
+            try:
+                tz = pytz.timezone(obj.city.timezone)
+                local_dt = obj.date.astimezone(tz)
+                return local_dt.strftime('%Y-%m-%dT%H:%M:%S')
+            except Exception:
+                pass
+        return obj.date.isoformat() if obj.date else None
+    
+    def validate(self, attrs):
+        """
+        Конвертирует локальное время в UTC с учётом таймзоны города.
+        Дата приходит с фронтенда в формате без таймзоны (например 2026-01-15T14:00:00),
+        интерпретируется как локальное время в таймзоне города.
+        Также проверяет, что дата прогона попадает в даты проведения конвента.
+        """
+        import pytz
+        from django.utils import timezone as django_timezone
+        
+        date_value = attrs.get('date')
+        if date_value and not django_timezone.is_aware(date_value):
+            city_timezone = None
+            
+            # Получаем таймзону из города в данных запроса
+            city = attrs.get('city')
+            if city and hasattr(city, 'timezone'):
+                city_timezone = city.timezone
+            
+            # Если нет в данных, пробуем из существующего прогона
+            if not city_timezone and self.instance and self.instance.city:
+                city_timezone = self.instance.city.timezone
+            
+            if city_timezone:
+                try:
+                    tz = pytz.timezone(city_timezone)
+                    # Интерпретируем naive datetime как локальное время в этой таймзоне
+                    local_dt = tz.localize(date_value)
+                    # Конвертируем в UTC
+                    attrs['date'] = local_dt.astimezone(pytz.UTC)
+                except Exception:
+                    pass
+            else:
+                # Если не удалось определить таймзону, используем дефолтную (Москва)
+                try:
+                    default_tz = pytz.timezone('Europe/Moscow')
+                    local_dt = default_tz.localize(date_value)
+                    attrs['date'] = local_dt.astimezone(pytz.UTC)
+                except Exception:
+                    pass
+        
+        # Проверяем, что дата прогона попадает в даты проведения конвента
+        convention_event = attrs.get('convention_event')
+        if not convention_event and self.instance:
+            convention_event = self.instance.convention_event
+        
+        date_to_check = attrs.get('date', self.instance.date if self.instance else None)
+        if convention_event and date_to_check:
+            run_date = date_to_check.date()
+            if run_date < convention_event.date_start or run_date > convention_event.date_end:
+                raise serializers.ValidationError({
+                    'date': f'Дата прогона ({run_date.strftime("%d.%m.%Y")}) должна быть в пределах дат '
+                            f'проведения конвента ({convention_event.date_start.strftime("%d.%m.%Y")} — '
+                            f'{convention_event.date_end.strftime("%d.%m.%Y")})'
+                })
+        
+        return attrs
+    
     def get_convention_name(self, obj):
         if obj.convention_event:
             return obj.convention_event.convention.name
+        return None
+    
+    def get_venue_name(self, obj):
+        """Возвращает название площадки (из помещений прогона)"""
+        rooms = obj.rooms.all()
+        if not rooms:
+            return None
+        # Собираем уникальные названия площадок
+        venue_names = set(room.venue.name for room in rooms if room.venue)
+        if len(venue_names) == 1:
+            return venue_names.pop()
+        elif len(venue_names) > 1:
+            return ', '.join(sorted(venue_names))
         return None
     
     def get_can_edit(self, obj):
@@ -235,3 +852,30 @@ class RunSerializer(serializers.ModelSerializer):
         if request.user.is_staff:
             return True
         return request.user in obj.masters.all()
+    
+    def get_registered_count(self, obj):
+        """Количество зарегистрированных игроков"""
+        return obj.get_registered_count()
+    
+    def get_available_slots(self, obj):
+        """Количество свободных мест"""
+        return obj.get_available_slots()
+    
+    def get_is_full(self, obj):
+        """Заполнен ли прогон"""
+        return obj.is_full()
+    
+    def get_effective_max_players(self, obj):
+        """Эффективный максимум игроков"""
+        return obj.get_max_players()
+    
+    def get_current_user_registration(self, obj):
+        """Регистрация текущего пользователя на этот прогон"""
+        request = self.context.get('request')
+        if not request or not request.user.is_authenticated:
+            return None
+        try:
+            registration = obj.registrations.get(user=request.user)
+            return RegistrationBriefSerializer(registration, context=self.context).data
+        except Registration.DoesNotExist:
+            return None

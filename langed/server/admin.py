@@ -1,9 +1,33 @@
 from django.contrib import admin
+from django.contrib.auth.admin import UserAdmin as BaseUserAdmin
+from django.contrib.auth import get_user_model
 from django import forms
 from django.contrib import messages
 from django.utils import timezone
 from datetime import time
-from .models import Game, City, Region, Convention, ConventionEvent, Run, ConventionLink
+from .models import Game, City, Region, Convention, ConventionEvent, Run, ConventionLink, Venue, Room, Registration
+
+User = get_user_model()
+
+
+def get_user_display_name(user):
+    """Возвращает отображаемое имя пользователя: first_name + last_name или username"""
+    full_name = f'{user.first_name} {user.last_name}'.strip()
+    return full_name if full_name else user.username
+
+
+# Перерегистрируем UserAdmin с поддержкой autocomplete
+admin.site.unregister(User)
+
+
+@admin.register(User)
+class UserAdmin(BaseUserAdmin):
+    list_display = ('username', 'get_display_name', 'email', 'is_staff', 'is_active')
+    search_fields = ('username', 'first_name', 'last_name', 'email')
+    
+    def get_display_name(self, obj):
+        return get_user_display_name(obj)
+    get_display_name.short_description = 'Имя'
 
 
 class ConventionEventForm(forms.ModelForm):
@@ -66,7 +90,7 @@ class GameAdmin(admin.ModelAdmin):
     )
     
     def get_creators(self, obj):
-        return ', '.join([str(c) for c in obj.creators.all()])
+        return ', '.join([get_user_display_name(c) for c in obj.creators.all()])
     get_creators.short_description = 'Создатели'
 
 
@@ -91,7 +115,7 @@ class ConventionAdmin(admin.ModelAdmin):
     )
     
     def get_organizers(self, obj):
-        return ', '.join([str(o) for o in obj.organizers.all()])
+        return ', '.join([get_user_display_name(o) for o in obj.organizers.all()])
     get_organizers.short_description = 'Организаторы'
     
     def links_count(self, obj):
@@ -176,23 +200,104 @@ class ConventionEventAdmin(admin.ModelAdmin):
     runs_count.short_description = 'Количество прогонов'
 
 
-@admin.register(Run)
-class RunAdmin(admin.ModelAdmin):
-    list_display = ('game', 'get_masters', 'city', 'date', 'convention_event', 'created_at')
-    list_filter = ('city', 'convention_event', 'date')
-    search_fields = ('game__name', 'city__name', 'convention_event__convention__name', 'masters__username', 'masters__first_name', 'masters__last_name')
-    date_hierarchy = 'date'
-    autocomplete_fields = ('game', 'city', 'convention_event')
-    filter_horizontal = ('masters',)
+class RoomInline(admin.TabularInline):
+    model = Room
+    extra = 1
+    fields = ('name', 'blackbox')
+
+
+@admin.register(Venue)
+class VenueAdmin(admin.ModelAdmin):
+    list_display = ('name', 'city', 'address', 'capacity', 'rooms_count', 'created_at')
+    list_filter = ('city', 'city__region')
+    search_fields = ('name', 'address', 'city__name', 'description')
+    ordering = ('name',)
+    autocomplete_fields = ('city',)
+    inlines = [RoomInline]
     fieldsets = (
         ('Основная информация', {
-            'fields': ('game', 'masters', 'city', 'convention_event')
+            'fields': ('name', 'city', 'address')
         }),
-        ('Дата', {
-            'fields': ('date',)
+        ('Дополнительно', {
+            'fields': ('description', 'capacity')
+        }),
+    )
+    
+    def rooms_count(self, obj):
+        return obj.rooms.count()
+    rooms_count.short_description = 'Помещений'
+
+
+@admin.register(Room)
+class RoomAdmin(admin.ModelAdmin):
+    list_display = ('name', 'venue', 'blackbox', 'created_at')
+    list_filter = ('blackbox', 'venue', 'venue__city')
+    search_fields = ('name', 'venue__name', 'venue__city__name')
+    ordering = ('venue__name', 'name')
+    autocomplete_fields = ('venue',)
+
+
+class RegistrationInline(admin.TabularInline):
+    model = Registration
+    extra = 1
+    fields = ('user', 'is_technician', 'role_preference', 'status', 'comment')
+    autocomplete_fields = ('user',)
+    
+    def get_queryset(self, request):
+        return super().get_queryset(request).select_related('user')
+
+
+@admin.register(Run)
+class RunAdmin(admin.ModelAdmin):
+    list_display = ('game', 'get_masters', 'city', 'get_rooms', 'date', 'convention_event', 'get_players_count', 'get_technicians_count', 'created_at')
+    list_filter = ('city', 'rooms__venue', 'convention_event', 'date')
+    search_fields = ('game__name', 'city__name', 'rooms__name', 'rooms__venue__name', 'convention_event__convention__name', 'masters__username', 'masters__first_name', 'masters__last_name')
+    date_hierarchy = 'date'
+    autocomplete_fields = ('game', 'city', 'convention_event')
+    filter_horizontal = ('masters', 'rooms')
+    inlines = [RegistrationInline]
+    fieldsets = (
+        ('Основная информация', {
+            'fields': ('game', 'masters', 'city', 'rooms', 'convention_event')
+        }),
+        ('Дата и настройки', {
+            'fields': ('date', 'duration', 'max_players', 'registration_open')
         }),
     )
     
     def get_masters(self, obj):
-        return ', '.join([str(m) for m in obj.masters.all()])
+        return ', '.join([get_user_display_name(m) for m in obj.masters.all()])
     get_masters.short_description = 'Мастера'
+    
+    def get_rooms(self, obj):
+        return ', '.join([r.name for r in obj.rooms.all()])
+    get_rooms.short_description = 'Помещения'
+    
+    def get_players_count(self, obj):
+        return obj.registrations.filter(is_technician=False, status__in=['confirmed', 'pending']).count()
+    get_players_count.short_description = 'Игроков'
+    
+    def get_technicians_count(self, obj):
+        return obj.registrations.filter(is_technician=True, status__in=['confirmed', 'pending']).count()
+    get_technicians_count.short_description = 'Игротехников'
+
+
+@admin.register(Registration)
+class RegistrationAdmin(admin.ModelAdmin):
+    list_display = ('user', 'run', 'is_technician', 'role_preference', 'status', 'created_at')
+    list_filter = ('is_technician', 'status', 'role_preference', 'run__city', 'run__convention_event')
+    search_fields = ('user__username', 'user__first_name', 'user__last_name', 'run__game__name', 'comment')
+    ordering = ('-created_at',)
+    autocomplete_fields = ('user', 'run')
+    date_hierarchy = 'created_at'
+    fieldsets = (
+        ('Основная информация', {
+            'fields': ('run', 'user', 'is_technician')
+        }),
+        ('Настройки роли', {
+            'fields': ('role_preference', 'status')
+        }),
+        ('Дополнительно', {
+            'fields': ('comment',)
+        }),
+    )

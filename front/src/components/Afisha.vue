@@ -87,6 +87,7 @@
               <th>Время</th>
               <th>Игра</th>
               <th>Город</th>
+              <th>Площадка</th>
               <th>Конвент</th>
               <th>Статус</th>
             </tr>
@@ -99,9 +100,9 @@
               @click="openRunModal(run)"
               class="clickable-row"
             >
-              <td class="date-cell">{{ formatDate(run.date, run.city_timezone) }}</td>
+              <td class="date-cell">{{ formatDateLocal(run.date_local || run.date) }}</td>
               <td class="time-cell">
-                {{ formatTime(run.date, run.city_timezone) }}
+                {{ formatTimeLocal(run.date_local || run.date) }}
                 <span class="timezone-hint">{{ getTimezoneAbbr(run.city_timezone) }}</span>
               </td>
               <td class="name-cell">
@@ -111,6 +112,10 @@
                 </span>
               </td>
               <td class="city-cell">{{ run.city }}</td>
+              <td class="venue-cell">
+                <span v-if="run.venue_name">{{ run.venue_name }}</span>
+                <span v-else class="no-data">—</span>
+              </td>
               <td class="convention-cell">
                 <span v-if="run.convention_name" class="convention-badge">
                   {{ run.convention_name }}
@@ -229,8 +234,8 @@
       <div class="modal-content run-modal">
         <button class="modal-close" @click="closeRunModal">×</button>
         <div class="modal-run-date">
-          {{ formatDate(selectedRun.date, selectedRun.city_timezone) }}
-          <span class="modal-run-time">{{ formatTime(selectedRun.date, selectedRun.city_timezone) }}</span>
+          {{ formatDateLocal(selectedRun.date_local || selectedRun.date) }}
+          <span class="modal-run-time">{{ formatTimeLocal(selectedRun.date_local || selectedRun.date) }}</span>
           <span class="timezone-hint">{{ getTimezoneAbbr(selectedRun.city_timezone) }}</span>
         </div>
         <div class="modal-header-row">
@@ -259,6 +264,14 @@
           </div>
         </div>
         <div class="modal-city">📍 {{ selectedRun.city }}</div>
+        
+        <div class="modal-section" v-if="selectedRun.venue_name || (selectedRun.rooms && selectedRun.rooms.length > 0)">
+          <h3>Площадка</h3>
+          <p v-if="selectedRun.venue_name" class="venue-name">🏢 {{ selectedRun.venue_name }}</p>
+          <p v-if="selectedRun.rooms && selectedRun.rooms.length > 0" class="rooms-list">
+            🚪 {{ selectedRun.rooms.map(r => r.name + (r.blackbox ? ' [blackbox]' : '')).join(', ') }}
+          </p>
+        </div>
         
         <div class="modal-section" v-if="selectedRun.convention_name">
           <h3>Конвент</h3>
@@ -311,6 +324,120 @@
           </div>
         </div>
         
+        <!-- Секция регистрации -->
+        <div class="modal-section registration-section" v-if="!isPast(selectedRun.date)">
+          <div class="section-header">
+            <h3>Запись на игру</h3>
+            <div class="registration-stats">
+              <span class="registration-count" :class="{ 'full': selectedRun.is_full }">
+                {{ selectedRun.registered_count || 0 }} / {{ selectedRun.effective_max_players || selectedRun.game.players_max }}
+              </span>
+              <span v-if="selectedRun.is_full" class="full-badge">Мест нет</span>
+            </div>
+          </div>
+          
+          <!-- Форма регистрации / статус регистрации -->
+          <div v-if="isAuthenticated">
+            <!-- Уже зарегистрирован -->
+            <div v-if="selectedRun.current_user_registration" class="user-registration">
+              <div class="registration-status-card">
+                <span class="registration-status-icon">✓</span>
+                <div class="registration-status-info">
+                  <span class="registration-status-text">
+                    {{ selectedRun.current_user_registration.is_technician ? 'Вы записаны как игротехник' : 'Вы записаны на игру' }}
+                  </span>
+                  <span class="registration-role">
+                    {{ getRolePreferenceText(selectedRun.current_user_registration.role_preference) }}
+                  </span>
+                  <span v-if="selectedRun.current_user_registration.status === 'waitlist'" class="waitlist-badge">
+                    В листе ожидания
+                  </span>
+                </div>
+                <button 
+                  @click="unregisterFromRun"
+                  class="btn btn-danger btn-sm"
+                  :disabled="registrationLoading"
+                >
+                  {{ registrationLoading ? '...' : 'Отменить' }}
+                </button>
+              </div>
+            </div>
+            
+            <!-- Форма записи -->
+            <div v-else-if="selectedRun.registration_open" class="registration-form">
+              <div class="form-row">
+                <div class="form-group half">
+                  <label>Предпочтение по роли</label>
+                  <select v-model="registrationData.role_preference" class="form-input">
+                    <option value="any">Любая</option>
+                    <option value="female">Женская</option>
+                    <option value="male">Мужская</option>
+                  </select>
+                </div>
+                <div class="form-group half">
+                  <label class="checkbox-label">
+                    <input type="checkbox" v-model="registrationData.is_technician" />
+                    <span>Записаться как игротехник</span>
+                  </label>
+                </div>
+              </div>
+              <div class="form-group">
+                <label>Комментарий (опционально)</label>
+                <textarea 
+                  v-model="registrationData.comment"
+                  class="form-input form-textarea"
+                  placeholder="Дополнительная информация для мастера"
+                  rows="2"
+                ></textarea>
+              </div>
+              <div v-if="registrationError" class="form-error">{{ registrationError }}</div>
+              <button 
+                @click="registerForRun"
+                class="btn btn-primary btn-register"
+                :disabled="registrationLoading"
+              >
+                {{ registrationLoading ? 'Запись...' : (selectedRun.is_full && !registrationData.is_technician ? 'Записаться в лист ожидания' : 'Записаться') }}
+              </button>
+            </div>
+            
+            <!-- Регистрация закрыта -->
+            <div v-else class="registration-closed">
+              <p>Регистрация на этот прогон закрыта</p>
+            </div>
+          </div>
+          
+          <!-- Не авторизован -->
+          <div v-else class="registration-login">
+            <p>Чтобы записаться на игру, <a href="/oidc/authenticate/">войдите</a> в систему</p>
+          </div>
+          
+          <!-- Список участников -->
+          <div v-if="selectedRun.registrations && selectedRun.registrations.length > 0" class="participants-list">
+            <div class="participants-header">
+              <h4>Участники ({{ selectedRun.registrations.filter(r => r.status === 'confirmed' && !r.is_technician).length }})</h4>
+            </div>
+            <div class="participants-grid">
+              <div 
+                v-for="reg in sortedRegistrations" 
+                :key="reg.id"
+                class="participant-item"
+                :class="{ 
+                  'technician': reg.is_technician,
+                  'waitlist': reg.status === 'waitlist',
+                  'cancelled': reg.status === 'cancelled'
+                }"
+              >
+                <span class="participant-icon">{{ reg.is_technician ? '🎭' : '👤' }}</span>
+                <span class="participant-name">{{ reg.user.display_name }}</span>
+                <span class="participant-role" v-if="!reg.is_technician && reg.role_preference !== 'any'">
+                  {{ reg.role_preference === 'female' ? '♀' : '♂' }}
+                </span>
+                <span v-if="reg.status === 'waitlist'" class="participant-waitlist">ожидание</span>
+              </div>
+            </div>
+          </div>
+        </div>
+        
         <div class="modal-stats">
           <div class="modal-stat">
             <span class="modal-stat-label">Игроки</span>
@@ -324,6 +451,10 @@
             <span class="modal-stat-label">Муж. роли</span>
             <span class="modal-stat-value">{{ selectedRun.game.male_roles_min }} – {{ selectedRun.game.male_roles_max }}</span>
           </div>
+          <div class="modal-stat" v-if="selectedRun.duration">
+            <span class="modal-stat-label">Длительность</span>
+            <span class="modal-stat-value">{{ formatDuration(selectedRun.duration) }}</span>
+          </div>
         </div>
         
         <div :class="['modal-status', isPast(selectedRun.date) ? 'past' : 'upcoming']">
@@ -333,68 +464,14 @@
     </div>
 
     <!-- Модальное окно с деталями проведения конвента -->
-    <div v-if="selectedConvention" class="modal-overlay" @click.self="closeConventionModal">
-      <div class="modal-content">
-        <button class="modal-close" @click="closeConventionModal">×</button>
-        <div class="modal-dates">
-          {{ formatConventionDates(selectedConvention.date_start, selectedConvention.date_end) }}
-        </div>
-        <div class="modal-header-row">
-          <h2>{{ selectedConvention.convention_name }}</h2>
-          <button class="copy-link-btn" @click="copyEventLink" :title="eventLinkCopied ? 'Скопировано!' : 'Скопировать ссылку'">
-            <span v-if="eventLinkCopied">✓</span>
-            <span v-else>🔗</span>
-          </button>
-        </div>
-        <div class="modal-city">📍 {{ selectedConvention.city_name || (selectedConvention.city && selectedConvention.city.name) }}</div>
-        
-        <div class="modal-section" v-if="selectedConvention.organizers && selectedConvention.organizers.length > 0">
-          <h3>{{ selectedConvention.organizers.length > 1 ? 'Организаторы' : 'Организатор' }}</h3>
-          <div class="modal-organizers">
-            <span class="organizers-icon">👤</span>
-            <span class="organizers-names">{{ selectedConvention.organizers.map(o => o.display_name).join(', ') }}</span>
-          </div>
-        </div>
-        
-        <div class="modal-section" v-if="selectedConvention.description">
-          <h3>Описание</h3>
-          <p>{{ selectedConvention.description }}</p>
-        </div>
-        
-        <div class="modal-section" v-if="selectedConvention.links && selectedConvention.links.length > 0">
-          <h3>Ссылки</h3>
-          <div class="links-list">
-            <a 
-              v-for="link in selectedConvention.links" 
-              :key="link.id"
-              :href="link.url"
-              target="_blank"
-              rel="noopener noreferrer"
-              class="link-item"
-              :class="'link-type-' + link.link_type"
-              @click.stop
-            >
-              <span class="link-icon">{{ getLinkIcon(link.link_type) }}</span>
-              <span class="link-title">{{ link.display_title }}</span>
-            </a>
-          </div>
-        </div>
-        
-        <div class="modal-section" v-if="selectedConvention.games && selectedConvention.games.length > 0">
-          <h3>Игры на конвенте ({{ selectedConvention.games.length }})</h3>
-          <div class="modal-games-list">
-            <div v-for="game in sortedConventionGames" :key="game.id" class="modal-game-item">
-              <span class="modal-game-name">{{ game.name }}</span>
-              <span class="modal-game-players">{{ game.players_min }}–{{ game.players_max }} игроков</span>
-            </div>
-          </div>
-        </div>
-        
-        <div v-if="!selectedConvention.games || selectedConvention.games.length === 0" class="modal-section">
-          <p class="no-runs">Игры пока не добавлены</p>
-        </div>
-      </div>
-    </div>
+    <ConventionEventModal
+      v-if="selectedConvention"
+      :event="selectedConvention"
+      :is-authenticated="isAuthenticated"
+      :csrf-token="csrfToken"
+      @close="closeConventionModal"
+      @registration-changed="fetchConventions"
+    />
 
     <!-- Модальное окно добавления проведения конвента -->
     <div v-if="showAddEventModal" class="modal-overlay" @click.self="closeAddEventModal">
@@ -508,312 +585,51 @@
       </div>
     </div>
 
-    <!-- Модальное окно добавления прогона -->
-    <div v-if="showAddRunModal" class="modal-overlay" @click.self="closeAddRunModal">
-      <div class="modal-content add-run-modal">
-        <button class="modal-close" @click="closeAddRunModal">×</button>
-        
-        <h2>Добавить прогон</h2>
-        
-        <form @submit.prevent="submitRun" class="add-form">
-          <div class="form-group searchable-select">
-            <label for="run-game">Игра *</label>
-            <input 
-              id="run-game"
-              v-model="gameSearch"
-              type="text"
-              class="form-input"
-              placeholder="Введите название игры..."
-              autocomplete="off"
-              @focus="onGameInputFocus"
-              @blur="onGameInputBlur"
-              @keydown.enter.prevent
-            />
-            <div v-if="showGameDropdown" class="dropdown-list">
-              <div 
-                v-for="game in filteredGamesList" 
-                :key="game.id" 
-                class="dropdown-item"
-                :class="{ selected: newRun.game_id === game.id }"
-                @mousedown.prevent="selectGame(game)"
-              >
-                {{ game.name }}
-              </div>
-              <div v-if="filteredGamesList.length === 0" class="dropdown-empty">
-                Игры не найдены
-              </div>
-            </div>
-            <input type="hidden" :value="newRun.game_id" required />
-          </div>
-          
-          <div class="form-group">
-            <label for="run-convention">Проведение конвента (опционально)</label>
-            <select 
-              id="run-convention"
-              v-model="newRun.convention_event_id"
-              @change="onConventionEventChange"
-              class="form-input"
-            >
-              <option :value="null">Без конвента (отдельный прогон)</option>
-              <option 
-                v-for="event in conventionEvents" 
-                :key="event.id" 
-                :value="event.id"
-              >
-                {{ event.convention_name }} — {{ event.city_name || (event.city && event.city.name) }} ({{ formatConventionDates(event.date_start, event.date_end) }})
-              </option>
-            </select>
-          </div>
-          
-          <div class="form-group searchable-select">
-            <label for="run-city">Город *</label>
-            <input 
-              id="run-city"
-              v-model="citySearch"
-              type="text"
-              class="form-input"
-              placeholder="Введите название города..."
-              autocomplete="off"
-              :disabled="newRun.convention_event_id !== null"
-              @focus="onCityInputFocus"
-              @blur="onCityInputBlur"
-              @keydown.enter.prevent
-            />
-            <div v-if="showCityDropdown && newRun.convention_event_id === null" class="dropdown-list">
-              <div 
-                v-for="city in filteredCitiesList" 
-                :key="city.id" 
-                class="dropdown-item"
-                :class="{ selected: newRun.city_id === city.id }"
-                @mousedown.prevent="selectCity(city)"
-              >
-                {{ city.name }}{{ city.region && city.region.name ? ` (${city.region.name})` : '' }}
-              </div>
-              <div 
-                class="dropdown-item dropdown-item-new"
-                @mousedown.prevent="selectNewCity"
-              >
-                + Создать новый город
-              </div>
-              <div v-if="filteredCitiesList.length === 0 && citySearch" class="dropdown-empty">
-                Города не найдены
-              </div>
-            </div>
-            <p v-if="newRun.convention_event_id" class="form-hint">
-              Город определяется проведением конвента
-            </p>
-            <input type="hidden" :value="newRun.city_id" required />
-          </div>
-          
-          <div v-if="newRun.city_id === 'new' && !newRun.convention_event_id" class="form-group">
-            <label for="new-city-name">Название нового города *</label>
-            <input 
-              id="new-city-name"
-              v-model="newRun.newCityName" 
-              type="text" 
-              required
-              class="form-input"
-              placeholder="Введите название города"
-            />
-          </div>
-          
-          <div class="form-row">
-            <div class="form-group half">
-              <label for="run-date">Дата *</label>
-              <input 
-                id="run-date"
-                v-model="newRun.date" 
-                type="date" 
-                required
-                class="form-input"
-              />
-            </div>
-            
-            <div class="form-group half">
-              <label for="run-time">Время * <span class="timezone-label">{{ getTimezoneAbbr(newRun.city_timezone) }}</span></label>
-              <input 
-                id="run-time"
-                v-model="newRun.time" 
-                type="time" 
-                required
-                class="form-input"
-              />
-            </div>
-          </div>
-          
-          <div v-if="addRunError" class="form-error">{{ addRunError }}</div>
-          
-          <div class="form-actions">
-            <button type="button" @click="closeAddRunModal" class="btn btn-secondary">Отмена</button>
-            <button type="submit" class="btn btn-primary" :disabled="addRunLoading">
-              <span v-if="addRunLoading">Сохранение...</span>
-              <span v-else>Добавить</span>
-            </button>
-          </div>
-        </form>
-      </div>
-    </div>
-
-    <!-- Модальное окно редактирования прогона -->
-    <div v-if="isEditingRun" class="modal-overlay" @click.self="cancelEditingRun">
-      <div class="modal-content add-run-modal">
-        <button class="modal-close" @click="cancelEditingRun">×</button>
-        
-        <h2>Редактировать прогон</h2>
-        
-        <form @submit.prevent="submitEditRun" class="add-form">
-          <div class="form-group searchable-select">
-            <label for="edit-run-game">Игра *</label>
-            <input 
-              id="edit-run-game"
-              v-model="editGameSearch"
-              type="text"
-              class="form-input"
-              placeholder="Введите название игры..."
-              autocomplete="off"
-              @focus="showEditGameDropdown = true"
-              @blur="onEditGameInputBlur"
-              @keydown.enter.prevent
-            />
-            <div v-if="showEditGameDropdown" class="dropdown-list">
-              <div 
-                v-for="game in filteredEditGamesList" 
-                :key="game.id" 
-                class="dropdown-item"
-                :class="{ selected: editRun.game_id === game.id }"
-                @mousedown.prevent="selectEditGame(game)"
-              >
-                {{ game.name }}
-              </div>
-              <div v-if="filteredEditGamesList.length === 0" class="dropdown-empty">
-                Игры не найдены
-              </div>
-            </div>
-            <input type="hidden" :value="editRun.game_id" required />
-          </div>
-          
-          <div class="form-group">
-            <label for="edit-run-convention">Проведение конвента (опционально)</label>
-            <select 
-              id="edit-run-convention"
-              v-model="editRun.convention_event_id"
-              @change="onEditConventionEventChange"
-              class="form-input"
-            >
-              <option :value="null">Без конвента (отдельный прогон)</option>
-              <option 
-                v-for="event in allConventionEvents" 
-                :key="event.id" 
-                :value="event.id"
-              >
-                {{ event.convention_name }} — {{ event.city_name || (event.city && event.city.name) }} ({{ formatConventionDates(event.date_start, event.date_end) }})
-              </option>
-            </select>
-          </div>
-          
-          <div class="form-group searchable-select">
-            <label for="edit-run-city">Город *</label>
-            <input 
-              id="edit-run-city"
-              v-model="editCitySearch"
-              type="text"
-              class="form-input"
-              placeholder="Введите название города..."
-              autocomplete="off"
-              :disabled="editRun.convention_event_id !== null"
-              @focus="showEditCityDropdown = true"
-              @blur="onEditCityInputBlur"
-              @keydown.enter.prevent
-            />
-            <div v-if="showEditCityDropdown && editRun.convention_event_id === null" class="dropdown-list">
-              <div 
-                v-for="city in filteredEditCitiesList" 
-                :key="city.id" 
-                class="dropdown-item"
-                :class="{ selected: editRun.city_id === city.id }"
-                @mousedown.prevent="selectEditCity(city)"
-              >
-                {{ city.name }}{{ city.region && city.region.name ? ` (${city.region.name})` : '' }}
-              </div>
-              <div v-if="filteredEditCitiesList.length === 0 && editCitySearch" class="dropdown-empty">
-                Города не найдены
-              </div>
-            </div>
-            <p v-if="editRun.convention_event_id" class="form-hint">
-              Город определяется проведением конвента
-            </p>
-            <input type="hidden" :value="editRun.city_id" required />
-          </div>
-          
-          <div class="form-row">
-            <div class="form-group half">
-              <label for="edit-run-date">Дата *</label>
-              <input 
-                id="edit-run-date"
-                v-model="editRun.date" 
-                type="date" 
-                required
-                class="form-input"
-              />
-            </div>
-            
-            <div class="form-group half">
-              <label for="edit-run-time">Время * <span class="timezone-label">{{ getTimezoneAbbr(editRun.city_timezone) }}</span></label>
-              <input 
-                id="edit-run-time"
-                v-model="editRun.time" 
-                type="time" 
-                required
-                class="form-input"
-              />
-            </div>
-          </div>
-          
-          <div v-if="editRunError" class="form-error">{{ editRunError }}</div>
-          
-          <div class="form-actions">
-            <button type="button" @click="cancelEditingRun" class="btn btn-secondary">Отмена</button>
-            <button type="submit" class="btn btn-primary" :disabled="editRunLoading">
-              <span v-if="editRunLoading">Сохранение...</span>
-              <span v-else>Сохранить</span>
-            </button>
-          </div>
-        </form>
-      </div>
-    </div>
+    <!-- Модальное окно добавления/редактирования прогона -->
+    <RunEditor
+      v-if="showRunEditor"
+      :mode="runEditorMode"
+      :run="runEditorRun"
+      :convention-event-id="runEditorRun ? runEditorRun.convention_event : null"
+      :lock-convention="false"
+      :lock-game="false"
+      :games="games"
+      :cities="allCities"
+      :convention-events="runEditorMode === 'add' ? conventionEvents : allConventionEvents"
+      :allow-new-city="true"
+      :csrf-token="csrfToken"
+      @save="handleRunEditorSave"
+      @cancel="closeRunEditor"
+      @error="handleRunEditorError"
+      @city-created="onCityCreated"
+    />
 
     <!-- Модальное окно подтверждения удаления -->
-    <div v-if="showDeleteConfirm" class="modal-overlay" @click.self="cancelDelete">
-      <div class="modal-content delete-confirm-modal">
-        <button class="modal-close" @click="cancelDelete">×</button>
-        
-        <h2>Удалить {{ deleteType === 'run' ? 'прогон' : 'проведение конвента' }}?</h2>
-        
-        <p class="delete-warning">
-          Это действие нельзя отменить. 
-          <template v-if="deleteType === 'run'">
-            Прогон будет удалён из расписания.
-          </template>
-          <template v-else>
-            Проведение конвента и все связанные прогоны будут удалены.
-          </template>
-        </p>
-        
-        <div class="form-actions">
-          <button type="button" @click="cancelDelete" class="btn btn-secondary">Отмена</button>
-          <button type="button" @click="executeDelete" class="btn btn-danger" :disabled="deleteLoading">
-            <span v-if="deleteLoading">Удаление...</span>
-            <span v-else>Удалить</span>
-          </button>
-        </div>
-      </div>
-    </div>
+    <DeleteConfirmModal
+      v-if="showDeleteConfirm"
+      :title="deleteType === 'run' ? 'Удалить прогон?' : 'Удалить проведение конвента?'"
+      :message="deleteType === 'run' 
+        ? 'Это действие нельзя отменить. Прогон будет удалён из расписания.'
+        : 'Это действие нельзя отменить. Проведение конвента и все связанные прогоны будут удалены.'"
+      :loading="deleteLoading"
+      @confirm="executeDelete"
+      @cancel="cancelDelete"
+    />
   </div>
 </template>
 
 <script>
+import RunEditor from './RunEditor.vue'
+import DeleteConfirmModal from './DeleteConfirmModal.vue'
+import ConventionEventModal from './ConventionEventModal.vue'
+
 export default {
   name: 'AfishaPage',
+  components: {
+    RunEditor,
+    DeleteConfirmModal,
+    ConventionEventModal
+  },
   inject: ['getUser'],
   props: {
     runId: {
@@ -846,40 +662,15 @@ export default {
       conventionsError: null,
       selectedConvention: null,
       eventLinkCopied: false,
-      // Для добавления прогона
-      showAddRunModal: false,
-      addRunLoading: false,
-      addRunError: null,
+      // Данные для формы прогона
       games: [],
       allCities: [],
       conventionEvents: [],
-      newRun: {
-        game_id: null,
-        city_id: null,
-        city_timezone: 'Europe/Moscow',
-        newCityName: '',
-        convention_event_id: null,
-        date: '',
-        time: ''
-      },
-      // Для редактирования прогона
-      isEditingRun: false,
-      editRunLoading: false,
-      editRunError: null,
-      editRun: {
-        id: null,
-        game_id: null,
-        city_id: null,
-        city_timezone: 'Europe/Moscow',
-        convention_event_id: null,
-        date: '',
-        time: ''
-      },
-      // Для searchable select
-      gameSearch: '',
-      citySearch: '',
-      showGameDropdown: false,
-      showCityDropdown: false,
+      // Единый редактор прогона
+      showRunEditor: false,
+      runEditorMode: 'add',
+      runEditorRun: null,
+      runEditorLoading: false,
       // Для добавления проведения конвента
       showAddEventModal: false,
       addEventLoading: false,
@@ -894,11 +685,7 @@ export default {
       },
       eventCitySearch: '',
       showEventCityDropdown: false,
-      // Для редактирования прогона - выпадающие списки
-      editGameSearch: '',
-      editCitySearch: '',
-      showEditGameDropdown: false,
-      showEditCityDropdown: false,
+      // Для редактирования прогона - все проведения конвентов
       allConventionEvents: [],
       // Удаление
       showDeleteConfirm: false,
@@ -909,7 +696,15 @@ export default {
       isManagingMasters: false,
       newMasterUsername: '',
       addMasterLoading: false,
-      addMasterError: null
+      addMasterError: null,
+      // Регистрация на прогон
+      registrationLoading: false,
+      registrationError: null,
+      registrationData: {
+        role_preference: 'any',
+        is_technician: false,
+        comment: ''
+      }
     }
   },
   computed: {
@@ -930,39 +725,23 @@ export default {
       }
       return this.selectedConvention.games.slice().sort((a, b) => a.name.localeCompare(b.name, 'ru'))
     },
-    filteredGamesList() {
-      if (!this.gameSearch) {
-        return this.sortedGames
+    sortedRegistrations() {
+      if (!this.selectedRun || !this.selectedRun.registrations) {
+        return []
       }
-      const query = this.gameSearch.toLowerCase()
-      return this.sortedGames.filter(g => g.name.toLowerCase().includes(query))
+      // Сортируем: сначала confirmed игроки, потом technicians, потом waitlist
+      return this.selectedRun.registrations.slice().sort((a, b) => {
+        const statusOrder = { confirmed: 0, pending: 1, waitlist: 2, cancelled: 3 }
+        if (a.is_technician !== b.is_technician) {
+          return a.is_technician ? 1 : -1
+        }
+        const statusDiff = (statusOrder[a.status] || 0) - (statusOrder[b.status] || 0)
+        if (statusDiff !== 0) return statusDiff
+        return 0
+      })
     },
     sortedCities() {
       return this.allCities.slice().sort((a, b) => a.name.localeCompare(b.name, 'ru'))
-    },
-    filteredCitiesList() {
-      if (!this.citySearch) {
-        return this.sortedCities
-      }
-      const query = this.citySearch.toLowerCase()
-      return this.sortedCities.filter(c => {
-        const regionName = c.region && c.region.name ? c.region.name : ''
-        return c.name.toLowerCase().includes(query) || 
-          regionName.toLowerCase().includes(query)
-      })
-    },
-    selectedGameName() {
-      if (!this.newRun.game_id) return ''
-      const game = this.games.find(g => g.id === this.newRun.game_id)
-      return game ? game.name : ''
-    },
-    selectedCityName() {
-      if (!this.newRun.city_id) return ''
-      if (this.newRun.city_id === 'new') return ''
-      const city = this.allCities.find(c => c.id === this.newRun.city_id)
-      if (!city) return ''
-      const regionName = city.region && city.region.name ? city.region.name : ''
-      return regionName ? `${city.name} (${regionName})` : city.name
     },
     filteredEventCitiesList() {
       if (!this.eventCitySearch) {
@@ -982,72 +761,45 @@ export default {
       if (!city) return ''
       const regionName = city.region && city.region.name ? city.region.name : ''
       return regionName ? `${city.name} (${regionName})` : city.name
-    },
-    // Для редактирования прогона
-    filteredEditGamesList() {
-      if (!this.editGameSearch) {
-        return this.sortedGames
-      }
-      const query = this.editGameSearch.toLowerCase()
-      return this.sortedGames.filter(g => g.name.toLowerCase().includes(query))
-    },
-    filteredEditCitiesList() {
-      if (!this.editCitySearch) {
-        return this.sortedCities
-      }
-      const query = this.editCitySearch.toLowerCase()
-      return this.sortedCities.filter(c => {
-        const regionName = c.region && c.region.name ? c.region.name : ''
-        return c.name.toLowerCase().includes(query) || 
-          regionName.toLowerCase().includes(query)
-      })
-    },
-    selectedEditGameName() {
-      if (!this.editRun.game_id) return ''
-      const game = this.games.find(g => g.id === this.editRun.game_id)
-      return game ? game.name : ''
-    },
-    selectedEditCityName() {
-      if (!this.editRun.city_id) return ''
-      const city = this.allCities.find(c => c.id === this.editRun.city_id)
-      if (!city) return ''
-      const regionName = city.region && city.region.name ? city.region.name : ''
-      return regionName ? `${city.name} (${regionName})` : city.name
     }
   },
   watch: {
     // Реагируем на изменение параметра runId в URL
     runId: {
-      handler(newId) {
-        if (newId) {
-          this.activeTab = 'runs'
-          this.openRunById(newId)
-        }
+      handler(newId, oldId) {
+        // Не реагируем если значение не изменилось или прогон уже выбран
+        if (!newId || newId === oldId) return
+        if (this.selectedRun && this.selectedRun.id === parseInt(newId, 10)) return
+        this.activeTab = 'runs'
+        this.openRunById(newId)
       },
       immediate: false
     },
     // Реагируем на изменение параметра eventId в URL
     eventId: {
-      handler(newId) {
-        if (newId) {
-          this.activeTab = 'conventions'
-          this.openEventById(newId)
-        }
+      handler(newId, oldId) {
+        // Не реагируем если значение не изменилось или проведение уже выбрано
+        if (!newId || newId === oldId) return
+        if (this.selectedConvention && this.selectedConvention.id === parseInt(newId, 10)) return
+        this.activeTab = 'conventions'
+        this.openEventById(newId)
       },
       immediate: false
     },
-    // Реагируем на загрузку прогонов
+    // Реагируем на загрузку прогонов (только при первичной загрузке)
     runs: {
-      handler() {
-        if (this.runId && this.runs.length > 0 && !this.selectedRun) {
+      handler(newVal, oldVal) {
+        const wasEmpty = !oldVal || oldVal.length === 0
+        if (wasEmpty && this.runId && this.runs.length > 0 && !this.selectedRun) {
           this.openRunById(this.runId)
         }
       }
     },
-    // Реагируем на загрузку проведений конвентов
+    // Реагируем на загрузку проведений конвентов (только при первичной загрузке)
     conventions: {
-      handler() {
-        if (this.eventId && this.conventions.length > 0 && !this.selectedConvention) {
+      handler(newVal, oldVal) {
+        const wasEmpty = !oldVal || oldVal.length === 0
+        if (wasEmpty && this.eventId && this.conventions.length > 0 && !this.selectedConvention) {
           this.openEventById(this.eventId)
         }
       }
@@ -1233,8 +985,8 @@ export default {
           throw new Error('Ошибка загрузки данных')
         }
         const conventionsData = await response.json()
-        // Прямая сортировка по дате начала (от ранних к поздним)
-        this.conventions = conventionsData.sort((a, b) => new Date(a.date_start) - new Date(b.date_start))
+        // Обратная сортировка по дате начала (от недавних к давним)
+        this.conventions = conventionsData.sort((a, b) => new Date(b.date_start) - new Date(a.date_start))
       } catch (err) {
         this.conventionsError = err.message
       } finally {
@@ -1247,31 +999,70 @@ export default {
     },
     
     // === Форматирование ===
-    formatDate(dateStr, timezone) {
+    formatDateLocal(dateStr) {
+      // dateStr может быть date_local (без таймзоны) или date (ISO с Z)
+      // Для date_local парсим напрямую, чтобы избежать преобразования браузером
+      if (dateStr && !dateStr.endsWith('Z') && !dateStr.includes('+')) {
+        // Локальная дата без таймзоны - парсим напрямую
+        const parts = dateStr.split('T')
+        if (parts.length >= 1) {
+          // Создаём дату с полуднем, чтобы избежать проблем со смещением часовых поясов
+          const date = new Date(parts[0] + 'T12:00:00')
+          const options = {
+            day: '2-digit',
+            month: 'long',
+            year: 'numeric'
+          }
+          return date.toLocaleDateString('ru-RU', options)
+        }
+      }
+      // Fallback для даты с таймзоной
       const date = new Date(dateStr)
       const options = {
         day: '2-digit',
         month: 'long',
         year: 'numeric'
       }
-      if (timezone) {
-        options.timeZone = timezone
+      return date.toLocaleDateString('ru-RU', options)
+    },
+    formatTimeLocal(dateStr) {
+      // dateStr может быть date_local (без таймзоны) или date (ISO с Z)
+      // Для date_local парсим напрямую
+      if (dateStr && !dateStr.endsWith('Z') && !dateStr.includes('+')) {
+        // Локальная дата без таймзоны - извлекаем время напрямую
+        const parts = dateStr.split('T')
+        if (parts.length === 2) {
+          return parts[1].slice(0, 5) // Возвращаем HH:MM
+        }
+      }
+      // Fallback для даты с таймзоной
+      const date = new Date(dateStr)
+      return date.toLocaleTimeString('ru-RU', { hour: '2-digit', minute: '2-digit' })
+    },
+    formatDate(dateStr, timezone) {
+      const date = new Date(dateStr)
+      const tz = timezone || 'Europe/Moscow'
+      const options = {
+        day: '2-digit',
+        month: 'long',
+        year: 'numeric',
+        timeZone: tz
       }
       return date.toLocaleDateString('ru-RU', options)
     },
     formatTime(dateStr, timezone) {
       const date = new Date(dateStr)
+      const tz = timezone || 'Europe/Moscow'
       const options = {
         hour: '2-digit',
-        minute: '2-digit'
-      }
-      if (timezone) {
-        options.timeZone = timezone
+        minute: '2-digit',
+        timeZone: tz
       }
       return date.toLocaleTimeString('ru-RU', options)
     },
     getTimezoneAbbr(timezone) {
       // Возвращает сокращённое название таймзоны (UTC offset)
+      const tz = timezone || 'Europe/Moscow'
       const tzMap = {
         'Europe/Kaliningrad': 'UTC+2',
         'Europe/Moscow': 'МСК',
@@ -1285,10 +1076,11 @@ export default {
         'Asia/Magadan': 'UTC+11',
         'Asia/Kamchatka': 'UTC+12'
       }
-      return tzMap[timezone] || ''
+      return tzMap[tz] || 'МСК'
     },
     getTimezoneOffset(timezone) {
       // Возвращает смещение таймзоны в формате +HH:MM
+      const tz = timezone || 'Europe/Moscow'
       const offsetMap = {
         'Europe/Kaliningrad': '+02:00',
         'Europe/Moscow': '+03:00',
@@ -1302,7 +1094,7 @@ export default {
         'Asia/Magadan': '+11:00',
         'Asia/Kamchatka': '+12:00'
       }
-      return offsetMap[timezone] || '+03:00'
+      return offsetMap[tz] || '+03:00'
     },
     convertToTimezone(dateStr, timeStr, timezone) {
       // Создаём ISO строку с правильным смещением таймзоны
@@ -1323,7 +1115,12 @@ export default {
       return `${this.formatDate(startStr)} — ${this.formatDate(endStr)}`
     },
     isPast(dateStr) {
-      return new Date(dateStr) < new Date()
+      // Если дата без таймзоны, добавляем Z чтобы парсить как UTC
+      let date = dateStr
+      if (date && !date.endsWith('Z') && !date.includes('+')) {
+        date = date + 'Z'
+      }
+      return new Date(date) < new Date()
     },
     isConventionPast(dateEndStr) {
       const endDate = new Date(dateEndStr)
@@ -1415,171 +1212,92 @@ export default {
         console.error('Ошибка загрузки проведений конвентов:', err)
       }
     },
+    // === Добавление/Редактирование прогона через RunEditor ===
     openAddRunModal() {
-      this.newRun = {
-        game_id: null,
-        city_id: null,
-        city_timezone: 'Europe/Moscow',
-        newCityName: '',
-        convention_event_id: null,
-        date: '',
-        time: ''
-      }
-      this.gameSearch = ''
-      this.citySearch = ''
-      this.showGameDropdown = false
-      this.showCityDropdown = false
-      this.addRunError = null
-      this.showAddRunModal = true
+      this.runEditorMode = 'add'
+      this.runEditorRun = null
+      this.showRunEditor = true
     },
-    closeAddRunModal() {
-      this.showAddRunModal = false
-      this.addRunError = null
+    
+    startEditingRun() {
+      if (!this.selectedRun) return
+      this.runEditorMode = 'edit'
+      this.runEditorRun = this.selectedRun
+      this.showRunEditor = true
     },
-    selectGame(game) {
-      this.newRun.game_id = game.id
-      this.gameSearch = game.name
-      this.showGameDropdown = false
+    
+    closeRunEditor() {
+      this.showRunEditor = false
+      this.runEditorRun = null
     },
-    selectCity(city) {
-      this.newRun.city_id = city.id
-      this.newRun.city_timezone = city.timezone || 'Europe/Moscow'
-      const regionName = city.region && city.region.name ? city.region.name : ''
-      this.citySearch = regionName ? `${city.name} (${regionName})` : city.name
-      this.showCityDropdown = false
+    
+    onCityCreated(newCity) {
+      // Добавляем созданный город в список
+      this.allCities.push(newCity)
     },
-    selectNewCity() {
-      this.newRun.city_id = 'new'
-      this.citySearch = ''
-      this.showCityDropdown = false
-    },
-    onGameInputFocus() {
-      this.showGameDropdown = true
-    },
-    onCityInputFocus() {
-      if (this.newRun.convention_event_id === null) {
-        this.showCityDropdown = true
-      }
-    },
-    onGameInputBlur() {
-      // Задержка для обработки клика по элементу списка
-      setTimeout(() => {
-        this.showGameDropdown = false
-        // Если поиск не соответствует выбранной игре, очищаем
-        if (this.newRun.game_id && this.gameSearch !== this.selectedGameName) {
-          this.gameSearch = this.selectedGameName
-        }
-      }, 200)
-    },
-    onCityInputBlur() {
-      setTimeout(() => {
-        this.showCityDropdown = false
-        if (this.newRun.city_id && this.newRun.city_id !== 'new' && this.citySearch !== this.selectedCityName) {
-          this.citySearch = this.selectedCityName
-        }
-      }, 200)
-    },
-    onConventionEventChange() {
-      // Если выбрано проведение конвента, автоматически устанавливаем город
-      if (this.newRun.convention_event_id) {
-        const event = this.conventionEvents.find(e => e.id === this.newRun.convention_event_id)
-        if (event && event.city) {
-          this.newRun.city_id = event.city.id
-          this.newRun.city_timezone = event.city.timezone || 'Europe/Moscow'
-          const regionName = event.city.region && event.city.region.name ? event.city.region.name : ''
-          this.citySearch = regionName 
-            ? `${event.city.name} (${regionName})` 
-            : event.city.name
-        }
-      } else {
-        this.newRun.city_id = null
-        this.newRun.city_timezone = 'Europe/Moscow'
-        this.citySearch = ''
-      }
-    },
-    async submitRun() {
-      this.addRunLoading = true
-      this.addRunError = null
+    
+    async handleRunEditorSave(runData) {
+      this.runEditorLoading = true
       
       try {
-        let cityId = this.newRun.city_id
-        
-        // Если выбрано создание нового города
-        if (cityId === 'new' && this.newRun.newCityName.trim()) {
-          const cityResponse = await fetch('/api/cities/', {
+        if (this.runEditorMode === 'add') {
+          // Добавление нового прогона
+          const response = await fetch('/api/runs/', {
             method: 'POST',
             headers: {
               'Content-Type': 'application/json',
               'X-CSRFToken': this.csrfToken
             },
-            body: JSON.stringify({ name: this.newRun.newCityName.trim() })
+            body: JSON.stringify(runData)
           })
           
-          if (!cityResponse.ok) {
-            throw new Error('Ошибка при создании города')
+          if (!response.ok) {
+            if (response.status === 401 || response.status === 403) {
+              throw new Error('Необходима авторизация для добавления прогона')
+            }
+            const data = await response.json()
+            throw new Error(data.detail || data.non_field_errors?.[0] || 'Ошибка при сохранении')
           }
           
-          const newCity = await cityResponse.json()
-          cityId = newCity.id
-          this.allCities.push(newCity)
-        }
-        
-        if (!cityId || cityId === 'new') {
-          throw new Error('Выберите или создайте город')
-        }
-        
-        if (!this.newRun.game_id) {
-          throw new Error('Выберите игру из списка. Если игры нет в списке, сначала создайте её в разделе "Игры"')
-        }
-        
-        if (!this.newRun.date || !this.newRun.time) {
-          throw new Error('Укажите дату и время')
-        }
-        
-        // Конвертируем время с учётом таймзоны города
-        const dateTime = this.convertToTimezone(
-          this.newRun.date, 
-          this.newRun.time, 
-          this.newRun.city_timezone
-        )
-        
-        const runData = {
-          game_id: this.newRun.game_id,
-          city_id: cityId,
-          date: dateTime
-        }
-        
-        // Привязка к конвенту опциональна
-        if (this.newRun.convention_event_id) {
-          runData.convention_event_id = this.newRun.convention_event_id
-        }
-        
-        const response = await fetch('/api/runs/', {
-          method: 'POST',
-          headers: {
-            'Content-Type': 'application/json',
-            'X-CSRFToken': this.csrfToken
-          },
-          body: JSON.stringify(runData)
-        })
-        
-        if (!response.ok) {
-          if (response.status === 401 || response.status === 403) {
-            throw new Error('Необходима авторизация для добавления прогона')
+          // Обновляем списки
+          await this.fetchRuns()
+          await this.fetchCities()
+        } else {
+          // Редактирование прогона
+          const response = await fetch(`/api/runs/${runData.id}/`, {
+            method: 'PATCH',
+            headers: {
+              'Content-Type': 'application/json',
+              'X-CSRFToken': this.csrfToken
+            },
+            body: JSON.stringify(runData)
+          })
+          
+          if (!response.ok) {
+            if (response.status === 401 || response.status === 403) {
+              throw new Error('Нет прав для редактирования этого прогона')
+            }
+            const data = await response.json()
+            throw new Error(data.detail || data.non_field_errors?.[0] || 'Ошибка при сохранении')
           }
-          const data = await response.json()
-          throw new Error(data.detail || data.non_field_errors?.[0] || 'Ошибка при сохранении')
+          
+          const updatedRun = await response.json()
+          
+          // Обновляем список и выбранный прогон
+          await this.fetchRuns()
+          this.selectedRun = updatedRun
         }
         
-        // Обновляем список
-        await this.fetchRuns()
-        await this.fetchCities()
-        this.closeAddRunModal()
+        this.closeRunEditor()
       } catch (err) {
-        this.addRunError = err.message
+        console.error('Ошибка сохранения прогона:', err.message)
       } finally {
-        this.addRunLoading = false
+        this.runEditorLoading = false
       }
+    },
+    
+    handleRunEditorError(errorMessage) {
+      console.error('RunEditor error:', errorMessage)
     },
     
     // === Добавление проведения конвента ===
@@ -1706,144 +1424,6 @@ export default {
         console.error('Ошибка загрузки всех проведений конвентов:', err)
       }
     },
-    startEditingRun() {
-      if (!this.selectedRun) return
-      
-      // Парсим дату и время из прогона
-      const runDate = new Date(this.selectedRun.date)
-      const timezone = this.selectedRun.city_timezone || 'Europe/Moscow'
-      
-      // Получаем дату и время в таймзоне города
-      const dateStr = runDate.toLocaleDateString('sv-SE', { timeZone: timezone })
-      const timeStr = runDate.toLocaleTimeString('en-GB', { 
-        timeZone: timezone, 
-        hour: '2-digit', 
-        minute: '2-digit' 
-      })
-      
-      // Находим city_id по названию
-      const city = this.allCities.find(c => c.name === this.selectedRun.city)
-      
-      this.editRun = {
-        id: this.selectedRun.id,
-        game_id: this.selectedRun.game.id,
-        city_id: city ? city.id : null,
-        city_timezone: timezone,
-        convention_event_id: this.selectedRun.convention_event || null,
-        date: dateStr,
-        time: timeStr
-      }
-      
-      this.editGameSearch = this.selectedRun.game.name
-      this.editCitySearch = city ? (city.region?.name ? `${city.name} (${city.region.name})` : city.name) : this.selectedRun.city
-      this.editRunError = null
-      this.isEditingRun = true
-    },
-    cancelEditingRun() {
-      this.isEditingRun = false
-      this.editRunError = null
-    },
-    selectEditGame(game) {
-      this.editRun.game_id = game.id
-      this.editGameSearch = game.name
-      this.showEditGameDropdown = false
-    },
-    selectEditCity(city) {
-      this.editRun.city_id = city.id
-      this.editRun.city_timezone = city.timezone || 'Europe/Moscow'
-      const regionName = city.region && city.region.name ? city.region.name : ''
-      this.editCitySearch = regionName ? `${city.name} (${regionName})` : city.name
-      this.showEditCityDropdown = false
-    },
-    onEditGameInputBlur() {
-      setTimeout(() => {
-        this.showEditGameDropdown = false
-        if (this.editRun.game_id && this.editGameSearch !== this.selectedEditGameName) {
-          this.editGameSearch = this.selectedEditGameName
-        }
-      }, 200)
-    },
-    onEditCityInputBlur() {
-      setTimeout(() => {
-        this.showEditCityDropdown = false
-        if (this.editRun.city_id && this.editCitySearch !== this.selectedEditCityName) {
-          this.editCitySearch = this.selectedEditCityName
-        }
-      }, 200)
-    },
-    onEditConventionEventChange() {
-      if (this.editRun.convention_event_id) {
-        const event = this.allConventionEvents.find(e => e.id === this.editRun.convention_event_id)
-        if (event && event.city) {
-          this.editRun.city_id = event.city.id
-          this.editRun.city_timezone = event.city.timezone || 'Europe/Moscow'
-          const regionName = event.city.region && event.city.region.name ? event.city.region.name : ''
-          this.editCitySearch = regionName 
-            ? `${event.city.name} (${regionName})` 
-            : event.city.name
-        }
-      }
-    },
-    async submitEditRun() {
-      this.editRunLoading = true
-      this.editRunError = null
-      
-      try {
-        if (!this.editRun.game_id) {
-          throw new Error('Выберите игру')
-        }
-        
-        if (!this.editRun.city_id) {
-          throw new Error('Выберите город')
-        }
-        
-        if (!this.editRun.date || !this.editRun.time) {
-          throw new Error('Укажите дату и время')
-        }
-        
-        // Конвертируем время с учётом таймзоны города
-        const dateTime = this.convertToTimezone(
-          this.editRun.date, 
-          this.editRun.time, 
-          this.editRun.city_timezone
-        )
-        
-        const runData = {
-          game_id: this.editRun.game_id,
-          city_id: this.editRun.city_id,
-          date: dateTime,
-          convention_event_id: this.editRun.convention_event_id || null
-        }
-        
-        const response = await fetch(`/api/runs/${this.editRun.id}/`, {
-          method: 'PATCH',
-          headers: {
-            'Content-Type': 'application/json',
-            'X-CSRFToken': this.csrfToken
-          },
-          body: JSON.stringify(runData)
-        })
-        
-        if (!response.ok) {
-          if (response.status === 401 || response.status === 403) {
-            throw new Error('Нет прав для редактирования этого прогона')
-          }
-          const data = await response.json()
-          throw new Error(data.detail || data.non_field_errors?.[0] || 'Ошибка при сохранении')
-        }
-        
-        const updatedRun = await response.json()
-        
-        // Обновляем список и выбранный прогон
-        await this.fetchRuns()
-        this.selectedRun = updatedRun
-        this.isEditingRun = false
-      } catch (err) {
-        this.editRunError = err.message
-      } finally {
-        this.editRunLoading = false
-      }
-    },
     
     // === Удаление ===
     confirmDeleteRun() {
@@ -1960,6 +1540,101 @@ export default {
       } catch (err) {
         alert(err.message)
       }
+    },
+    
+    // Регистрация на прогон
+    async registerForRun() {
+      if (!this.selectedRun) return
+      
+      this.registrationLoading = true
+      this.registrationError = null
+      
+      try {
+        const response = await fetch(`/api/runs/${this.selectedRun.id}/register/`, {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+            'X-CSRFToken': this.csrfToken
+          },
+          body: JSON.stringify({
+            role_preference: this.registrationData.role_preference,
+            is_technician: this.registrationData.is_technician,
+            comment: this.registrationData.comment
+          })
+        })
+        
+        if (!response.ok) {
+          const data = await response.json()
+          throw new Error(data.error || 'Ошибка при регистрации')
+        }
+        
+        const result = await response.json()
+        this.selectedRun = result.run
+        
+        // Сбрасываем форму
+        this.registrationData = {
+          role_preference: 'any',
+          is_technician: false,
+          comment: ''
+        }
+        
+        // Обновляем список прогонов
+        await this.fetchRuns()
+      } catch (err) {
+        this.registrationError = err.message
+      } finally {
+        this.registrationLoading = false
+      }
+    },
+    
+    async unregisterFromRun() {
+      if (!this.selectedRun) return
+      
+      this.registrationLoading = true
+      this.registrationError = null
+      
+      try {
+        const response = await fetch(`/api/runs/${this.selectedRun.id}/unregister/`, {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+            'X-CSRFToken': this.csrfToken
+          }
+        })
+        
+        if (!response.ok) {
+          const data = await response.json()
+          throw new Error(data.error || 'Ошибка при отмене регистрации')
+        }
+        
+        const result = await response.json()
+        this.selectedRun = result.run
+        
+        // Обновляем список прогонов
+        await this.fetchRuns()
+      } catch (err) {
+        this.registrationError = err.message
+      } finally {
+        this.registrationLoading = false
+      }
+    },
+    
+    getRolePreferenceText(role) {
+      const roles = {
+        'any': 'Любая роль',
+        'female': 'Женская роль',
+        'male': 'Мужская роль'
+      }
+      return roles[role] || role
+    },
+    
+    formatDuration(minutes) {
+      if (!minutes) return ''
+      const hours = Math.floor(minutes / 60)
+      const mins = minutes % 60
+      if (hours === 0) return `${mins} мин`
+      if (mins === 0) return `${hours} ч`
+      return `${hours} ч ${mins} мин`
     }
   }
 }
@@ -1980,7 +1655,7 @@ export default {
 }
 
 .page-header h1 {
-  font-family: 'Orbitron', 'Courier New', monospace;
+  font-family: 'JetBrains Mono', monospace;
   font-size: 3rem;
   color: #ff6b35;
   text-shadow: 0 0 20px rgba(255, 107, 53, 0.5);
@@ -2221,14 +1896,14 @@ export default {
 }
 
 .date-cell {
-  font-family: 'Courier New', monospace;
+  font-family: 'JetBrains Mono', monospace;
   color: #ff6b35;
   font-weight: bold;
   white-space: nowrap;
 }
 
 .time-cell {
-  font-family: 'Courier New', monospace;
+  font-family: 'JetBrains Mono', monospace;
   color: #00ccff;
   font-size: 1.1rem;
 }
@@ -2260,6 +1935,22 @@ export default {
 
 .city-cell {
   color: #aaa;
+}
+
+.venue-cell {
+  color: #888;
+  font-size: 0.9rem;
+}
+
+.venue-name {
+  color: #00ccff;
+  margin: 0;
+}
+
+.rooms-list {
+  color: #888;
+  font-size: 0.9rem;
+  margin: 4px 0 0 0;
 }
 
 .convention-cell {
@@ -2352,7 +2043,7 @@ export default {
 }
 
 .convention-dates {
-  font-family: 'Courier New', monospace;
+  font-family: 'JetBrains Mono', monospace;
   color: #ff6b35;
   font-size: 0.9rem;
   font-weight: bold;
@@ -2362,7 +2053,7 @@ export default {
 }
 
 .convention-title {
-  font-family: 'Orbitron', 'Courier New', monospace;
+  font-family: 'JetBrains Mono', monospace;
   font-size: 1.4rem;
   color: #e0e0e0;
   margin-bottom: 8px;
@@ -2384,7 +2075,7 @@ export default {
 
 .runs-count, .games-count {
   color: #00ccff;
-  font-family: 'Courier New', monospace;
+  font-family: 'JetBrains Mono', monospace;
   font-size: 0.9rem;
 }
 
@@ -2526,7 +2217,7 @@ export default {
 }
 
 .modal-dates {
-  font-family: 'Courier New', monospace;
+  font-family: 'JetBrains Mono', monospace;
   color: #ff6b35;
   font-size: 1rem;
   font-weight: bold;
@@ -2549,7 +2240,7 @@ export default {
 }
 
 .modal-content h2 {
-  font-family: 'Orbitron', 'Courier New', monospace;
+  font-family: 'JetBrains Mono', monospace;
   color: #e0e0e0;
   font-size: 1.8rem;
   margin-bottom: 8px;
@@ -2617,23 +2308,6 @@ export default {
   background: rgba(255, 68, 68, 0.2);
   border-color: #ff4444;
   transform: scale(1.1);
-}
-
-/* Модальное окно удаления */
-.delete-confirm-modal {
-  max-width: 450px;
-  text-align: center;
-}
-
-.delete-confirm-modal h2 {
-  color: #ff4444;
-  padding-right: 0;
-}
-
-.delete-warning {
-  color: #aaa;
-  line-height: 1.6;
-  margin-bottom: 24px;
 }
 
 .btn-danger {
@@ -2757,7 +2431,7 @@ export default {
 }
 
 .modal-run-date {
-  font-family: 'Courier New', monospace;
+  font-family: 'JetBrains Mono', monospace;
   color: #ff6b35;
   font-size: 1rem;
   font-weight: bold;
@@ -2794,9 +2468,228 @@ export default {
   border: 1px solid #88888844;
 }
 
+/* ========== Секция регистрации ========== */
+.registration-section {
+  margin-top: 20px;
+  padding: 20px;
+  background: rgba(0, 0, 0, 0.3);
+  border-radius: 12px;
+  border: 1px solid #ff6b3533;
+}
+
+.registration-section .section-header {
+  margin-bottom: 16px;
+}
+
+.registration-stats {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+}
+
+.registration-count {
+  font-family: 'JetBrains Mono', monospace;
+  color: #00ff88;
+  font-size: 1.1rem;
+  font-weight: bold;
+}
+
+.registration-count.full {
+  color: #ff6b6b;
+}
+
+.full-badge {
+  background: rgba(255, 107, 107, 0.2);
+  color: #ff6b6b;
+  padding: 4px 10px;
+  border-radius: 12px;
+  font-size: 0.75rem;
+  font-weight: bold;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+}
+
+/* Статус регистрации пользователя */
+.user-registration {
+  margin-bottom: 16px;
+}
+
+.registration-status-card {
+  display: flex;
+  align-items: center;
+  gap: 16px;
+  padding: 16px;
+  background: rgba(0, 255, 136, 0.1);
+  border: 1px solid #00ff8844;
+  border-radius: 10px;
+}
+
+.registration-status-icon {
+  font-size: 1.5rem;
+  color: #00ff88;
+}
+
+.registration-status-info {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.registration-status-text {
+  color: #00ff88;
+  font-weight: bold;
+}
+
+.registration-role {
+  color: #aaa;
+  font-size: 0.9rem;
+}
+
+.waitlist-badge {
+  display: inline-block;
+  background: rgba(255, 193, 7, 0.2);
+  color: #ffc107;
+  padding: 3px 8px;
+  border-radius: 8px;
+  font-size: 0.75rem;
+  font-weight: bold;
+  text-transform: uppercase;
+}
+
+/* Форма регистрации */
+.registration-form {
+  margin-bottom: 16px;
+}
+
+.registration-form .form-row {
+  display: flex;
+  gap: 16px;
+  margin-bottom: 12px;
+}
+
+.registration-form .form-group.half {
+  flex: 1;
+}
+
+.checkbox-label {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  cursor: pointer;
+  padding-top: 24px;
+  color: #e0e0e0;
+}
+
+.checkbox-label input[type="checkbox"] {
+  width: 18px;
+  height: 18px;
+  accent-color: #ff6b35;
+}
+
+.btn-register {
+  width: 100%;
+  padding: 14px;
+  font-size: 1rem;
+  font-weight: bold;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+}
+
+/* Закрытая регистрация */
+.registration-closed {
+  text-align: center;
+  padding: 20px;
+  color: #888;
+}
+
+.registration-login {
+  text-align: center;
+  padding: 20px;
+  color: #aaa;
+}
+
+.registration-login a {
+  color: #00ccff;
+  text-decoration: none;
+}
+
+.registration-login a:hover {
+  text-decoration: underline;
+}
+
+/* Список участников */
+.participants-list {
+  margin-top: 20px;
+  padding-top: 16px;
+  border-top: 1px solid #ffffff15;
+}
+
+.participants-header {
+  margin-bottom: 12px;
+}
+
+.participants-header h4 {
+  color: #aaa;
+  font-size: 0.9rem;
+  font-weight: normal;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+  margin: 0;
+}
+
+.participants-grid {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+
+.participant-item {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding: 6px 12px;
+  background: rgba(255, 255, 255, 0.05);
+  border-radius: 20px;
+  font-size: 0.85rem;
+}
+
+.participant-item.technician {
+  background: rgba(156, 39, 176, 0.15);
+  border: 1px solid #9c27b044;
+}
+
+.participant-item.waitlist {
+  opacity: 0.6;
+}
+
+.participant-item.cancelled {
+  opacity: 0.4;
+  text-decoration: line-through;
+}
+
+.participant-icon {
+  font-size: 0.9rem;
+}
+
+.participant-name {
+  color: #e0e0e0;
+}
+
+.participant-role {
+  color: #00ccff;
+  font-size: 0.8rem;
+}
+
+.participant-waitlist {
+  color: #ffc107;
+  font-size: 0.7rem;
+  text-transform: uppercase;
+}
+
 .modal-stats {
   display: grid;
-  grid-template-columns: repeat(3, 1fr);
+  grid-template-columns: repeat(auto-fit, minmax(80px, 1fr));
   gap: 16px;
   margin-top: 20px;
   padding-top: 20px;
@@ -2816,7 +2709,7 @@ export default {
 
 .modal-stat-value {
   color: #00ccff;
-  font-family: 'Courier New', monospace;
+  font-family: 'JetBrains Mono', monospace;
   font-size: 1.1rem;
   font-weight: bold;
 }
@@ -2885,6 +2778,56 @@ export default {
   font-size: 0.85rem;
 }
 
+/* Ссылки на расписание */
+.schedule-links-section {
+  margin-top: 24px;
+  padding-top: 20px;
+  border-top: 1px solid #ff6b3533;
+}
+
+.schedule-links {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 12px;
+}
+
+.schedule-link,
+.schedule-edit-link {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  padding: 12px 20px;
+  border-radius: 8px;
+  text-decoration: none;
+  font-size: 0.95rem;
+  font-weight: 600;
+  transition: all 0.2s ease;
+}
+
+.schedule-link {
+  background: rgba(0, 204, 255, 0.1);
+  border: 1px solid #00ccff55;
+  color: #00ccff;
+}
+
+.schedule-link:hover {
+  background: rgba(0, 204, 255, 0.2);
+  border-color: #00ccff;
+  transform: translateY(-2px);
+}
+
+.schedule-edit-link {
+  background: rgba(255, 107, 53, 0.1);
+  border: 1px solid #ff6b3555;
+  color: #ff6b35;
+}
+
+.schedule-edit-link:hover {
+  background: rgba(255, 107, 53, 0.2);
+  border-color: #ff6b35;
+  transform: translateY(-2px);
+}
+
 .modal-runs-list {
   display: flex;
   flex-direction: column;
@@ -2901,7 +2844,7 @@ export default {
 }
 
 .modal-run-time {
-  font-family: 'Courier New', monospace;
+  font-family: 'JetBrains Mono', monospace;
   color: #00ccff;
   font-weight: bold;
   min-width: 50px;
@@ -3008,7 +2951,7 @@ export default {
 }
 
 .add-run-modal h2 {
-  font-family: 'Orbitron', 'Courier New', monospace;
+  font-family: 'JetBrains Mono', monospace;
   margin-bottom: 24px;
   padding-right: 40px;
 }

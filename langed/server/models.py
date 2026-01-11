@@ -1,6 +1,7 @@
 from django.db import models
 from django.conf import settings
 from django.core.exceptions import ValidationError
+from auditlog.registry import auditlog
 
 
 class Region(models.Model):
@@ -204,8 +205,28 @@ class ConventionEvent(models.Model):
         related_name='convention_events',
         verbose_name='Город'
     )
+    venue = models.ForeignKey(
+        'Venue',
+        on_delete=models.SET_NULL,
+        related_name='convention_events',
+        verbose_name='Площадка',
+        null=True,
+        blank=True
+    )
     date_start = models.DateField(verbose_name='Дата начала')
     date_end = models.DateField(verbose_name='Дата окончания')
+    
+    # Поля регистрации участников
+    capacity = models.PositiveIntegerField(
+        null=True,
+        blank=True,
+        verbose_name='Лимит участников',
+        help_text='Максимальное количество участников (если не указано — без ограничений)'
+    )
+    registration_open = models.BooleanField(
+        default=False,
+        verbose_name='Регистрация открыта'
+    )
     
     created_at = models.DateTimeField(auto_now_add=True, verbose_name='Дата создания')
     updated_at = models.DateTimeField(auto_now=True, verbose_name='Дата обновления')
@@ -221,6 +242,82 @@ class ConventionEvent(models.Model):
     def clean(self):
         if self.date_start > self.date_end:
             raise ValidationError('Дата начала не может быть позже даты окончания')
+    
+    def get_confirmed_registrations_count(self):
+        """Возвращает количество подтверждённых регистраций"""
+        return self.event_registrations.filter(status='confirmed').count()
+    
+    def get_pending_registrations_count(self):
+        """Возвращает количество ожидающих регистраций"""
+        return self.event_registrations.filter(status='pending').count()
+    
+    def get_available_slots(self):
+        """Возвращает количество свободных мест (None если без ограничений)"""
+        if self.capacity is None:
+            return None
+        confirmed = self.get_confirmed_registrations_count()
+        return max(0, self.capacity - confirmed)
+    
+    def is_full(self):
+        """Проверяет, заполнен ли конвент"""
+        if self.capacity is None:
+            return False
+        return self.get_available_slots() == 0
+
+
+class Venue(models.Model):
+    """Модель площадки (место проведения)"""
+    
+    name = models.CharField(max_length=255, verbose_name='Название')
+    address = models.TextField(blank=True, verbose_name='Адрес')
+    city = models.ForeignKey(
+        City,
+        on_delete=models.PROTECT,
+        related_name='venues',
+        verbose_name='Город'
+    )
+    description = models.TextField(blank=True, verbose_name='Описание')
+    capacity = models.PositiveIntegerField(
+        null=True,
+        blank=True,
+        verbose_name='Вместимость'
+    )
+    
+    created_at = models.DateTimeField(auto_now_add=True, verbose_name='Дата создания')
+    updated_at = models.DateTimeField(auto_now=True, verbose_name='Дата обновления')
+
+    class Meta:
+        verbose_name = 'Площадка'
+        verbose_name_plural = 'Площадки'
+        ordering = ['name']
+
+    def __str__(self):
+        return f'{self.name} ({self.city.name})'
+
+
+class Room(models.Model):
+    """Модель помещения на площадке"""
+    
+    venue = models.ForeignKey(
+        Venue,
+        on_delete=models.CASCADE,
+        related_name='rooms',
+        verbose_name='Площадка'
+    )
+    name = models.CharField(max_length=255, verbose_name='Название')
+    blackbox = models.BooleanField(default=False, verbose_name='Blackbox')
+    
+    created_at = models.DateTimeField(auto_now_add=True, verbose_name='Дата создания')
+    updated_at = models.DateTimeField(auto_now=True, verbose_name='Дата обновления')
+
+    class Meta:
+        verbose_name = 'Помещение'
+        verbose_name_plural = 'Помещения'
+        ordering = ['name']
+
+    def __str__(self):
+        blackbox_mark = ' [blackbox]' if self.blackbox else ''
+        return f'{self.name}{blackbox_mark} — {self.venue.name}'
 
 
 class Run(models.Model):
@@ -239,11 +336,22 @@ class Run(models.Model):
         blank=True
     )
     date = models.DateTimeField(verbose_name='Дата и время прогона')
+    duration = models.PositiveIntegerField(
+        default=180,
+        verbose_name='Продолжительность (минут)',
+        help_text='Продолжительность прогона в минутах'
+    )
     city = models.ForeignKey(
         City,
         on_delete=models.PROTECT,
         related_name='runs',
         verbose_name='Город'
+    )
+    rooms = models.ManyToManyField(
+        Room,
+        related_name='runs',
+        verbose_name='Помещения',
+        blank=True
     )
     convention_event = models.ForeignKey(
         ConventionEvent,
@@ -252,6 +360,16 @@ class Run(models.Model):
         verbose_name='Проведение конвента',
         null=True,
         blank=True
+    )
+    max_players = models.PositiveIntegerField(
+        null=True,
+        blank=True,
+        verbose_name='Максимум игроков',
+        help_text='Если не указано, берётся из игры'
+    )
+    registration_open = models.BooleanField(
+        default=True,
+        verbose_name='Регистрация открыта'
     )
     
     created_at = models.DateTimeField(auto_now_add=True, verbose_name='Дата создания')
@@ -264,3 +382,230 @@ class Run(models.Model):
 
     def __str__(self):
         return f'{self.game.name} — {self.city.name} ({self.date.strftime("%d.%m.%Y %H:%M")})'
+    
+    def clean(self):
+        # Проверяем, что дата прогона попадает в даты проведения конвента
+        if self.convention_event and self.date:
+            run_date = self.date.date()
+            if run_date < self.convention_event.date_start or run_date > self.convention_event.date_end:
+                raise ValidationError(
+                    f'Дата прогона ({run_date.strftime("%d.%m.%Y")}) должна быть в пределах дат '
+                    f'проведения конвента ({self.convention_event.date_start.strftime("%d.%m.%Y")} — '
+                    f'{self.convention_event.date_end.strftime("%d.%m.%Y")})'
+                )
+    
+    def get_max_players(self):
+        """Возвращает максимальное количество игроков для этого прогона"""
+        if self.max_players is not None:
+            return self.max_players
+        return self.game.players_max
+    
+    def get_registered_count(self):
+        """Возвращает количество зарегистрированных игроков"""
+        return self.registrations.filter(
+            status__in=['confirmed', 'pending'],
+            is_technician=False
+        ).count()
+    
+    def get_available_slots(self):
+        """Возвращает количество свободных мест"""
+        max_players = self.get_max_players()
+        registered = self.get_registered_count()
+        return max(0, max_players - registered)
+    
+    def is_full(self):
+        """Проверяет, заполнен ли прогон"""
+        return self.get_available_slots() == 0
+
+
+class CommonEvent(models.Model):
+    """Модель общего события расписания (ужин, завтрак, заезд и т.п.)
+    
+    Общие события отображаются во всех помещениях площадки.
+    """
+    
+    convention_event = models.ForeignKey(
+        ConventionEvent,
+        on_delete=models.CASCADE,
+        related_name='common_events',
+        verbose_name='Проведение конвента'
+    )
+    name = models.CharField(max_length=255, verbose_name='Название')
+    date = models.DateTimeField(verbose_name='Дата и время начала')
+    duration = models.PositiveIntegerField(
+        default=60,
+        verbose_name='Продолжительность (минут)',
+        help_text='Продолжительность события в минутах'
+    )
+    description = models.TextField(blank=True, verbose_name='Описание')
+    
+    created_at = models.DateTimeField(auto_now_add=True, verbose_name='Дата создания')
+    updated_at = models.DateTimeField(auto_now=True, verbose_name='Дата обновления')
+
+    class Meta:
+        verbose_name = 'Общее событие'
+        verbose_name_plural = 'Общие события'
+        ordering = ['date']
+
+    def __str__(self):
+        return f'{self.name} — {self.date.strftime("%d.%m.%Y %H:%M")}'
+    
+    def clean(self):
+        # Проверяем, что дата события попадает в даты проведения конвента
+        if self.convention_event and self.date:
+            event_date = self.date.date()
+            if event_date < self.convention_event.date_start or event_date > self.convention_event.date_end:
+                raise ValidationError(
+                    f'Дата события ({event_date.strftime("%d.%m.%Y")}) должна быть в пределах дат '
+                    f'проведения конвента ({self.convention_event.date_start.strftime("%d.%m.%Y")} — '
+                    f'{self.convention_event.date_end.strftime("%d.%m.%Y")})'
+                )
+
+
+class Registration(models.Model):
+    """Модель регистрации игрока на прогон"""
+    
+    ROLE_CHOICES = [
+        ('any', 'Любая'),
+        ('female', 'Женская'),
+        ('male', 'Мужская'),
+    ]
+    
+    STATUS_CHOICES = [
+        ('pending', 'Ожидает подтверждения'),
+        ('confirmed', 'Подтверждена'),
+        ('cancelled', 'Отменена'),
+        ('waitlist', 'В листе ожидания'),
+    ]
+    
+    run = models.ForeignKey(
+        Run,
+        on_delete=models.CASCADE,
+        related_name='registrations',
+        verbose_name='Прогон'
+    )
+    user = models.ForeignKey(
+        settings.AUTH_USER_MODEL,
+        on_delete=models.CASCADE,
+        related_name='registrations',
+        verbose_name='Пользователь'
+    )
+    role_preference = models.CharField(
+        max_length=10,
+        choices=ROLE_CHOICES,
+        default='any',
+        verbose_name='Предпочтение по роли'
+    )
+    is_technician = models.BooleanField(
+        default=False,
+        verbose_name='Игротехник'
+    )
+    status = models.CharField(
+        max_length=20,
+        choices=STATUS_CHOICES,
+        default='pending',
+        verbose_name='Статус'
+    )
+    comment = models.TextField(
+        blank=True,
+        verbose_name='Комментарий',
+        help_text='Дополнительная информация от игрока'
+    )
+    
+    created_at = models.DateTimeField(auto_now_add=True, verbose_name='Дата регистрации')
+    updated_at = models.DateTimeField(auto_now=True, verbose_name='Дата обновления')
+
+    class Meta:
+        verbose_name = 'Регистрация'
+        verbose_name_plural = 'Регистрации'
+        ordering = ['created_at']
+        unique_together = ['run', 'user']
+
+    def __str__(self):
+        role_info = ' (игротехник)' if self.is_technician else ''
+        return f'{self.user.username} → {self.run.game.name}{role_info}'
+    
+    def clean(self):
+        # Проверяем, что пользователь не является мастером этого прогона
+        if hasattr(self, 'run') and hasattr(self, 'user'):
+            if self.run.masters.filter(id=self.user.id).exists():
+                raise ValidationError('Мастер не может зарегистрироваться как игрок на свой прогон')
+            
+            # Если прогон привязан к проведению конвента, проверяем подтверждённую регистрацию
+            if self.run.convention_event:
+                has_confirmed_registration = ConventionEventRegistration.objects.filter(
+                    convention_event=self.run.convention_event,
+                    user=self.user,
+                    status='confirmed'
+                ).exists()
+                if not has_confirmed_registration:
+                    raise ValidationError(
+                        'Для регистрации на игры конвента необходимо быть подтверждённым участником конвента'
+                    )
+
+
+class ConventionEventRegistration(models.Model):
+    """Модель регистрации участника на проведение конвента"""
+    
+    STATUS_CHOICES = [
+        ('pending', 'Ожидает подтверждения'),
+        ('confirmed', 'Подтверждена'),
+        ('rejected', 'Отклонена'),
+        ('cancelled', 'Отменена'),
+    ]
+    
+    convention_event = models.ForeignKey(
+        ConventionEvent,
+        on_delete=models.CASCADE,
+        related_name='event_registrations',
+        verbose_name='Проведение конвента'
+    )
+    user = models.ForeignKey(
+        settings.AUTH_USER_MODEL,
+        on_delete=models.CASCADE,
+        related_name='convention_event_registrations',
+        verbose_name='Пользователь'
+    )
+    status = models.CharField(
+        max_length=20,
+        choices=STATUS_CHOICES,
+        default='pending',
+        verbose_name='Статус'
+    )
+    comment = models.TextField(
+        blank=True,
+        verbose_name='Комментарий',
+        help_text='Дополнительная информация от участника'
+    )
+    admin_comment = models.TextField(
+        blank=True,
+        verbose_name='Комментарий организатора',
+        help_text='Заметка организатора (не видна участнику)'
+    )
+    
+    created_at = models.DateTimeField(auto_now_add=True, verbose_name='Дата регистрации')
+    updated_at = models.DateTimeField(auto_now=True, verbose_name='Дата обновления')
+
+    class Meta:
+        verbose_name = 'Регистрация на конвент'
+        verbose_name_plural = 'Регистрации на конвент'
+        ordering = ['created_at']
+        unique_together = ['convention_event', 'user']
+
+    def __str__(self):
+        return f'{self.user.username} → {self.convention_event.convention.name} ({self.get_status_display()})'
+
+
+# Регистрация моделей для аудита (логирование изменений)
+auditlog.register(Region)
+auditlog.register(City)
+auditlog.register(Game, m2m_fields={'creators'})
+auditlog.register(Convention, m2m_fields={'organizers'})
+auditlog.register(ConventionLink)
+auditlog.register(ConventionEvent, m2m_fields={'organizers'})
+auditlog.register(Venue)
+auditlog.register(Room)
+auditlog.register(Run, m2m_fields={'masters', 'rooms'})
+auditlog.register(CommonEvent)
+auditlog.register(Registration)
+auditlog.register(ConventionEventRegistration)
