@@ -1,9 +1,13 @@
+import csv
+import io
 from django.contrib import admin
 from django.contrib.auth.admin import UserAdmin as BaseUserAdmin
 from django.contrib.auth import get_user_model
 from django import forms
 from django.contrib import messages
 from django.utils import timezone
+from django.urls import path
+from django.shortcuts import render, redirect
 from datetime import time
 from .models import Game, City, Region, Convention, ConventionEvent, Run, ConventionLink, Venue, Room, Registration
 
@@ -64,6 +68,15 @@ class CityAdmin(admin.ModelAdmin):
     autocomplete_fields = ('region',)
 
 
+class CsvImportForm(forms.Form):
+    """Форма для импорта игр из CSV"""
+    csv_file = forms.FileField(label='CSV файл')
+    update_existing = forms.BooleanField(
+        required=False,
+        label='Обновлять существующие игры'
+    )
+
+
 @admin.register(Game)
 class GameAdmin(admin.ModelAdmin):
     list_display = ('name', 'get_creators', 'players_min', 'players_max', 'female_roles_min', 'female_roles_max', 
@@ -71,6 +84,7 @@ class GameAdmin(admin.ModelAdmin):
     list_filter = ('created_at',)
     search_fields = ('name', 'announcement', 'red_flags', 'creators__username', 'creators__first_name', 'creators__last_name')
     filter_horizontal = ('creators',)
+    change_list_template = 'admin/server/game/change_list.html'
     fieldsets = (
         ('Основная информация', {
             'fields': ('name', 'creators', 'poster', 'announcement', 'red_flags')
@@ -92,6 +106,129 @@ class GameAdmin(admin.ModelAdmin):
     def get_creators(self, obj):
         return ', '.join([get_user_display_name(c) for c in obj.creators.all()])
     get_creators.short_description = 'Создатели'
+    
+    def get_urls(self):
+        urls = super().get_urls()
+        custom_urls = [
+            path(
+                'import-csv/',
+                self.admin_site.admin_view(self.import_csv_view),
+                name='server_game_import_csv',
+            ),
+        ]
+        return custom_urls + urls
+    
+    def import_csv_view(self, request):
+        """View для импорта игр из CSV файла"""
+        if request.method == 'POST':
+            csv_file = request.FILES.get('csv_file')
+            update_existing = request.POST.get('update_existing') == 'on'
+            
+            if not csv_file:
+                messages.error(request, 'Пожалуйста, выберите CSV файл.')
+                return redirect('admin:server_game_import_csv')
+            
+            if not csv_file.name.endswith('.csv'):
+                messages.error(request, 'Файл должен быть в формате CSV.')
+                return redirect('admin:server_game_import_csv')
+            
+            try:
+                # Читаем и декодируем файл
+                decoded_file = csv_file.read().decode('utf-8')
+                io_string = io.StringIO(decoded_file)
+                reader = csv.DictReader(io_string)
+                
+                created_count = 0
+                updated_count = 0
+                skipped_count = 0
+                errors = []
+                
+                for row_num, row in enumerate(reader, start=2):  # start=2 т.к. строка 1 - заголовок
+                    name = row.get('Название', '').strip()
+                    if not name:
+                        errors.append(f'Строка {row_num}: пропущена (нет названия)')
+                        continue
+                    
+                    # Собираем данные из CSV
+                    game_data = {
+                        'announcement': row.get('Анонс', '').strip(),
+                        'red_flags': row.get('Красные флаги', '').strip(),
+                    }
+                    
+                    # Числовые поля с значениями по умолчанию
+                    int_fields = {
+                        'Мин. игроков': ('players_min', 1),
+                        'Макс. игроков': ('players_max', 10),
+                        'Мин. женских ролей': ('female_roles_min', 0),
+                        'Макс. женских ролей': ('female_roles_max', 0),
+                        'Мин. мужских ролей': ('male_roles_min', 0),
+                        'Макс. мужских ролей': ('male_roles_max', 0),
+                        'Игротехники': ('technicians', 0),
+                    }
+                    
+                    for csv_col, (field_name, default_val) in int_fields.items():
+                        val = row.get(csv_col, '').strip()
+                        if val:
+                            try:
+                                game_data[field_name] = int(val)
+                            except ValueError:
+                                errors.append(f'Строка {row_num}: некорректное значение "{val}" для {csv_col}')
+                                game_data[field_name] = default_val
+                        else:
+                            game_data[field_name] = default_val
+                    
+                    # Создаём или обновляем игру
+                    game, created = Game.objects.get_or_create(
+                        name=name,
+                        defaults=game_data
+                    )
+                    
+                    if created:
+                        created_count += 1
+                    elif update_existing:
+                        for field, value in game_data.items():
+                            setattr(game, field, value)
+                        game.save()
+                        updated_count += 1
+                    else:
+                        skipped_count += 1
+                
+                # Формируем сообщение о результате
+                result_parts = []
+                if created_count:
+                    result_parts.append(f'создано {created_count}')
+                if updated_count:
+                    result_parts.append(f'обновлено {updated_count}')
+                if skipped_count:
+                    result_parts.append(f'пропущено {skipped_count}')
+                
+                if result_parts:
+                    messages.success(request, f'Импорт завершён: {", ".join(result_parts)} игр.')
+                else:
+                    messages.warning(request, 'Не найдено игр для импорта.')
+                
+                for error in errors[:10]:  # Показываем первые 10 ошибок
+                    messages.warning(request, error)
+                
+                if len(errors) > 10:
+                    messages.warning(request, f'... и ещё {len(errors) - 10} предупреждений')
+                
+                return redirect('admin:server_game_changelist')
+                
+            except UnicodeDecodeError:
+                messages.error(request, 'Ошибка кодировки файла. Убедитесь, что файл в UTF-8.')
+                return redirect('admin:server_game_import_csv')
+            except Exception as e:
+                messages.error(request, f'Ошибка при импорте: {str(e)}')
+                return redirect('admin:server_game_import_csv')
+        
+        # GET запрос - показываем форму
+        context = {
+            **self.admin_site.each_context(request),
+            'title': 'Импорт игр из CSV',
+            'opts': self.model._meta,
+        }
+        return render(request, 'admin/server/game/import_csv.html', context)
 
 
 class ConventionLinkInline(admin.TabularInline):
