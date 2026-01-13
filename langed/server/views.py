@@ -492,13 +492,24 @@ class RunViewSet(viewsets.ModelViewSet):
     
     @action(detail=True, methods=['post'], permission_classes=[IsAuthenticated])
     def update_registration(self, request, pk=None):
-        """Обновить статус регистрации (только для мастера/staff)"""
+        """Обновить статус регистрации (для мастера/организатора конвента/staff)"""
         run = self.get_object()
         
-        # Проверяем права
-        if not request.user.is_staff and request.user not in run.masters.all():
+        # Проверяем права: staff, мастер прогона или организатор конвента (если игра на конвенте)
+        can_manage = False
+        if request.user.is_staff:
+            can_manage = True
+        elif request.user in run.masters.all():
+            can_manage = True
+        elif run.convention_event:
+            if request.user in run.convention_event.organizers.all():
+                can_manage = True
+            elif request.user in run.convention_event.convention.organizers.all():
+                can_manage = True
+        
+        if not can_manage:
             return Response(
-                {'error': 'Только мастер прогона может изменять регистрации'},
+                {'error': 'Только мастер прогона или организатор конвента может изменять регистрации'},
                 status=status.HTTP_403_FORBIDDEN
             )
         

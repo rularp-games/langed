@@ -219,8 +219,14 @@
               </div>
               
               <div class="run-status">
-                <span class="run-slots" :class="{ 'slots-full': run.is_full }">
+                <span 
+                  class="run-slots" 
+                  :class="{ 'slots-full': run.is_full, 'clickable': run.registered_count > 0 || getPendingCount(run) > 0 }"
+                  @click="toggleRegistrations(run.id)"
+                  :title="(run.registered_count > 0 || getPendingCount(run) > 0) ? 'Показать участников' : ''"
+                >
                   {{ run.registered_count }}/{{ run.effective_max_players }}
+                  <span v-if="getPendingCount(run) > 0" class="pending-count">+{{ getPendingCount(run) }} заявок</span>
                 </span>
                 <span v-if="run.is_full" class="full-badge">МЕСТ НЕТ</span>
               </div>
@@ -240,6 +246,66 @@
                 >
                   🗑️
                 </button>
+              </div>
+              
+              <!-- Секция регистраций -->
+              <div v-if="expandedRuns[run.id] && run.registrations && run.registrations.length > 0" class="run-registrations">
+                <div class="registrations-header">
+                  <span class="registrations-title">Участники</span>
+                  <button class="close-registrations" @click="toggleRegistrations(run.id)">×</button>
+                </div>
+                <div class="registrations-list">
+                  <div 
+                    v-for="reg in sortRegistrations(run.registrations)" 
+                    :key="reg.id"
+                    class="registration-item"
+                    :class="{
+                      'reg-pending': reg.status === 'pending',
+                      'reg-confirmed': reg.status === 'confirmed',
+                      'reg-waitlist': reg.status === 'waitlist',
+                      'reg-cancelled': reg.status === 'cancelled',
+                      'reg-technician': reg.is_technician
+                    }"
+                  >
+                    <span class="reg-icon">{{ reg.is_technician ? '🎭' : '👤' }}</span>
+                    <span class="reg-name">{{ reg.user.display_name }}</span>
+                    <span v-if="reg.role_preference !== 'any'" class="reg-role">
+                      {{ reg.role_preference === 'female' ? '♀' : '♂' }}
+                    </span>
+                    <span class="reg-status-badge" :class="'status-' + reg.status">
+                      {{ getStatusLabel(reg.status) }}
+                    </span>
+                    <!-- Кнопки управления -->
+                    <div v-if="reg.status !== 'cancelled'" class="reg-actions">
+                      <button 
+                        v-if="reg.status === 'pending' || reg.status === 'waitlist'"
+                        class="reg-action-btn confirm-btn"
+                        @click.stop="updateRunRegistration(run.id, reg.id, 'confirmed')"
+                        :disabled="registrationUpdateLoading === reg.id"
+                        title="Подтвердить"
+                      >
+                        ✓
+                      </button>
+                      <button 
+                        v-if="reg.status === 'confirmed'"
+                        class="reg-action-btn pending-btn"
+                        @click.stop="updateRunRegistration(run.id, reg.id, 'pending')"
+                        :disabled="registrationUpdateLoading === reg.id"
+                        title="Вернуть в ожидание"
+                      >
+                        ⏳
+                      </button>
+                      <button 
+                        class="reg-action-btn reject-btn"
+                        @click.stop="updateRunRegistration(run.id, reg.id, 'cancelled')"
+                        :disabled="registrationUpdateLoading === reg.id"
+                        title="Отклонить"
+                      >
+                        ✕
+                      </button>
+                    </div>
+                  </div>
+                </div>
               </div>
             </div>
           </div>
@@ -456,7 +522,11 @@ export default {
       commonEventError: null,
       
       // Тип удаления
-      deleteType: 'run'
+      deleteType: 'run',
+      
+      // Управление регистрациями
+      expandedRuns: {},
+      registrationUpdateLoading: null
     }
   },
   computed: {
@@ -1208,6 +1278,69 @@ export default {
         
         this.commonEventForm.time = `${String(hours).padStart(2, '0')}:${String(minutes).padStart(2, '0')}`
       }
+    },
+    
+    // === Управление регистрациями ===
+    toggleRegistrations(runId) {
+      this.expandedRuns[runId] = !this.expandedRuns[runId]
+    },
+    
+    getPendingCount(run) {
+      if (!run.registrations) return 0
+      return run.registrations.filter(r => r.status === 'pending').length
+    },
+    
+    sortRegistrations(registrations) {
+      if (!registrations) return []
+      // Сортируем: pending первыми, потом confirmed, потом waitlist, потом cancelled
+      // Игротехники в конце каждой группы
+      return [...registrations].sort((a, b) => {
+        const statusOrder = { pending: 0, confirmed: 1, waitlist: 2, cancelled: 3 }
+        if (a.is_technician !== b.is_technician) {
+          return a.is_technician ? 1 : -1
+        }
+        return (statusOrder[a.status] || 0) - (statusOrder[b.status] || 0)
+      })
+    },
+    
+    getStatusLabel(status) {
+      const labels = {
+        pending: 'Заявка',
+        confirmed: 'Подтв.',
+        waitlist: 'Ожидание',
+        cancelled: 'Отклонён'
+      }
+      return labels[status] || status
+    },
+    
+    async updateRunRegistration(runId, registrationId, newStatus) {
+      this.registrationUpdateLoading = registrationId
+      
+      try {
+        const response = await fetch(`/api/runs/${runId}/update_registration/`, {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+            'X-CSRFToken': this.csrfToken
+          },
+          body: JSON.stringify({
+            registration_id: registrationId,
+            status: newStatus
+          })
+        })
+        
+        if (!response.ok) {
+          const data = await response.json()
+          throw new Error(data.error || 'Ошибка при обновлении статуса')
+        }
+        
+        // Обновляем расписание
+        await this.fetchSchedule()
+      } catch (err) {
+        alert(err.message)
+      } finally {
+        this.registrationUpdateLoading = null
+      }
     }
   }
 }
@@ -1506,6 +1639,7 @@ export default {
   display: flex;
   gap: 20px;
   align-items: center;
+  flex-wrap: wrap;
   padding: 16px 20px;
   background: linear-gradient(145deg, #1a1a2e, #16213e);
   border: 1px solid #ff6b3533;
@@ -1766,6 +1900,23 @@ export default {
 
 .run-slots.slots-full {
   color: #ff4444;
+}
+
+.run-slots.clickable {
+  cursor: pointer;
+  padding: 4px 10px;
+  border-radius: 16px;
+  transition: background 0.2s ease;
+}
+
+.run-slots.clickable:hover {
+  background: rgba(0, 204, 255, 0.15);
+}
+
+.pending-count {
+  font-size: 0.75rem;
+  color: #ff9800;
+  margin-left: 6px;
 }
 
 .full-badge {
@@ -2053,6 +2204,178 @@ export default {
 
 .form-group.half {
   flex: 1;
+}
+
+/* ========== Секция регистраций ========== */
+.run-registrations {
+  width: 100%;
+  margin-top: 16px;
+  padding-top: 16px;
+  border-top: 1px solid #ff6b3533;
+}
+
+.registrations-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 12px;
+}
+
+.registrations-title {
+  color: #00ccff;
+  font-weight: 600;
+  font-size: 0.95rem;
+}
+
+.close-registrations {
+  background: none;
+  border: none;
+  color: #888;
+  font-size: 1.2rem;
+  cursor: pointer;
+  padding: 4px;
+  line-height: 1;
+}
+
+.close-registrations:hover {
+  color: #fff;
+}
+
+.registrations-list {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.registration-item {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 10px 14px;
+  background: rgba(255, 255, 255, 0.03);
+  border-radius: 8px;
+  border-left: 3px solid #666;
+  position: relative;
+}
+
+.registration-item.reg-pending {
+  border-left-color: #ff9800;
+  background: rgba(255, 152, 0, 0.08);
+}
+
+.registration-item.reg-confirmed {
+  border-left-color: #4caf50;
+}
+
+.registration-item.reg-waitlist {
+  border-left-color: #ffc107;
+  opacity: 0.7;
+}
+
+.registration-item.reg-cancelled {
+  border-left-color: #666;
+  opacity: 0.4;
+  text-decoration: line-through;
+}
+
+.registration-item.reg-technician {
+  border-left-style: dashed;
+}
+
+.reg-icon {
+  font-size: 1rem;
+}
+
+.reg-name {
+  flex: 1;
+  color: #e0e0e0;
+  font-weight: 500;
+}
+
+.reg-role {
+  color: #00ccff;
+  font-size: 0.9rem;
+}
+
+.reg-status-badge {
+  padding: 3px 8px;
+  border-radius: 12px;
+  font-size: 0.7rem;
+  font-weight: bold;
+  text-transform: uppercase;
+}
+
+.reg-status-badge.status-pending {
+  background: rgba(255, 152, 0, 0.2);
+  color: #ff9800;
+}
+
+.reg-status-badge.status-confirmed {
+  background: rgba(76, 175, 80, 0.2);
+  color: #4caf50;
+}
+
+.reg-status-badge.status-waitlist {
+  background: rgba(255, 193, 7, 0.2);
+  color: #ffc107;
+}
+
+.reg-status-badge.status-cancelled {
+  background: rgba(136, 136, 136, 0.2);
+  color: #888;
+}
+
+.reg-actions {
+  display: flex;
+  gap: 4px;
+}
+
+.reg-action-btn {
+  width: 26px;
+  height: 26px;
+  border-radius: 50%;
+  border: none;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 0.8rem;
+  transition: all 0.2s ease;
+}
+
+.reg-action-btn:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+
+.reg-action-btn.confirm-btn {
+  background: rgba(76, 175, 80, 0.2);
+  color: #4caf50;
+}
+
+.reg-action-btn.confirm-btn:hover:not(:disabled) {
+  background: #4caf50;
+  color: #fff;
+}
+
+.reg-action-btn.pending-btn {
+  background: rgba(255, 152, 0, 0.2);
+  color: #ff9800;
+}
+
+.reg-action-btn.pending-btn:hover:not(:disabled) {
+  background: #ff9800;
+  color: #fff;
+}
+
+.reg-action-btn.reject-btn {
+  background: rgba(244, 67, 54, 0.2);
+  color: #f44336;
+}
+
+.reg-action-btn.reject-btn:hover:not(:disabled) {
+  background: #f44336;
+  color: #fff;
 }
 
 /* ========== Адаптив ========== */
