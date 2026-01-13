@@ -328,9 +328,26 @@ export default {
                 : "Нет прав для редактирования этой игры"
             );
           }
-          const data = await response.json();
+          // Проверяем, что ответ содержит JSON
+          const contentType = response.headers.get("content-type");
+          if (contentType && contentType.includes("application/json")) {
+            const data = await response.json();
+            throw new Error(
+              data.detail || data.name?.[0] || "Ошибка при сохранении"
+            );
+          } else {
+            // Сервер вернул не-JSON ответ (например, HTML страницу ошибки)
+            throw new Error(
+              `Ошибка сервера (${response.status}). Попробуйте позже.`
+            );
+          }
+        }
+
+        // Проверяем Content-Type перед парсингом JSON
+        const contentType = response.headers.get("content-type");
+        if (!contentType || !contentType.includes("application/json")) {
           throw new Error(
-            data.detail || data.name?.[0] || "Ошибка при сохранении"
+            "Сервер вернул неожиданный ответ. Попробуйте обновить страницу."
           );
         }
 

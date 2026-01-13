@@ -1,13 +1,44 @@
 import csv
 import io
+import logging
 from rest_framework import viewsets, status
 from rest_framework.decorators import action, api_view, permission_classes
 from rest_framework.permissions import AllowAny, IsAuthenticated
 from rest_framework.response import Response
+from rest_framework.views import exception_handler
 from django.shortcuts import get_object_or_404
 from django.utils import timezone
 from django.conf import settings
+from django.views.decorators.csrf import ensure_csrf_cookie
 from datetime import date
+
+logger = logging.getLogger(__name__)
+
+
+def custom_exception_handler(exc, context):
+    """
+    Кастомный обработчик исключений для DRF.
+    Гарантирует, что все ошибки возвращаются как JSON.
+    """
+    # Сначала вызываем стандартный обработчик DRF
+    response = exception_handler(exc, context)
+    
+    if response is not None:
+        # Добавляем код ошибки для удобства отладки
+        response.data['status_code'] = response.status_code
+        return response
+    
+    # Если стандартный обработчик не обработал исключение,
+    # логируем его и возвращаем generic JSON ответ
+    logger.exception("Unhandled exception in API view", exc_info=exc)
+    
+    return Response(
+        {
+            'detail': 'Внутренняя ошибка сервера',
+            'status_code': 500,
+        },
+        status=status.HTTP_500_INTERNAL_SERVER_ERROR
+    )
 
 from django.db.models import Prefetch
 from .models import Game, Run, Convention, ConventionEvent, City, ConventionLink, Venue, Room, Registration, Region, CommonEvent, ConventionEventRegistration
@@ -24,8 +55,9 @@ from .serializers import (
 
 @api_view(['GET'])
 @permission_classes([AllowAny])
+@ensure_csrf_cookie
 def current_user(request):
-    """Возвращает информацию о текущем пользователе"""
+    """Возвращает информацию о текущем пользователе и устанавливает CSRF cookie"""
     if request.user.is_authenticated:
         # Формируем display_name
         display_name = f'{request.user.first_name} {request.user.last_name}'.strip()
