@@ -53,6 +53,11 @@
               Все
             </button>
           </div>
+          
+          <label class="filter-checkbox">
+            <input type="checkbox" v-model="hideConventionRuns" />
+            <span>Скрыть конвенты</span>
+          </label>
         </div>
         
         <button v-if="isAuthenticated" @click="openAddRunModal" class="add-btn">
@@ -74,7 +79,7 @@
       </div>
 
       <!-- Пустой список -->
-      <div v-else-if="runs.length === 0" class="empty">
+      <div v-else-if="filteredRuns.length === 0" class="empty">
         <p>Прогоны не найдены</p>
       </div>
 
@@ -94,7 +99,7 @@
           </thead>
           <tbody>
             <tr 
-              v-for="run in runs" 
+              v-for="run in filteredRuns" 
               :key="run.id"
               :class="{ 'past-row': isPast(run.date) }"
               @click="openRunModal(run)"
@@ -649,6 +654,7 @@ export default {
       cities: [],
       selectedCity: '',
       timeFilter: 'upcoming',
+      hideConventionRuns: false,
       loading: true,
       error: null,
       selectedRun: null,
@@ -717,6 +723,12 @@ export default {
     csrfToken() {
       const match = document.cookie.match(/csrftoken=([^;]+)/)
       return match ? match[1] : ''
+    },
+    filteredRuns() {
+      if (!this.hideConventionRuns) {
+        return this.runs
+      }
+      return this.runs.filter(run => !run.convention_event)
     },
     sortedGames() {
       return this.games.slice().sort((a, b) => a.name.localeCompare(b.name, 'ru'))
@@ -1832,6 +1844,39 @@ export default {
   border-color: #ff6b35;
   color: #0a0a0a;
   font-weight: bold;
+}
+
+.filter-checkbox {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 10px 16px;
+  background: rgba(0, 0, 0, 0.3);
+  border: 1px solid #ff6b3555;
+  border-radius: 8px;
+  cursor: pointer;
+  color: #aaa;
+  font-size: 0.9rem;
+  transition: all 0.2s ease;
+  white-space: nowrap;
+}
+
+.filter-checkbox:hover {
+  border-color: #ff6b35;
+  color: #e0e0e0;
+}
+
+.filter-checkbox input[type="checkbox"] {
+  width: 16px;
+  height: 16px;
+  accent-color: #ff6b35;
+  cursor: pointer;
+}
+
+.filter-checkbox:has(input:checked) {
+  background: rgba(255, 107, 53, 0.15);
+  border-color: #ff6b35;
+  color: #ff6b35;
 }
 
 /* ========== Загрузка / Ошибка / Пустой список ========== */
