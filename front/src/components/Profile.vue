@@ -73,7 +73,7 @@
 
 <script>
 export default {
-  name: 'Profile',
+  name: 'UserProfile',
   inject: ['getUser'],
   computed: {
     user() {

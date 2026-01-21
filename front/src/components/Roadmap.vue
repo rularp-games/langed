@@ -62,7 +62,7 @@
 
 <script>
 export default {
-  name: 'Roadmap'
+  name: 'ProjectRoadmap'
 }
 </script>
 
