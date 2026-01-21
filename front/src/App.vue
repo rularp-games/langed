@@ -14,8 +14,8 @@
               <circle cx="12" cy="8" r="4"/>
               <path d="M4 20c0-4 4-6 8-6s8 2 8 6"/>
             </svg>
+            <span class="username">{{ user.first_name }} {{ user.last_name }}</span>
           </router-link>
-          <router-link to="/profile" class="username">{{ user.first_name }} {{ user.last_name }}</router-link>
           <form action="/oidc/logout/" method="POST" class="logout-form">
             <input type="hidden" name="csrfmiddlewaretoken" :value="csrfToken" />
             <button type="submit" class="auth-btn logout-btn">Выйти</button>
@@ -161,19 +161,14 @@ nav {
   gap: 12px;
 }
 
-.user-info .profile-link + .username {
-  margin-left: -4px;
-}
-
 .profile-link {
   display: flex;
   align-items: center;
-  justify-content: center;
-  width: 32px;
-  height: 32px;
+  gap: 8px;
   color: #ff6b35;
+  padding: 6px 12px 6px 8px;
   border: 1px solid transparent;
-  border-radius: 50%;
+  border-radius: 20px;
   transition: all 0.3s ease;
   text-decoration: none;
 }
@@ -191,23 +186,10 @@ nav {
   border-color: #ff6b35;
 }
 
-.username {
-  color: #ff6b35;
+.profile-link .username {
   font-weight: 600;
   font-size: 0.9rem;
   letter-spacing: 0.05em;
-  text-decoration: none;
-  transition: color 0.2s ease;
-}
-
-.username:hover {
-  color: #ff8c5a;
-  text-decoration: underline;
-}
-
-.username.router-link-active,
-.username.router-link-exact-active {
-  color: #ff8c5a;
 }
 
 .auth-btn {
