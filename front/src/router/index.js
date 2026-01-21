@@ -5,6 +5,8 @@ import Conventions from '../components/Conventions.vue'
 import Venues from '../components/Venues.vue'
 import ConventionSchedule from '../components/ConventionSchedule.vue'
 import ScheduleEditor from '../components/ScheduleEditor.vue'
+import Roadmap from '../components/Roadmap.vue'
+import Profile from '../components/Profile.vue'
 
 const routes = [
   {
@@ -26,8 +28,8 @@ const routes = [
     name: 'Conventions',
     component: Conventions,
     // Поддержка query параметров: ?id=ID или ?event=ID или ?view=schedule
-    props: route => ({ 
-      conventionId: route.query.id, 
+    props: route => ({
+      conventionId: route.query.id,
       eventId: route.query.event,
       viewMode: route.query.view
     })
@@ -50,6 +52,16 @@ const routes = [
     name: 'ScheduleEditor',
     component: ScheduleEditor,
     props: true
+  },
+  {
+    path: '/roadmap',
+    name: 'Roadmap',
+    component: Roadmap
+  },
+  {
+    path: '/profile',
+    name: 'Profile',
+    component: Profile
   }
 ]
 
