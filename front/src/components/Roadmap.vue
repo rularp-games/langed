@@ -49,13 +49,6 @@
         </div>
       </div>
       
-      <div class="roadmap-item planned">
-        <div class="roadmap-marker"></div>
-        <div class="roadmap-content">
-          <h3>Мобильное приложение</h3>
-          <p>PWA для удобного доступа с мобильных устройств</p>
-        </div>
-      </div>
     </div>
   </div>
 </template>
