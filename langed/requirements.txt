@@ -7,3 +7,4 @@ Pillow==11.1.0
 pytz==2024.1
 django-auditlog==3.0.0
 sentry-sdk[django]==2.19.2
+django-mcp-server==0.5.7

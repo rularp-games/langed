@@ -41,6 +41,8 @@ INSTALLED_APPS = [
     'rest_framework',
     'mozilla_django_oidc',
     'auditlog',
+    'rest_framework.authtoken',
+    'mcp_server',
     'server',
 ]
 
@@ -256,4 +258,24 @@ if SENTRY_DSN:
         # Environment name
         environment='development' if DEBUG else 'production',
     )
+
+# MCP Server (Model Context Protocol) for AI agents
+DJANGO_MCP_GLOBAL_SERVER_CONFIG = {
+    'name': 'langed',
+    'instructions': (
+        'Langed — база настольных ролевых игр, конвентов и расписания прогонов. '
+        'Используй инструменты query_* для чтения данных: игры (Game), конвенты (Convention), '
+        'проведения (ConventionEvent), прогоны/сеансы (Run), площадки (Venue), помещения (Room), '
+        'регистрации (Registration, ConventionEventRegistration). '
+        'Сначала вызови get_server_instructions, если нужен обзор доступных инструментов.'
+    ),
+    'stateless': True,
+}
+
+try:
+    from langed.private_settings import DJANGO_MCP_AUTHENTICATION_CLASSES
+except ImportError:
+    DJANGO_MCP_AUTHENTICATION_CLASSES = [
+        'rest_framework.authentication.TokenAuthentication',
+    ]
 
