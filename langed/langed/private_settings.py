@@ -49,3 +49,8 @@ OIDC_RP_REDIRECT_URI = f'{SITE_URL}/oidc/callback/'
 SESSION_COOKIE_SECURE = False
 CSRF_COOKIE_SECURE = False
 
+# Sentry DSN for error tracking
+# Get your DSN from https://sentry.io/
+# Leave empty to disable Sentry
+SENTRY_DSN = ''
+

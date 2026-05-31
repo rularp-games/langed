@@ -53,6 +53,11 @@
               Все
             </button>
           </div>
+          
+          <label class="filter-checkbox">
+            <input type="checkbox" v-model="hideConventionRuns" />
+            <span>Скрыть конвенты</span>
+          </label>
         </div>
         
         <button v-if="isAuthenticated" @click="openAddRunModal" class="add-btn">
@@ -74,7 +79,7 @@
       </div>
 
       <!-- Пустой список -->
-      <div v-else-if="runs.length === 0" class="empty">
+      <div v-else-if="filteredRuns.length === 0" class="empty">
         <p>Прогоны не найдены</p>
       </div>
 
@@ -94,7 +99,7 @@
           </thead>
           <tbody>
             <tr 
-              v-for="run in runs" 
+              v-for="run in filteredRuns" 
               :key="run.id"
               :class="{ 'past-row': isPast(run.date) }"
               @click="openRunModal(run)"
@@ -416,7 +421,7 @@
             <div class="participants-header">
               <h4>Участники ({{ selectedRun.registrations.filter(r => r.status === 'confirmed' && !r.is_technician).length }})</h4>
             </div>
-            <div class="participants-grid">
+            <div class="participants-grid" :class="{ 'manage-mode': selectedRun.can_manage_registrations }">
               <div 
                 v-for="reg in sortedRegistrations" 
                 :key="reg.id"
@@ -424,6 +429,7 @@
                 :class="{ 
                   'technician': reg.is_technician,
                   'waitlist': reg.status === 'waitlist',
+                  'pending': reg.status === 'pending',
                   'cancelled': reg.status === 'cancelled'
                 }"
               >
@@ -432,7 +438,37 @@
                 <span class="participant-role" v-if="!reg.is_technician && reg.role_preference !== 'any'">
                   {{ reg.role_preference === 'female' ? '♀' : '♂' }}
                 </span>
-                <span v-if="reg.status === 'waitlist'" class="participant-waitlist">ожидание</span>
+                <span v-if="reg.status === 'waitlist'" class="participant-status-badge waitlist-badge-small">ожидание</span>
+                <span v-if="reg.status === 'pending'" class="participant-status-badge pending-badge-small">заявка</span>
+                <!-- Кнопки управления для мастера/организатора -->
+                <div v-if="selectedRun.can_manage_registrations && reg.status !== 'cancelled'" class="participant-actions">
+                  <button 
+                    v-if="reg.status === 'pending' || reg.status === 'waitlist'"
+                    class="action-btn confirm-btn"
+                    @click.stop="updateRegistrationStatus(reg.id, 'confirmed')"
+                    :disabled="registrationUpdateLoading === reg.id"
+                    title="Подтвердить"
+                  >
+                    ✓
+                  </button>
+                  <button 
+                    v-if="reg.status === 'confirmed'"
+                    class="action-btn pending-btn"
+                    @click.stop="updateRegistrationStatus(reg.id, 'pending')"
+                    :disabled="registrationUpdateLoading === reg.id"
+                    title="Вернуть в ожидание"
+                  >
+                    ⏳
+                  </button>
+                  <button 
+                    class="action-btn reject-btn"
+                    @click.stop="updateRegistrationStatus(reg.id, 'cancelled')"
+                    :disabled="registrationUpdateLoading === reg.id"
+                    title="Отклонить"
+                  >
+                    ✕
+                  </button>
+                </div>
               </div>
             </div>
           </div>
@@ -649,6 +685,7 @@ export default {
       cities: [],
       selectedCity: '',
       timeFilter: 'upcoming',
+      hideConventionRuns: false,
       loading: true,
       error: null,
       selectedRun: null,
@@ -706,7 +743,9 @@ export default {
         role_preference: 'any',
         is_technician: false,
         comment: ''
-      }
+      },
+      // Управление регистрациями (для мастера/организатора)
+      registrationUpdateLoading: null
     }
   },
   computed: {
@@ -717,6 +756,12 @@ export default {
     csrfToken() {
       const match = document.cookie.match(/csrftoken=([^;]+)/)
       return match ? match[1] : ''
+    },
+    filteredRuns() {
+      if (!this.hideConventionRuns) {
+        return this.runs
+      }
+      return this.runs.filter(run => !run.convention_event)
     },
     sortedGames() {
       return this.games.slice().sort((a, b) => a.name.localeCompare(b.name, 'ru'))
@@ -1667,6 +1712,42 @@ export default {
       return roles[role] || role
     },
     
+    // Обновить статус регистрации (для мастера/организатора)
+    async updateRegistrationStatus(registrationId, newStatus) {
+      if (!this.selectedRun) return
+      
+      this.registrationUpdateLoading = registrationId
+      
+      try {
+        const response = await fetch(`/api/runs/${this.selectedRun.id}/update_registration/`, {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+            'X-CSRFToken': this.csrfToken
+          },
+          body: JSON.stringify({
+            registration_id: registrationId,
+            status: newStatus
+          })
+        })
+        
+        if (!response.ok) {
+          const data = await response.json()
+          throw new Error(data.error || 'Ошибка при обновлении статуса')
+        }
+        
+        const result = await response.json()
+        this.selectedRun = result.run
+        
+        // Обновляем список прогонов
+        await this.fetchRuns()
+      } catch (err) {
+        alert(err.message)
+      } finally {
+        this.registrationUpdateLoading = null
+      }
+    },
+    
     formatDuration(minutes) {
       if (!minutes) return ''
       const hours = Math.floor(minutes / 60)
@@ -1832,6 +1913,39 @@ export default {
   border-color: #ff6b35;
   color: #0a0a0a;
   font-weight: bold;
+}
+
+.filter-checkbox {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 10px 16px;
+  background: rgba(0, 0, 0, 0.3);
+  border: 1px solid #ff6b3555;
+  border-radius: 8px;
+  cursor: pointer;
+  color: #aaa;
+  font-size: 0.9rem;
+  transition: all 0.2s ease;
+  white-space: nowrap;
+}
+
+.filter-checkbox:hover {
+  border-color: #ff6b35;
+  color: #e0e0e0;
+}
+
+.filter-checkbox input[type="checkbox"] {
+  width: 16px;
+  height: 16px;
+  accent-color: #ff6b35;
+  cursor: pointer;
+}
+
+.filter-checkbox:has(input:checked) {
+  background: rgba(255, 107, 53, 0.15);
+  border-color: #ff6b35;
+  color: #ff6b35;
 }
 
 /* ========== Загрузка / Ошибка / Пустой список ========== */
@@ -2724,6 +2838,95 @@ export default {
   color: #ffc107;
   font-size: 0.7rem;
   text-transform: uppercase;
+}
+
+/* Статус-бейджи для заявок */
+.participant-status-badge {
+  font-size: 0.65rem;
+  padding: 2px 6px;
+  border-radius: 8px;
+  text-transform: uppercase;
+  font-weight: bold;
+  letter-spacing: 0.02em;
+}
+
+.waitlist-badge-small {
+  background: rgba(255, 193, 7, 0.2);
+  color: #ffc107;
+}
+
+.pending-badge-small {
+  background: rgba(255, 152, 0, 0.2);
+  color: #ff9800;
+}
+
+/* Режим управления участниками */
+.participants-grid.manage-mode .participant-item {
+  padding-right: 90px;
+  position: relative;
+}
+
+.participant-item.pending {
+  background: rgba(255, 152, 0, 0.1);
+  border: 1px solid #ff980044;
+}
+
+/* Кнопки действий */
+.participant-actions {
+  position: absolute;
+  right: 8px;
+  top: 50%;
+  transform: translateY(-50%);
+  display: flex;
+  gap: 4px;
+}
+
+.action-btn {
+  width: 26px;
+  height: 26px;
+  border-radius: 50%;
+  border: none;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 0.8rem;
+  transition: all 0.2s ease;
+}
+
+.action-btn:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+
+.confirm-btn {
+  background: rgba(76, 175, 80, 0.2);
+  color: #4caf50;
+}
+
+.confirm-btn:hover:not(:disabled) {
+  background: #4caf50;
+  color: #fff;
+}
+
+.pending-btn {
+  background: rgba(255, 152, 0, 0.2);
+  color: #ff9800;
+}
+
+.pending-btn:hover:not(:disabled) {
+  background: #ff9800;
+  color: #fff;
+}
+
+.reject-btn {
+  background: rgba(244, 67, 54, 0.2);
+  color: #f44336;
+}
+
+.reject-btn:hover:not(:disabled) {
+  background: #f44336;
+  color: #fff;
 }
 
 .modal-stats {

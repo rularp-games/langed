@@ -11,6 +11,7 @@ https://docs.djangoproject.com/en/5.2/ref/settings/
 """
 
 from pathlib import Path
+import sentry_sdk
 
 # Build paths inside the project like this: BASE_DIR / 'subdir'.
 BASE_DIR = Path(__file__).resolve().parent.parent
@@ -40,10 +41,14 @@ INSTALLED_APPS = [
     'rest_framework',
     'mozilla_django_oidc',
     'auditlog',
+    'rest_framework.authtoken',
+    'mcp_server',
     'server',
 ]
 
 MIDDLEWARE = [
+    # Должен быть первым, чтобы гарантировать JSON ответы для API ошибок
+    'server.middleware.APIExceptionMiddleware',
     'django.middleware.security.SecurityMiddleware',
     'django.contrib.sessions.middleware.SessionMiddleware',
     'django.middleware.common.CommonMiddleware',
@@ -171,6 +176,8 @@ REST_FRAMEWORK = {
     'DEFAULT_AUTHENTICATION_CLASSES': [
         'rest_framework.authentication.SessionAuthentication',
     ],
+    # Кастомный exception handler для гарантии JSON ответов на все ошибки
+    'EXCEPTION_HANDLER': 'server.views.custom_exception_handler',
 }
 
 # Session and CSRF settings for reverse proxy / HTTPS
@@ -231,4 +238,44 @@ LOGGING = {
         },
     },
 }
+
+# Sentry configuration for error tracking
+try:
+    from langed.private_settings import SENTRY_DSN
+except ImportError:
+    SENTRY_DSN = ''
+
+if SENTRY_DSN:
+    sentry_sdk.init(
+        dsn=SENTRY_DSN,
+        # Set traces_sample_rate to capture performance data
+        # Adjust this value in production (0.0 to 1.0)
+        traces_sample_rate=0.1,
+        # Set profiles_sample_rate to profile performance
+        profiles_sample_rate=0.1,
+        # Send default PII (like user info) - set to False if not needed
+        send_default_pii=True,
+        # Environment name
+        environment='development' if DEBUG else 'production',
+    )
+
+# MCP Server (Model Context Protocol) for AI agents
+DJANGO_MCP_GLOBAL_SERVER_CONFIG = {
+    'name': 'langed',
+    'instructions': (
+        'Langed — база настольных ролевых игр, конвентов и расписания прогонов. '
+        'Используй инструменты query_* для чтения данных: игры (Game), конвенты (Convention), '
+        'проведения (ConventionEvent), прогоны/сеансы (Run), площадки (Venue), помещения (Room), '
+        'регистрации (Registration, ConventionEventRegistration). '
+        'Сначала вызови get_server_instructions, если нужен обзор доступных инструментов.'
+    ),
+    'stateless': True,
+}
+
+try:
+    from langed.private_settings import DJANGO_MCP_AUTHENTICATION_CLASSES
+except ImportError:
+    DJANGO_MCP_AUTHENTICATION_CLASSES = [
+        'rest_framework.authentication.TokenAuthentication',
+    ]
 

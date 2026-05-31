@@ -319,6 +319,80 @@
           </label>
         </div>
 
+        <!-- Секция управления мастерами (только в режиме редактирования) -->
+        <div v-if="mode === 'edit' && run" class="form-group masters-section">
+          <label>Мастера</label>
+          <div class="masters-list">
+            <div 
+              v-for="master in currentMasters" 
+              :key="master.id" 
+              class="master-item"
+            >
+              <span class="master-name">{{ master.display_name }}</span>
+              <button 
+                type="button"
+                class="master-remove-btn"
+                @click.stop="removeMaster(master)"
+                title="Удалить мастера"
+                :disabled="masterLoading"
+              >
+                ×
+              </button>
+            </div>
+            <div v-if="currentMasters.length === 0" class="no-masters">
+              Нет мастеров
+            </div>
+          </div>
+          <!-- Форма добавления мастера с автодополнением -->
+          <div class="add-master-form">
+            <div class="autocomplete-wrapper searchable-select">
+              <input 
+                v-model="masterInput"
+                type="text"
+                class="form-input add-master-input"
+                placeholder="Начните вводить имя..."
+                autocomplete="off"
+                @input="searchUsers"
+                @focus="showUserDropdown = true"
+                @blur="hideUserDropdownDelayed"
+                @keydown.enter.prevent="selectFirstUser"
+                @keydown.down.prevent="highlightNextUser"
+                @keydown.up.prevent="highlightPrevUser"
+              />
+              <div 
+                v-if="showUserDropdown && userSearchResults.length > 0" 
+                class="dropdown-list user-dropdown"
+              >
+                <div 
+                  v-for="(user, idx) in userSearchResults" 
+                  :key="user.id"
+                  class="dropdown-item user-dropdown-item"
+                  :class="{ highlighted: highlightedUserIndex === idx }"
+                  @mousedown.prevent="selectUser(user)"
+                >
+                  <span class="user-display-name">{{ user.display_name }}</span>
+                  <span class="user-username">@{{ user.username }}</span>
+                </div>
+              </div>
+              <div 
+                v-if="showUserDropdown && masterInput && masterInput.length >= 2 && userSearchResults.length === 0 && !userSearchLoading" 
+                class="dropdown-list user-dropdown user-dropdown-empty"
+              >
+                <div class="dropdown-empty">Пользователи не найдены</div>
+              </div>
+            </div>
+            <button 
+              type="button"
+              class="btn btn-add-master"
+              @click.stop="addMasterFromSelected"
+              :disabled="!selectedUser || masterLoading"
+            >
+              {{ masterLoading ? '...' : '+' }}
+            </button>
+          </div>
+          <div v-if="masterError" class="master-error">{{ masterError }}</div>
+        </div>
+
         <div v-if="error" class="form-error">{{ error }}</div>
 
         <div class="form-actions">
@@ -435,7 +509,7 @@ export default {
       default: "",
     },
   },
-  emits: ["save", "cancel", "error", "city-created"],
+  emits: ["save", "cancel", "error", "city-created", "masters-updated"],
   mounted() {
     // Сохраняем позицию прокрутки и блокируем прокрутку body
     this.savedScrollY = window.scrollY;
@@ -479,6 +553,17 @@ export default {
       showRoomsDropdown: false,
       venuesList: [],
       roomsList: [],
+      // Управление мастерами
+      masterInput: "",
+      masterLoading: false,
+      masterError: null,
+      userSearchResults: [],
+      userSearchLoading: false,
+      showUserDropdown: false,
+      selectedUser: null,
+      highlightedUserIndex: 0,
+      searchDebounceTimer: null,
+      localMasters: [],
     };
   },
   computed: {
@@ -573,6 +658,10 @@ export default {
         return this.conventionVenue.name;
       }
       return null;
+    },
+    // Текущие мастера прогона
+    currentMasters() {
+      return this.localMasters;
     },
     // Форматированная дата для отображения (дд/мм/гггг)
     formattedDate: {
@@ -768,6 +857,9 @@ export default {
       // Устанавливаем поисковые поля
       this.gameSearch = run.game_name || (run.game && run.game.name) || "";
       this.citySearch = cityName || this.selectedCityName || run.city || "";
+
+      // Инициализируем список мастеров
+      this.localMasters = run.masters ? [...run.masters] : [];
 
       // Загружаем площадки и помещения
       if (cityId) {
@@ -1175,6 +1267,157 @@ export default {
         this.loading = false;
       }
     },
+
+    // === Управление мастерами ===
+    
+    // Поиск пользователей с debounce
+    searchUsers() {
+      const query = this.masterInput;
+      
+      // Сбрасываем выбранного пользователя при изменении ввода
+      this.selectedUser = null;
+      this.highlightedUserIndex = 0;
+      
+      // Очищаем предыдущий таймер
+      if (this.searchDebounceTimer) {
+        clearTimeout(this.searchDebounceTimer);
+      }
+      
+      if (!query || query.length < 2) {
+        this.userSearchResults = [];
+        return;
+      }
+      
+      // Debounce 300ms
+      this.searchDebounceTimer = setTimeout(() => {
+        this.fetchUsers(query);
+      }, 300);
+    },
+    
+    async fetchUsers(query) {
+      this.userSearchLoading = true;
+      
+      try {
+        const response = await fetch(`/api/users/search/?q=${encodeURIComponent(query)}`);
+        if (response.ok) {
+          const users = await response.json();
+          // Фильтруем уже добавленных мастеров
+          const existingMasterIds = this.localMasters.map(m => m.id);
+          this.userSearchResults = users.filter(u => !existingMasterIds.includes(u.id));
+        }
+      } catch (err) {
+        console.error('Ошибка поиска пользователей:', err);
+      } finally {
+        this.userSearchLoading = false;
+      }
+    },
+    
+    hideUserDropdownDelayed() {
+      // Задержка для обработки клика по выпадающему списку
+      setTimeout(() => {
+        this.showUserDropdown = false;
+      }, 200);
+    },
+    
+    selectUser(user) {
+      this.masterInput = user.display_name;
+      this.selectedUser = user;
+      this.showUserDropdown = false;
+      this.userSearchResults = [];
+      // Автоматически добавляем мастера
+      this.addMasterFromSelected();
+    },
+    
+    selectFirstUser() {
+      if (this.userSearchResults.length > 0) {
+        const idx = this.highlightedUserIndex || 0;
+        this.selectUser(this.userSearchResults[idx]);
+      }
+    },
+    
+    highlightNextUser() {
+      if (this.userSearchResults.length === 0) return;
+      this.highlightedUserIndex = Math.min(this.highlightedUserIndex + 1, this.userSearchResults.length - 1);
+    },
+    
+    highlightPrevUser() {
+      this.highlightedUserIndex = Math.max(this.highlightedUserIndex - 1, 0);
+    },
+    
+    async addMasterFromSelected() {
+      const user = this.selectedUser;
+      if (!user) {
+        this.masterError = 'Выберите пользователя из списка';
+        return;
+      }
+      
+      this.masterLoading = true;
+      this.masterError = null;
+      
+      try {
+        const response = await fetch(`/api/runs/${this.run.id}/add_master/`, {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+            'X-CSRFToken': this.csrfToken
+          },
+          body: JSON.stringify({ username: user.username })
+        });
+        
+        if (!response.ok) {
+          const data = await response.json();
+          throw new Error(data.error || 'Ошибка при добавлении мастера');
+        }
+        
+        // Добавляем мастера в локальный список
+        this.localMasters.push({
+          id: user.id,
+          display_name: user.display_name,
+          username: user.username
+        });
+        
+        this.masterInput = '';
+        this.selectedUser = null;
+        this.$emit('masters-updated');
+      } catch (err) {
+        this.masterError = err.message;
+      } finally {
+        this.masterLoading = false;
+      }
+    },
+    
+    async removeMaster(master) {
+      this.masterLoading = true;
+      this.masterError = null;
+      
+      try {
+        const response = await fetch(`/api/runs/${this.run.id}/remove_master/`, {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+            'X-CSRFToken': this.csrfToken
+          },
+          body: JSON.stringify({ user_id: master.id })
+        });
+        
+        if (!response.ok) {
+          const data = await response.json();
+          throw new Error(data.error || 'Ошибка при удалении мастера');
+        }
+        
+        // Удаляем мастера из локального списка
+        const index = this.localMasters.findIndex(m => m.id === master.id);
+        if (index !== -1) {
+          this.localMasters.splice(index, 1);
+        }
+        
+        this.$emit('masters-updated');
+      } catch (err) {
+        this.masterError = err.message;
+      } finally {
+        this.masterLoading = false;
+      }
+    },
   },
 };
 </script>
@@ -1551,6 +1794,135 @@ export default {
 .dropdown-list::-webkit-scrollbar-thumb {
   background: #ff6b35;
   border-radius: 4px;
+}
+
+/* Masters section */
+.masters-section {
+  padding-top: 10px;
+  border-top: 1px solid #ff6b3533;
+}
+
+.masters-list {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  margin-bottom: 12px;
+}
+
+.master-item {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  background: rgba(255, 107, 53, 0.15);
+  border: 1px solid #ff6b3544;
+  border-radius: 20px;
+  padding: 6px 12px;
+}
+
+.master-name {
+  color: #e0e0e0;
+  font-size: 0.9rem;
+}
+
+.master-remove-btn {
+  background: none;
+  border: none;
+  color: #ff6b6b;
+  font-size: 1.2rem;
+  cursor: pointer;
+  padding: 0 4px;
+  line-height: 1;
+  opacity: 0.7;
+  transition: opacity 0.2s, transform 0.2s;
+}
+
+.master-remove-btn:hover:not(:disabled) {
+  opacity: 1;
+  transform: scale(1.2);
+}
+
+.master-remove-btn:disabled {
+  opacity: 0.3;
+  cursor: not-allowed;
+}
+
+.no-masters {
+  color: #666;
+  font-style: italic;
+  font-size: 0.9rem;
+}
+
+.add-master-form {
+  display: flex;
+  gap: 8px;
+  align-items: flex-start;
+}
+
+.autocomplete-wrapper {
+  flex: 1;
+  position: relative;
+}
+
+.add-master-input {
+  width: 100%;
+  box-sizing: border-box;
+}
+
+.user-dropdown {
+  border-top: 2px solid #ff6b35;
+}
+
+.user-dropdown-item {
+  flex-direction: row !important;
+  align-items: center;
+  gap: 10px;
+}
+
+.user-dropdown-item.highlighted {
+  background: rgba(255, 107, 53, 0.25);
+}
+
+.user-display-name {
+  font-weight: 600;
+  color: #e0e0e0;
+}
+
+.user-username {
+  font-size: 0.85rem;
+  color: #888;
+}
+
+.user-dropdown-empty .dropdown-empty {
+  border-bottom: none;
+}
+
+.btn-add-master {
+  padding: 12px 16px;
+  background: linear-gradient(145deg, #ff6b35, #e55a2b);
+  color: #fff;
+  min-width: 44px;
+  font-size: 1.2rem;
+  font-weight: bold;
+}
+
+.btn-add-master:hover:not(:disabled) {
+  transform: translateY(-2px);
+  box-shadow: 0 4px 15px rgba(255, 107, 53, 0.35);
+}
+
+.btn-add-master:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+
+.master-error {
+  margin-top: 8px;
+  background: rgba(255, 68, 68, 0.15);
+  border: 1px solid #ff4444;
+  border-radius: 6px;
+  padding: 8px 12px;
+  color: #ff6b6b;
+  font-size: 0.9rem;
 }
 
 /* Responsive */

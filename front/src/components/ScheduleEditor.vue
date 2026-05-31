@@ -145,82 +145,30 @@
                 <div class="run-details">
                   <span v-if="run.rooms && run.rooms.length" class="run-rooms">📍 {{ run.rooms.map(r => r.name).join(', ') }}</span>
                 </div>
-                <!-- Секция управления мастерами -->
-                <div class="run-masters-section">
+                <!-- Отображение мастеров (редактирование в RunEditor) -->
+                <div class="run-masters-section" v-if="run.masters && run.masters.length > 0">
                   <span class="masters-label">👤 Мастера:</span>
                   <div class="masters-list">
-                    <div 
-                      v-for="master in (run.masters || [])" 
+                    <span 
+                      v-for="master in run.masters" 
                       :key="master.id" 
                       class="master-item"
                     >
-                      <span class="master-name">{{ master.display_name }}</span>
-                      <button 
-                        v-if="run.masters && run.masters.length > 1"
-                        class="master-remove-btn"
-                        @click.stop="removeMaster(run, master)"
-                        title="Удалить мастера"
-                      >
-                        ×
-                      </button>
-                    </div>
-                    <div v-if="!run.masters || run.masters.length === 0" class="no-masters">
-                      Нет мастеров
-                    </div>
+                      {{ master.display_name }}
+                    </span>
                   </div>
-                  <!-- Форма добавления мастера с автодополнением -->
-                  <div class="add-master-form" @click.stop>
-                    <div class="autocomplete-wrapper">
-                      <input 
-                        v-model="masterInputs[run.id]"
-                        type="text"
-                        class="add-master-input"
-                        placeholder="Начните вводить имя..."
-                        autocomplete="off"
-                        @input="searchUsers(run.id)"
-                        @focus="showUserDropdown[run.id] = true"
-                        @blur="hideUserDropdownDelayed(run.id)"
-                        @keydown.enter.prevent="selectFirstUser(run)"
-                        @keydown.down.prevent="highlightNextUser(run.id)"
-                        @keydown.up.prevent="highlightPrevUser(run.id)"
-                      />
-                      <div 
-                        v-if="showUserDropdown[run.id] && userSearchResults[run.id] && userSearchResults[run.id].length > 0" 
-                        class="user-dropdown"
-                      >
-                        <div 
-                          v-for="(user, idx) in userSearchResults[run.id]" 
-                          :key="user.id"
-                          class="user-dropdown-item"
-                          :class="{ highlighted: highlightedUserIndex[run.id] === idx }"
-                          @mousedown.prevent="selectUser(run, user)"
-                        >
-                          <span class="user-display-name">{{ user.display_name }}</span>
-                          <span class="user-username">@{{ user.username }}</span>
-                        </div>
-                      </div>
-                      <div 
-                        v-if="showUserDropdown[run.id] && masterInputs[run.id] && masterInputs[run.id].length >= 2 && (!userSearchResults[run.id] || userSearchResults[run.id].length === 0) && !userSearchLoading[run.id]" 
-                        class="user-dropdown user-dropdown-empty"
-                      >
-                        Пользователи не найдены
-                      </div>
-                    </div>
-                    <button 
-                      class="add-master-btn"
-                      @click.stop="addMasterFromSelected(run)"
-                      :disabled="!selectedUsers[run.id] || masterLoading[run.id]"
-                    >
-                      {{ masterLoading[run.id] ? '...' : '+' }}
-                    </button>
-                  </div>
-                  <div v-if="masterErrors[run.id]" class="master-error">{{ masterErrors[run.id] }}</div>
                 </div>
               </div>
               
               <div class="run-status">
-                <span class="run-slots" :class="{ 'slots-full': run.is_full }">
+                <span 
+                  class="run-slots" 
+                  :class="{ 'slots-full': run.is_full, 'clickable': run.registered_count > 0 || getPendingCount(run) > 0 }"
+                  @click="toggleRegistrations(run.id)"
+                  :title="(run.registered_count > 0 || getPendingCount(run) > 0) ? 'Показать участников' : ''"
+                >
                   {{ run.registered_count }}/{{ run.effective_max_players }}
+                  <span v-if="getPendingCount(run) > 0" class="pending-count">+{{ getPendingCount(run) }} заявок</span>
                 </span>
                 <span v-if="run.is_full" class="full-badge">МЕСТ НЕТ</span>
               </div>
@@ -240,6 +188,66 @@
                 >
                   🗑️
                 </button>
+              </div>
+              
+              <!-- Секция регистраций -->
+              <div v-if="expandedRuns[run.id] && run.registrations && run.registrations.length > 0" class="run-registrations">
+                <div class="registrations-header">
+                  <span class="registrations-title">Участники</span>
+                  <button class="close-registrations" @click="toggleRegistrations(run.id)">×</button>
+                </div>
+                <div class="registrations-list">
+                  <div 
+                    v-for="reg in sortRegistrations(run.registrations)" 
+                    :key="reg.id"
+                    class="registration-item"
+                    :class="{
+                      'reg-pending': reg.status === 'pending',
+                      'reg-confirmed': reg.status === 'confirmed',
+                      'reg-waitlist': reg.status === 'waitlist',
+                      'reg-cancelled': reg.status === 'cancelled',
+                      'reg-technician': reg.is_technician
+                    }"
+                  >
+                    <span class="reg-icon">{{ reg.is_technician ? '🎭' : '👤' }}</span>
+                    <span class="reg-name">{{ reg.user.display_name }}</span>
+                    <span v-if="reg.role_preference !== 'any'" class="reg-role">
+                      {{ reg.role_preference === 'female' ? '♀' : '♂' }}
+                    </span>
+                    <span class="reg-status-badge" :class="'status-' + reg.status">
+                      {{ getStatusLabel(reg.status) }}
+                    </span>
+                    <!-- Кнопки управления -->
+                    <div v-if="reg.status !== 'cancelled'" class="reg-actions">
+                      <button 
+                        v-if="reg.status === 'pending' || reg.status === 'waitlist'"
+                        class="reg-action-btn confirm-btn"
+                        @click.stop="updateRunRegistration(run.id, reg.id, 'confirmed')"
+                        :disabled="registrationUpdateLoading === reg.id"
+                        title="Подтвердить"
+                      >
+                        ✓
+                      </button>
+                      <button 
+                        v-if="reg.status === 'confirmed'"
+                        class="reg-action-btn pending-btn"
+                        @click.stop="updateRunRegistration(run.id, reg.id, 'pending')"
+                        :disabled="registrationUpdateLoading === reg.id"
+                        title="Вернуть в ожидание"
+                      >
+                        ⏳
+                      </button>
+                      <button 
+                        class="reg-action-btn reject-btn"
+                        @click.stop="updateRunRegistration(run.id, reg.id, 'cancelled')"
+                        :disabled="registrationUpdateLoading === reg.id"
+                        title="Отклонить"
+                      >
+                        ✕
+                      </button>
+                    </div>
+                  </div>
+                </div>
               </div>
             </div>
           </div>
@@ -270,6 +278,7 @@
       @save="handleRunSave"
       @cancel="closeRunEditor"
       @error="handleRunError"
+      @masters-updated="handleMastersUpdated"
     />
 
     <!-- Модальное окно подтверждения удаления -->
@@ -428,19 +437,6 @@ export default {
       deleteTarget: null,
       deleteLoading: false,
       
-      // Управление мастерами
-      masterInputs: {},
-      masterLoading: {},
-      masterErrors: {},
-      
-      // Автодополнение пользователей
-      userSearchResults: {},
-      userSearchLoading: {},
-      showUserDropdown: {},
-      selectedUsers: {},
-      highlightedUserIndex: {},
-      searchDebounceTimers: {},
-      
       // Редактор общих событий
       showCommonEventEditor: false,
       commonEventEditorMode: 'add',
@@ -456,7 +452,11 @@ export default {
       commonEventError: null,
       
       // Тип удаления
-      deleteType: 'run'
+      deleteType: 'run',
+      
+      // Управление регистрациями
+      expandedRuns: {},
+      registrationUpdateLoading: null
     }
   },
   computed: {
@@ -781,182 +781,11 @@ export default {
       console.error('RunEditor error:', errorMessage)
     },
     
-    // === Управление мастерами с автодополнением ===
-    
-    // Поиск пользователей с debounce
-    searchUsers(runId) {
-      const query = this.masterInputs[runId]
-      
-      // Сбрасываем выбранного пользователя при изменении ввода
-      this.selectedUsers[runId] = null
-      this.highlightedUserIndex[runId] = 0
-      
-      // Очищаем предыдущий таймер
-      if (this.searchDebounceTimers[runId]) {
-        clearTimeout(this.searchDebounceTimers[runId])
-      }
-      
-      if (!query || query.length < 2) {
-        this.userSearchResults[runId] = []
-        return
-      }
-      
-      // Debounce 300ms
-      this.searchDebounceTimers[runId] = setTimeout(() => {
-        this.fetchUsers(runId, query)
-      }, 300)
-    },
-    
-    async fetchUsers(runId, query) {
-      this.userSearchLoading[runId] = true
-      
-      try {
-        const response = await fetch(`/api/users/search/?q=${encodeURIComponent(query)}`)
-        if (response.ok) {
-          const users = await response.json()
-          // Фильтруем уже добавленных мастеров
-          const run = this.schedule.runs.find(r => r.id === runId)
-          const existingMasterIds = (run?.masters || []).map(m => m.id)
-          this.userSearchResults[runId] = users.filter(u => !existingMasterIds.includes(u.id))
-        }
-      } catch (err) {
-        console.error('Ошибка поиска пользователей:', err)
-      } finally {
-        this.userSearchLoading[runId] = false
-      }
-    },
-    
-    hideUserDropdownDelayed(runId) {
-      // Задержка для обработки клика по выпадающему списку
-      setTimeout(() => {
-        this.showUserDropdown[runId] = false
-      }, 200)
-    },
-    
-    selectUser(run, user) {
-      this.masterInputs[run.id] = user.display_name
-      this.selectedUsers[run.id] = user
-      this.showUserDropdown[run.id] = false
-      this.userSearchResults[run.id] = []
-      // Автоматически добавляем мастера
-      this.addMasterFromSelected(run)
-    },
-    
-    selectFirstUser(run) {
-      const users = this.userSearchResults[run.id]
-      if (users && users.length > 0) {
-        const idx = this.highlightedUserIndex[run.id] || 0
-        this.selectUser(run, users[idx])
-      }
-    },
-    
-    highlightNextUser(runId) {
-      const users = this.userSearchResults[runId]
-      if (!users || users.length === 0) return
-      const current = this.highlightedUserIndex[runId] || 0
-      this.highlightedUserIndex[runId] = Math.min(current + 1, users.length - 1)
-    },
-    
-    highlightPrevUser(runId) {
-      const current = this.highlightedUserIndex[runId] || 0
-      this.highlightedUserIndex[runId] = Math.max(current - 1, 0)
-    },
-    
-    async addMasterFromSelected(run) {
-      const user = this.selectedUsers[run.id]
-      if (!user) {
-        this.masterErrors[run.id] = 'Выберите пользователя из списка'
-        return
-      }
-      
-      this.masterLoading[run.id] = true
-      this.masterErrors[run.id] = null
-      
-      try {
-        const response = await fetch(`/api/runs/${run.id}/add_master/`, {
-          method: 'POST',
-          headers: {
-            'Content-Type': 'application/json',
-            'X-CSRFToken': this.csrfToken
-          },
-          body: JSON.stringify({ username: user.username })
-        })
-        
-        if (!response.ok) {
-          const data = await response.json()
-          throw new Error(data.error || 'Ошибка при добавлении мастера')
-        }
-        
-        // Обновляем расписание
-        await this.fetchSchedule()
-        this.masterInputs[run.id] = ''
-        this.selectedUsers[run.id] = null
-      } catch (err) {
-        this.masterErrors[run.id] = err.message
-      } finally {
-        this.masterLoading[run.id] = false
-      }
-    },
-    
-    // Для обратной совместимости (если вызывается старый метод)
-    async addMaster(run) {
-      const username = this.masterInputs[run.id]
-      if (!username || !username.trim()) return
-      
-      this.masterLoading[run.id] = true
-      this.masterErrors[run.id] = null
-      
-      try {
-        const response = await fetch(`/api/runs/${run.id}/add_master/`, {
-          method: 'POST',
-          headers: {
-            'Content-Type': 'application/json',
-            'X-CSRFToken': this.csrfToken
-          },
-          body: JSON.stringify({ username: username.trim() })
-        })
-        
-        if (!response.ok) {
-          const data = await response.json()
-          throw new Error(data.error || 'Ошибка при добавлении мастера')
-        }
-        
-        // Обновляем расписание
-        await this.fetchSchedule()
-        this.masterInputs[run.id] = ''
-      } catch (err) {
-        this.masterErrors[run.id] = err.message
-      } finally {
-        this.masterLoading[run.id] = false
-      }
-    },
-    
-    async removeMaster(run, master) {
-      this.masterLoading[run.id] = true
-      this.masterErrors[run.id] = null
-      
-      try {
-        const response = await fetch(`/api/runs/${run.id}/remove_master/`, {
-          method: 'POST',
-          headers: {
-            'Content-Type': 'application/json',
-            'X-CSRFToken': this.csrfToken
-          },
-          body: JSON.stringify({ user_id: master.id })
-        })
-        
-        if (!response.ok) {
-          const data = await response.json()
-          throw new Error(data.error || 'Ошибка при удалении мастера')
-        }
-        
-        // Обновляем расписание
-        await this.fetchSchedule()
-      } catch (err) {
-        this.masterErrors[run.id] = err.message
-      } finally {
-        this.masterLoading[run.id] = false
-      }
+    // Обработка обновления мастеров в RunEditor
+    async handleMastersUpdated() {
+      // Обновляем данные расписания
+      await this.fetchSchedule()
+      this.$emit('updated')
     },
     
     // === Удаление прогона ===
@@ -1207,6 +1036,69 @@ export default {
         if (minutes < 0) minutes = 0
         
         this.commonEventForm.time = `${String(hours).padStart(2, '0')}:${String(minutes).padStart(2, '0')}`
+      }
+    },
+    
+    // === Управление регистрациями ===
+    toggleRegistrations(runId) {
+      this.expandedRuns[runId] = !this.expandedRuns[runId]
+    },
+    
+    getPendingCount(run) {
+      if (!run.registrations) return 0
+      return run.registrations.filter(r => r.status === 'pending').length
+    },
+    
+    sortRegistrations(registrations) {
+      if (!registrations) return []
+      // Сортируем: pending первыми, потом confirmed, потом waitlist, потом cancelled
+      // Игротехники в конце каждой группы
+      return [...registrations].sort((a, b) => {
+        const statusOrder = { pending: 0, confirmed: 1, waitlist: 2, cancelled: 3 }
+        if (a.is_technician !== b.is_technician) {
+          return a.is_technician ? 1 : -1
+        }
+        return (statusOrder[a.status] || 0) - (statusOrder[b.status] || 0)
+      })
+    },
+    
+    getStatusLabel(status) {
+      const labels = {
+        pending: 'Заявка',
+        confirmed: 'Подтв.',
+        waitlist: 'Ожидание',
+        cancelled: 'Отклонён'
+      }
+      return labels[status] || status
+    },
+    
+    async updateRunRegistration(runId, registrationId, newStatus) {
+      this.registrationUpdateLoading = registrationId
+      
+      try {
+        const response = await fetch(`/api/runs/${runId}/update_registration/`, {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+            'X-CSRFToken': this.csrfToken
+          },
+          body: JSON.stringify({
+            registration_id: registrationId,
+            status: newStatus
+          })
+        })
+        
+        if (!response.ok) {
+          const data = await response.json()
+          throw new Error(data.error || 'Ошибка при обновлении статуса')
+        }
+        
+        // Обновляем расписание
+        await this.fetchSchedule()
+      } catch (err) {
+        alert(err.message)
+      } finally {
+        this.registrationUpdateLoading = null
       }
     }
   }
@@ -1506,6 +1398,7 @@ export default {
   display: flex;
   gap: 20px;
   align-items: center;
+  flex-wrap: wrap;
   padding: 16px 20px;
   background: linear-gradient(145deg, #1a1a2e, #16213e);
   border: 1px solid #ff6b3533;
@@ -1566,181 +1459,32 @@ export default {
 
 /* Секция управления мастерами */
 .run-masters-section {
-  margin-top: 10px;
-  padding: 10px 12px;
-  background: rgba(0, 204, 255, 0.05);
-  border-radius: 8px;
-  border-left: 2px solid #00ccff55;
+  margin-top: 8px;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex-wrap: wrap;
 }
 
 .masters-label {
   font-size: 0.85rem;
   color: #888;
-  margin-bottom: 8px;
-  display: block;
 }
 
 .masters-list {
   display: flex;
   flex-wrap: wrap;
   gap: 6px;
-  margin-bottom: 8px;
 }
 
 .master-item {
-  display: flex;
-  align-items: center;
-  gap: 4px;
   padding: 4px 10px;
   background: rgba(0, 204, 255, 0.15);
   border-radius: 16px;
   border: 1px solid #00ccff44;
-}
-
-.master-name {
   color: #00ccff;
   font-weight: 600;
   font-size: 0.85rem;
-}
-
-.master-remove-btn {
-  width: 16px;
-  height: 16px;
-  padding: 0;
-  background: rgba(255, 68, 68, 0.3);
-  border: none;
-  border-radius: 50%;
-  color: #ff6b6b;
-  font-size: 0.9rem;
-  line-height: 1;
-  cursor: pointer;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  transition: all 0.2s ease;
-}
-
-.master-remove-btn:hover {
-  background: #ff4444;
-  color: #fff;
-}
-
-.no-masters {
-  color: #666;
-  font-size: 0.85rem;
-}
-
-.add-master-form {
-  display: flex;
-  gap: 6px;
-  margin-top: 6px;
-}
-
-.autocomplete-wrapper {
-  position: relative;
-  flex: 1;
-}
-
-.user-dropdown {
-  position: absolute;
-  top: 100%;
-  left: 0;
-  right: 0;
-  background: #0a0a0a;
-  border: 1px solid #00ccff;
-  border-radius: 0 0 6px 6px;
-  z-index: 100;
-  max-height: 200px;
-  overflow-y: auto;
-  box-shadow: 0 8px 24px rgba(0, 0, 0, 0.5);
-}
-
-.user-dropdown-item {
-  padding: 10px 12px;
-  cursor: pointer;
-  border-bottom: 1px solid #00ccff22;
-  transition: background 0.15s ease;
-  display: flex;
-  flex-direction: column;
-  gap: 2px;
-}
-
-.user-dropdown-item:last-child {
-  border-bottom: none;
-}
-
-.user-dropdown-item:hover,
-.user-dropdown-item.highlighted {
-  background: rgba(0, 204, 255, 0.15);
-}
-
-.user-display-name {
-  color: #e0e0e0;
-  font-weight: 600;
-  font-size: 0.9rem;
-}
-
-.user-username {
-  color: #00ccff;
-  font-size: 0.8rem;
-}
-
-.user-dropdown-empty {
-  padding: 12px;
-  color: #666;
-  text-align: center;
-  font-size: 0.85rem;
-}
-
-.add-master-input {
-  flex: 1;
-  padding: 6px 10px;
-  background: rgba(10, 10, 10, 0.6);
-  border: 1px solid #00ccff44;
-  border-radius: 6px;
-  color: #e0e0e0;
-  font-size: 0.85rem;
-}
-
-.add-master-input::placeholder {
-  color: #555;
-}
-
-.add-master-input:focus {
-  outline: none;
-  border-color: #00ccff;
-}
-
-.add-master-btn {
-  padding: 6px 12px;
-  background: rgba(0, 204, 255, 0.2);
-  border: 1px solid #00ccff;
-  border-radius: 6px;
-  color: #00ccff;
-  font-size: 1rem;
-  font-weight: bold;
-  cursor: pointer;
-  transition: all 0.2s ease;
-}
-
-.add-master-btn:hover:not(:disabled) {
-  background: #00ccff;
-  color: #0a0a0a;
-}
-
-.add-master-btn:disabled {
-  opacity: 0.5;
-  cursor: not-allowed;
-}
-
-.master-error {
-  margin-top: 6px;
-  padding: 6px 10px;
-  background: rgba(255, 68, 68, 0.15);
-  border: 1px solid #ff4444;
-  border-radius: 6px;
-  color: #ff6b6b;
-  font-size: 0.8rem;
 }
 
 .form-hint {
@@ -1766,6 +1510,23 @@ export default {
 
 .run-slots.slots-full {
   color: #ff4444;
+}
+
+.run-slots.clickable {
+  cursor: pointer;
+  padding: 4px 10px;
+  border-radius: 16px;
+  transition: background 0.2s ease;
+}
+
+.run-slots.clickable:hover {
+  background: rgba(0, 204, 255, 0.15);
+}
+
+.pending-count {
+  font-size: 0.75rem;
+  color: #ff9800;
+  margin-left: 6px;
 }
 
 .full-badge {
@@ -2053,6 +1814,178 @@ export default {
 
 .form-group.half {
   flex: 1;
+}
+
+/* ========== Секция регистраций ========== */
+.run-registrations {
+  width: 100%;
+  margin-top: 16px;
+  padding-top: 16px;
+  border-top: 1px solid #ff6b3533;
+}
+
+.registrations-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 12px;
+}
+
+.registrations-title {
+  color: #00ccff;
+  font-weight: 600;
+  font-size: 0.95rem;
+}
+
+.close-registrations {
+  background: none;
+  border: none;
+  color: #888;
+  font-size: 1.2rem;
+  cursor: pointer;
+  padding: 4px;
+  line-height: 1;
+}
+
+.close-registrations:hover {
+  color: #fff;
+}
+
+.registrations-list {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.registration-item {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 10px 14px;
+  background: rgba(255, 255, 255, 0.03);
+  border-radius: 8px;
+  border-left: 3px solid #666;
+  position: relative;
+}
+
+.registration-item.reg-pending {
+  border-left-color: #ff9800;
+  background: rgba(255, 152, 0, 0.08);
+}
+
+.registration-item.reg-confirmed {
+  border-left-color: #4caf50;
+}
+
+.registration-item.reg-waitlist {
+  border-left-color: #ffc107;
+  opacity: 0.7;
+}
+
+.registration-item.reg-cancelled {
+  border-left-color: #666;
+  opacity: 0.4;
+  text-decoration: line-through;
+}
+
+.registration-item.reg-technician {
+  border-left-style: dashed;
+}
+
+.reg-icon {
+  font-size: 1rem;
+}
+
+.reg-name {
+  flex: 1;
+  color: #e0e0e0;
+  font-weight: 500;
+}
+
+.reg-role {
+  color: #00ccff;
+  font-size: 0.9rem;
+}
+
+.reg-status-badge {
+  padding: 3px 8px;
+  border-radius: 12px;
+  font-size: 0.7rem;
+  font-weight: bold;
+  text-transform: uppercase;
+}
+
+.reg-status-badge.status-pending {
+  background: rgba(255, 152, 0, 0.2);
+  color: #ff9800;
+}
+
+.reg-status-badge.status-confirmed {
+  background: rgba(76, 175, 80, 0.2);
+  color: #4caf50;
+}
+
+.reg-status-badge.status-waitlist {
+  background: rgba(255, 193, 7, 0.2);
+  color: #ffc107;
+}
+
+.reg-status-badge.status-cancelled {
+  background: rgba(136, 136, 136, 0.2);
+  color: #888;
+}
+
+.reg-actions {
+  display: flex;
+  gap: 4px;
+}
+
+.reg-action-btn {
+  width: 26px;
+  height: 26px;
+  border-radius: 50%;
+  border: none;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 0.8rem;
+  transition: all 0.2s ease;
+}
+
+.reg-action-btn:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+
+.reg-action-btn.confirm-btn {
+  background: rgba(76, 175, 80, 0.2);
+  color: #4caf50;
+}
+
+.reg-action-btn.confirm-btn:hover:not(:disabled) {
+  background: #4caf50;
+  color: #fff;
+}
+
+.reg-action-btn.pending-btn {
+  background: rgba(255, 152, 0, 0.2);
+  color: #ff9800;
+}
+
+.reg-action-btn.pending-btn:hover:not(:disabled) {
+  background: #ff9800;
+  color: #fff;
+}
+
+.reg-action-btn.reject-btn {
+  background: rgba(244, 67, 54, 0.2);
+  color: #f44336;
+}
+
+.reg-action-btn.reject-btn:hover:not(:disabled) {
+  background: #f44336;
+  color: #fff;
 }
 
 /* ========== Адаптив ========== */

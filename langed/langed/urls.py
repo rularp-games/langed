@@ -42,6 +42,7 @@ def vue_app(request):
 
 urlpatterns = [
     path('admin/', admin.site.urls),
+    path('', include('mcp_server.urls')),
     path('api/', include('server.urls')),
     # Custom callback that handles expired state gracefully (must be before include)
     path('oidc/callback/', SafeOIDCCallbackView.as_view(), name='oidc_authentication_callback'),
@@ -50,7 +51,7 @@ urlpatterns = [
 
 # Catch-all для Vue Router — добавляется последним
 urlpatterns += [
-    re_path(r'^(?!(admin|api|static|media|oidc)/).*$', vue_app, name='vue_app'),
+    re_path(r'^(?!(admin|api|static|media|oidc|mcp)/).*$', vue_app, name='vue_app'),
 ]
 
 # Для dev-режима: отдача статики и медиа Django

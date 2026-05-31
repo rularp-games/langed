@@ -212,6 +212,7 @@ class ScheduleRunSerializer(serializers.ModelSerializer):
     is_full = serializers.SerializerMethodField()
     effective_max_players = serializers.SerializerMethodField()
     can_edit = serializers.SerializerMethodField()
+    can_manage_registrations = serializers.SerializerMethodField()
     
     class Meta:
         model = Run
@@ -221,9 +222,9 @@ class ScheduleRunSerializer(serializers.ModelSerializer):
             'rooms', 'room_ids',
             'max_players', 'registration_open',
             'registered_count', 'available_slots', 'is_full', 
-            'effective_max_players', 'can_edit'
+            'effective_max_players', 'can_edit', 'can_manage_registrations'
         ]
-        read_only_fields = ['id', 'masters', 'can_edit']
+        read_only_fields = ['id', 'masters', 'can_edit', 'can_manage_registrations']
     
     def get_date_local(self, obj):
         """Возвращает дату и время в локальной таймзоне города"""
@@ -316,6 +317,24 @@ class ScheduleRunSerializer(serializers.ModelSerializer):
         # Может редактировать мастер прогона или организатор конвента
         if request.user in obj.masters.all():
             return True
+        if obj.convention_event:
+            if request.user in obj.convention_event.organizers.all():
+                return True
+            if request.user in obj.convention_event.convention.organizers.all():
+                return True
+        return False
+    
+    def get_can_manage_registrations(self, obj):
+        """Может ли пользователь управлять заявками на прогон (подтверждать/отклонять)"""
+        request = self.context.get('request')
+        if not request or not request.user.is_authenticated:
+            return False
+        if request.user.is_staff:
+            return True
+        # Может управлять мастер прогона
+        if request.user in obj.masters.all():
+            return True
+        # Или организатор конвента (если игра на конвенте)
         if obj.convention_event:
             if request.user in obj.convention_event.organizers.all():
                 return True
@@ -741,6 +760,7 @@ class RunSerializer(serializers.ModelSerializer):
     is_full = serializers.SerializerMethodField()
     current_user_registration = serializers.SerializerMethodField()
     effective_max_players = serializers.SerializerMethodField()
+    can_manage_registrations = serializers.SerializerMethodField()
     
     class Meta:
         model = Run
@@ -752,9 +772,9 @@ class RunSerializer(serializers.ModelSerializer):
             'max_players', 'registration_open',
             'registrations', 'registered_count', 'available_slots', 'is_full',
             'current_user_registration', 'effective_max_players',
-            'can_edit', 'created_at', 'updated_at'
+            'can_edit', 'can_manage_registrations', 'created_at', 'updated_at'
         ]
-        read_only_fields = ['id', 'masters', 'created_at', 'updated_at', 'can_edit']
+        read_only_fields = ['id', 'masters', 'created_at', 'updated_at', 'can_edit', 'can_manage_registrations']
     
     def get_date_local(self, obj):
         """Возвращает дату и время в локальной таймзоне города"""
@@ -879,3 +899,21 @@ class RunSerializer(serializers.ModelSerializer):
             return RegistrationBriefSerializer(registration, context=self.context).data
         except Registration.DoesNotExist:
             return None
+    
+    def get_can_manage_registrations(self, obj):
+        """Может ли пользователь управлять заявками на прогон (подтверждать/отклонять)"""
+        request = self.context.get('request')
+        if not request or not request.user.is_authenticated:
+            return False
+        if request.user.is_staff:
+            return True
+        # Может управлять мастер прогона
+        if request.user in obj.masters.all():
+            return True
+        # Или организатор конвента (если игра на конвенте)
+        if obj.convention_event:
+            if request.user in obj.convention_event.organizers.all():
+                return True
+            if request.user in obj.convention_event.convention.organizers.all():
+                return True
+        return False

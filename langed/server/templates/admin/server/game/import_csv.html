@@ -1,0 +1,116 @@
+{% extends "admin/base_site.html" %}
+{% load i18n admin_urls %}
+
+{% block title %}Импорт игр из CSV{% endblock %}
+
+{% block breadcrumbs %}
+<div class="breadcrumbs">
+    <a href="{% url 'admin:index' %}">{% trans 'Home' %}</a>
+    &rsaquo; <a href="{% url 'admin:app_list' app_label='server' %}">Server</a>
+    &rsaquo; <a href="{% url 'admin:server_game_changelist' %}">Игры</a>
+    &rsaquo; Импорт из CSV
+</div>
+{% endblock %}
+
+{% block content %}
+<h1>Импорт игр из CSV файла</h1>
+
+<div id="content-main">
+    <form action="" method="post" enctype="multipart/form-data">
+        {% csrf_token %}
+        
+        <fieldset class="module aligned">
+            <h2>Загрузка файла</h2>
+            
+            <div class="form-row">
+                <label for="id_csv_file">CSV файл:</label>
+                <input type="file" name="csv_file" id="id_csv_file" accept=".csv" required>
+            </div>
+            
+            <div class="form-row">
+                <label for="id_update_existing">
+                    <input type="checkbox" name="update_existing" id="id_update_existing">
+                    Обновлять существующие игры
+                </label>
+                <p class="help">Если включено, игры с совпадающим названием будут обновлены. Иначе — пропущены.</p>
+            </div>
+        </fieldset>
+        
+        <fieldset class="module aligned">
+            <h2>Формат файла</h2>
+            <p>CSV файл должен содержать заголовок с колонками. Поддерживаемые колонки:</p>
+            <table>
+                <thead>
+                    <tr>
+                        <th>Колонка</th>
+                        <th>Обязательная</th>
+                        <th>Описание</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    <tr>
+                        <td><code>Название</code></td>
+                        <td>Да</td>
+                        <td>Название игры</td>
+                    </tr>
+                    <tr>
+                        <td><code>Анонс</code></td>
+                        <td>Нет</td>
+                        <td>Описание/анонс игры</td>
+                    </tr>
+                    <tr>
+                        <td><code>Красные флаги</code></td>
+                        <td>Нет</td>
+                        <td>Красные флаги (предупреждения)</td>
+                    </tr>
+                    <tr>
+                        <td><code>Мин. игроков</code></td>
+                        <td>Нет</td>
+                        <td>Минимальное количество игроков (по умолчанию: 1)</td>
+                    </tr>
+                    <tr>
+                        <td><code>Макс. игроков</code></td>
+                        <td>Нет</td>
+                        <td>Максимальное количество игроков (по умолчанию: 10)</td>
+                    </tr>
+                    <tr>
+                        <td><code>Мин. женских ролей</code></td>
+                        <td>Нет</td>
+                        <td>Минимум женских ролей (по умолчанию: 0)</td>
+                    </tr>
+                    <tr>
+                        <td><code>Макс. женских ролей</code></td>
+                        <td>Нет</td>
+                        <td>Максимум женских ролей (по умолчанию: 0)</td>
+                    </tr>
+                    <tr>
+                        <td><code>Мин. мужских ролей</code></td>
+                        <td>Нет</td>
+                        <td>Минимум мужских ролей (по умолчанию: 0)</td>
+                    </tr>
+                    <tr>
+                        <td><code>Макс. мужских ролей</code></td>
+                        <td>Нет</td>
+                        <td>Максимум мужских ролей (по умолчанию: 0)</td>
+                    </tr>
+                    <tr>
+                        <td><code>Игротехники</code></td>
+                        <td>Нет</td>
+                        <td>Количество игротехников (по умолчанию: 0)</td>
+                    </tr>
+                </tbody>
+            </table>
+            
+            <h3>Пример CSV:</h3>
+            <pre style="background: #f5f5f5; padding: 10px; border-radius: 4px; overflow-x: auto;">Название,Анонс,Красные флаги,Мин. игроков,Макс. игроков
+Моя игра,"Описание игры, которая очень интересная",Насилие,4,8
+Другая игра,Короткое описание,,2,6</pre>
+        </fieldset>
+        
+        <div class="submit-row">
+            <input type="submit" value="Импортировать" class="default">
+            <a href="{% url 'admin:server_game_changelist' %}" class="button cancel-link">Отмена</a>
+        </div>
+    </form>
+</div>
+{% endblock %}
