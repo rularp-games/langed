@@ -108,7 +108,7 @@ AUTH_PASSWORD_VALIDATORS = [
 # Internationalization
 # https://docs.djangoproject.com/en/5.2/topics/i18n/
 
-LANGUAGE_CODE = 'en-us'
+LANGUAGE_CODE = 'ru'
 
 TIME_ZONE = 'UTC'
 
@@ -150,12 +150,37 @@ from langed.private_settings import (
     OIDC_OP_JWKS_ENDPOINT,
 )
 
-# OIDC Redirect URI - must match what's configured in Keycloak
-# mozilla_django_oidc uses this to build the redirect_uri for token exchange
+# Keycloak: базовый URL и realm — для входа по паролю и Admin REST API (server/keycloak.py).
+# redirect_uri для OIDC mozilla_django_oidc строит сам из запроса (request.build_absolute_uri),
+# поэтому схема https берётся из X-Forwarded-Proto (см. SECURE_PROXY_SSL_HEADER ниже).
+from langed.private_settings import KEYCLOAK_SERVER_URL, KEYCLOAK_REALM
+
+# Таймаут запросов к Keycloak, секунды (OIDC_TIMEOUT использует mozilla_django_oidc)
+KEYCLOAK_TIMEOUT = 10
+OIDC_TIMEOUT = KEYCLOAK_TIMEOUT
+
+# Адрес сайта — ссылка «вернуться в приложение» в письмах Keycloak
 try:
-    from langed.private_settings import OIDC_RP_REDIRECT_URI
+    from langed.private_settings import SITE_URL
 except ImportError:
-    OIDC_RP_REDIRECT_URI = None
+    SITE_URL = None
+
+# Внешние провайдеры входа (alias IdP в Keycloak), показываются на форме входа
+try:
+    from langed.private_settings import AUTH_PROVIDERS
+except ImportError:
+    AUTH_PROVIDERS = [
+        {'id': 'google', 'name': 'Google'},
+        {'id': 'vkid', 'name': 'VK ID'},
+        {'id': 'rularp_games_bot', 'name': 'Telegram'},
+    ]
+
+# Разовая привязка старых пользователей (без KeycloakIdentity) по username == preferred_username.
+# После того как все активные пользователи войдут хотя бы раз, можно выключить.
+try:
+    from langed.private_settings import OIDC_LEGACY_USERNAME_LINK
+except ImportError:
+    OIDC_LEGACY_USERNAME_LINK = True
 
 # OIDC configuration
 OIDC_RP_SIGN_ALGO = 'RS256'
@@ -178,7 +203,20 @@ REST_FRAMEWORK = {
     ],
     # Кастомный exception handler для гарантии JSON ответов на все ошибки
     'EXCEPTION_HANDLER': 'server.views.custom_exception_handler',
+    # Ограничение частоты запросов к эндпоинтам авторизации (по IP)
+    'DEFAULT_THROTTLE_RATES': {
+        'auth_login': '10/min',
+        'auth_register': '10/min',
+        'auth_password_reset': '10/min',
+    },
 }
+
+# Число прокси перед Django — чтобы троттлинг брал IP клиента из X-Forwarded-For
+try:
+    from langed.private_settings import NUM_PROXIES
+except ImportError:
+    NUM_PROXIES = None
+REST_FRAMEWORK['NUM_PROXIES'] = NUM_PROXIES
 
 # Session and CSRF settings for reverse proxy / HTTPS
 SESSION_COOKIE_SAMESITE = 'Lax'
@@ -211,7 +249,8 @@ except ImportError:
     CSRF_TRUSTED_ORIGINS = []
 
 # OIDC callback settings
-OIDC_CALLBACK_CLASS = 'mozilla_django_oidc.views.OIDCAuthenticationCallbackView'
+OIDC_AUTHENTICATE_CLASS = 'server.oidc.KeycloakAuthenticationRequestView'
+OIDC_CALLBACK_CLASS = 'server.oidc.SafeOIDCCallbackView'
 OIDC_STORE_ACCESS_TOKEN = True
 OIDC_STORE_ID_TOKEN = True
 
@@ -222,7 +261,7 @@ OIDC_EXEMPT_URLS = [
     re.compile(r'^/api/'),
 ]
 
-# Logging for OIDC debugging
+# Logging for OIDC
 LOGGING = {
     'version': 1,
     'disable_existing_loggers': False,
@@ -234,7 +273,7 @@ LOGGING = {
     'loggers': {
         'mozilla_django_oidc': {
             'handlers': ['console'],
-            'level': 'DEBUG',
+            'level': 'INFO',
         },
     },
 }

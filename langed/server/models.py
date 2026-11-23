@@ -4,6 +4,30 @@ from django.core.exceptions import ValidationError
 from auditlog.registry import auditlog
 
 
+def event_local_date(value, convention_event):
+    """Дата (без времени) в часовом поясе города проведения конвента"""
+    import pytz
+    try:
+        return value.astimezone(pytz.timezone(convention_event.city.timezone)).date()
+    except Exception:
+        return value.date()
+
+
+def date_outside_event_error(value, convention_event, subject):
+    """
+    Текст ошибки, если дата не попадает в даты проведения конвента (иначе None).
+    Сравнение — в часовом поясе города проведения. subject — «прогона» или «события».
+    """
+    local_date = event_local_date(value, convention_event)
+    if convention_event.date_start <= local_date <= convention_event.date_end:
+        return None
+    return (
+        f'Дата {subject} ({local_date.strftime("%d.%m.%Y")}) должна быть в пределах дат '
+        f'проведения конвента ({convention_event.date_start.strftime("%d.%m.%Y")} — '
+        f'{convention_event.date_end.strftime("%d.%m.%Y")})'
+    )
+
+
 class Region(models.Model):
     """Модель региона"""
     
@@ -385,14 +409,11 @@ class Run(models.Model):
     
     def clean(self):
         # Проверяем, что дата прогона попадает в даты проведения конвента
+        # (в часовом поясе города проведения)
         if self.convention_event and self.date:
-            run_date = self.date.date()
-            if run_date < self.convention_event.date_start or run_date > self.convention_event.date_end:
-                raise ValidationError(
-                    f'Дата прогона ({run_date.strftime("%d.%m.%Y")}) должна быть в пределах дат '
-                    f'проведения конвента ({self.convention_event.date_start.strftime("%d.%m.%Y")} — '
-                    f'{self.convention_event.date_end.strftime("%d.%m.%Y")})'
-                )
+            error = date_outside_event_error(self.date, self.convention_event, 'прогона')
+            if error:
+                raise ValidationError(error)
     
     def get_max_players(self):
         """Возвращает максимальное количество игроков для этого прогона"""
@@ -452,14 +473,11 @@ class CommonEvent(models.Model):
     
     def clean(self):
         # Проверяем, что дата события попадает в даты проведения конвента
+        # (в часовом поясе города проведения)
         if self.convention_event and self.date:
-            event_date = self.date.date()
-            if event_date < self.convention_event.date_start or event_date > self.convention_event.date_end:
-                raise ValidationError(
-                    f'Дата события ({event_date.strftime("%d.%m.%Y")}) должна быть в пределах дат '
-                    f'проведения конвента ({self.convention_event.date_start.strftime("%d.%m.%Y")} — '
-                    f'{self.convention_event.date_end.strftime("%d.%m.%Y")})'
-                )
+            error = date_outside_event_error(self.date, self.convention_event, 'события')
+            if error:
+                raise ValidationError(error)
 
 
 class Registration(models.Model):
@@ -474,6 +492,7 @@ class Registration(models.Model):
     STATUS_CHOICES = [
         ('pending', 'Ожидает подтверждения'),
         ('confirmed', 'Подтверждена'),
+        ('rejected', 'Отклонена'),
         ('cancelled', 'Отменена'),
         ('waitlist', 'В листе ожидания'),
     ]
@@ -594,6 +613,30 @@ class ConventionEventRegistration(models.Model):
 
     def __str__(self):
         return f'{self.user.username} → {self.convention_event.convention.name} ({self.get_status_display()})'
+
+
+class KeycloakIdentity(models.Model):
+    """Привязка пользователя Langed к учётной записи Keycloak (claim sub)"""
+
+    user = models.OneToOneField(
+        settings.AUTH_USER_MODEL,
+        on_delete=models.CASCADE,
+        related_name='keycloak_identity',
+        verbose_name='Пользователь'
+    )
+    sub = models.CharField(
+        max_length=255,
+        unique=True,
+        verbose_name='Keycloak ID (sub)'
+    )
+    created_at = models.DateTimeField(auto_now_add=True, verbose_name='Дата привязки')
+
+    class Meta:
+        verbose_name = 'Учётная запись Keycloak'
+        verbose_name_plural = 'Учётные записи Keycloak'
+
+    def __str__(self):
+        return f'{self.user.username} ({self.sub})'
 
 
 # Регистрация моделей для аудита (логирование изменений)

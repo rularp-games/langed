@@ -20,7 +20,6 @@ from django.conf import settings
 from django.conf.urls.static import static
 from django.http import HttpResponse
 from django.views.decorators.cache import never_cache
-from server.oidc import SafeOIDCCallbackView
 import os
 
 
@@ -44,8 +43,7 @@ urlpatterns = [
     path('admin/', admin.site.urls),
     path('', include('mcp_server.urls')),
     path('api/', include('server.urls')),
-    # Custom callback that handles expired state gracefully (must be before include)
-    path('oidc/callback/', SafeOIDCCallbackView.as_view(), name='oidc_authentication_callback'),
+    # Классы authenticate/callback задаются в settings (OIDC_AUTHENTICATE_CLASS, OIDC_CALLBACK_CLASS)
     path('oidc/', include('mozilla_django_oidc.urls')),
 ]
 

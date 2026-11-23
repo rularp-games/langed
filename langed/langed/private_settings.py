@@ -37,12 +37,18 @@ OIDC_OP_LOGOUT_ENDPOINT = f'{KEYCLOAK_SERVER_URL}/realms/{KEYCLOAK_REALM}/protoc
 # Example: ['https://langed.example.com', 'https://www.langed.example.com']
 CSRF_TRUSTED_ORIGINS = ['http://localhost', 'https://localhost']
 
-# Site URL for OIDC callback (include https:// scheme)
+# Site URL (include https:// scheme) - used as the return link in Keycloak emails
 SITE_URL = 'https://localhost'
 
-# OIDC Redirect URI - must match what's configured in Keycloak
-# Use the correct setting name for mozilla_django_oidc
-OIDC_RP_REDIRECT_URI = f'{SITE_URL}/oidc/callback/'
+# Identity providers offered on the Langed login form (Keycloak IdP aliases)
+AUTH_PROVIDERS = [
+    {'id': 'google', 'name': 'Google'},
+    {'id': 'vkid', 'name': 'VK ID'},
+    {'id': 'rularp_games_bot', 'name': 'Telegram'},
+]
+
+# Proxies in front of Django - for DRF throttling by client IP (None = use REMOTE_ADDR / whole X-Forwarded-For)
+NUM_PROXIES = None
 
 # Session cookie security - set to False for local HTTP development
 # In production (HTTPS), this should be True

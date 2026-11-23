@@ -9,7 +9,7 @@ from django.utils import timezone
 from django.urls import path
 from django.shortcuts import render, redirect
 from datetime import time
-from .models import Game, City, Region, Convention, ConventionEvent, Run, ConventionLink, Venue, Room, Registration
+from .models import Game, City, Region, Convention, ConventionEvent, Run, ConventionLink, Venue, Room, Registration, KeycloakIdentity
 
 User = get_user_model()
 
@@ -438,3 +438,11 @@ class RegistrationAdmin(admin.ModelAdmin):
             'fields': ('comment',)
         }),
     )
+
+
+@admin.register(KeycloakIdentity)
+class KeycloakIdentityAdmin(admin.ModelAdmin):
+    list_display = ('user', 'sub', 'created_at')
+    search_fields = ('user__username', 'user__email', 'sub')
+    autocomplete_fields = ('user',)
+    readonly_fields = ('created_at',)
