@@ -1,0 +1,163 @@
+/*
+ * Дизайн-токены Langed. Единственное место, где заданы цвета, отступы, радиусы и тени.
+ * Светлая палитра — на :root; тёмная — по системной настройке (если тема не выбрана
+ * явно) и по [data-theme="dark"]. Компоненты используют только var(--…).
+ */
+:root {
+  color-scheme: light;
+
+  /* Поверхности и текст */
+  --bg: #faf9f7;
+  --surface: #ffffff;
+  --surface-2: #f3f1ed;
+  --surface-hover: #efece7;
+  --border: #e2ded7;
+  --border-strong: #c4beb3;
+  --text: #1d1b18;
+  --text-muted: #5f5a52;
+  --text-subtle: #726c62;
+
+  /* Акцент (терракотовый) */
+  --accent: #b4532a;
+  --accent-hover: #9c4521;
+  --accent-soft: #f8e9e1;
+  --accent-text: #9c4521;
+  --on-accent: #ffffff;
+
+  /* Семантика: -text для текста/иконок, -soft для фона, -solid для заливки кнопок */
+  --success-text: #25693f;
+  --success-soft: #e4f2e9;
+  --warning-text: #805300;
+  --warning-soft: #fbf0d9;
+  --danger-text: #b3261e;
+  --danger-soft: #fbe9e7;
+  --danger-solid: #b3261e;
+  --danger-solid-hover: #981f18;
+  --on-danger: #ffffff;
+  --info-text: #2b5fa8;
+  --info-soft: #e6eef9;
+
+  --focus-ring: #b4532a;
+  --backdrop: rgb(29 27 24 / 0.45);
+
+  /* Типографика */
+  --font-sans: 'Inter Variable', Inter, system-ui, -apple-system, 'Segoe UI', Roboto, sans-serif;
+  --font-mono: ui-monospace, 'SFMono-Regular', Menlo, Consolas, monospace;
+  --text-xs: 0.75rem;
+  --text-sm: 0.8125rem;
+  --text-base: 0.9375rem;
+  --text-md: 1.0625rem;
+  --text-lg: 1.25rem;
+  --text-xl: 1.5rem;
+  --text-2xl: 1.875rem;
+  --leading-tight: 1.25;
+  --leading-normal: 1.5;
+
+  /* Отступы (шаг 4px) */
+  --space-1: 0.25rem;
+  --space-2: 0.5rem;
+  --space-3: 0.75rem;
+  --space-4: 1rem;
+  --space-5: 1.25rem;
+  --space-6: 1.5rem;
+  --space-8: 2rem;
+  --space-10: 2.5rem;
+  --space-12: 3rem;
+
+  /* Радиусы */
+  --radius-sm: 4px;
+  --radius-md: 8px;
+  --radius-lg: 12px;
+  --radius-full: 999px;
+
+  /* Тени */
+  --shadow-sm: 0 1px 2px rgb(29 27 24 / 0.06);
+  --shadow-md: 0 4px 12px rgb(29 27 24 / 0.08), 0 1px 3px rgb(29 27 24 / 0.06);
+  --shadow-lg: 0 16px 40px rgb(29 27 24 / 0.16), 0 2px 8px rgb(29 27 24 / 0.08);
+
+  /* Раскладка */
+  --content-width: 1200px;
+  --gutter: var(--space-4);
+  --header-height: 56px;
+  --control-h-sm: 2rem;
+  --control-h-md: 2.5rem;
+  --control-h-lg: 2.875rem;
+
+  --duration: 150ms;
+}
+
+@media (min-width: 768px) {
+  :root {
+    --gutter: var(--space-6);
+  }
+}
+
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme='light']) {
+    color-scheme: dark;
+    --bg: #141312;
+    --surface: #1d1c1a;
+    --surface-2: #272522;
+    --surface-hover: #2e2b28;
+    --border: #36332f;
+    --border-strong: #55504a;
+    --text: #ece9e4;
+    --text-muted: #b3ada3;
+    --text-subtle: #989187;
+    --accent: #e58a5e;
+    --accent-hover: #f09c72;
+    --accent-soft: #3a2418;
+    --accent-text: #f0a27c;
+    --on-accent: #1f1108;
+    --success-text: #7cc797;
+    --success-soft: #1b3324;
+    --warning-text: #e3b658;
+    --warning-soft: #382c11;
+    --danger-text: #f2918a;
+    --danger-soft: #3f1d1a;
+    --danger-solid: #f0867d;
+    --danger-solid-hover: #f59c94;
+    --on-danger: #2a0d0a;
+    --info-text: #8fb6ee;
+    --info-soft: #1a2b45;
+    --focus-ring: #f0a27c;
+    --backdrop: rgb(0 0 0 / 0.6);
+    --shadow-sm: 0 1px 2px rgb(0 0 0 / 0.4);
+    --shadow-md: 0 4px 12px rgb(0 0 0 / 0.45);
+    --shadow-lg: 0 16px 40px rgb(0 0 0 / 0.6);
+  }
+}
+
+:root[data-theme='dark'] {
+  color-scheme: dark;
+  --bg: #141312;
+  --surface: #1d1c1a;
+  --surface-2: #272522;
+  --surface-hover: #2e2b28;
+  --border: #36332f;
+  --border-strong: #55504a;
+  --text: #ece9e4;
+  --text-muted: #b3ada3;
+  --text-subtle: #989187;
+  --accent: #e58a5e;
+  --accent-hover: #f09c72;
+  --accent-soft: #3a2418;
+  --accent-text: #f0a27c;
+  --on-accent: #1f1108;
+  --success-text: #7cc797;
+  --success-soft: #1b3324;
+  --warning-text: #e3b658;
+  --warning-soft: #382c11;
+  --danger-text: #f2918a;
+  --danger-soft: #3f1d1a;
+  --danger-solid: #f0867d;
+  --danger-solid-hover: #f59c94;
+  --on-danger: #2a0d0a;
+  --info-text: #8fb6ee;
+  --info-soft: #1a2b45;
+  --focus-ring: #f0a27c;
+  --backdrop: rgb(0 0 0 / 0.6);
+  --shadow-sm: 0 1px 2px rgb(0 0 0 / 0.4);
+  --shadow-md: 0 4px 12px rgb(0 0 0 / 0.45);
+  --shadow-lg: 0 16px 40px rgb(0 0 0 / 0.6);
+}

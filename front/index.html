@@ -1,0 +1,27 @@
+<!DOCTYPE html>
+<html lang="ru">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>Langed — кабинетные ролевые игры</title>
+    <meta
+      name="description"
+      content="Langed — каталог кабинетных ролевых игр, афиша прогонов, конвенты и площадки."
+    />
+    <meta name="color-scheme" content="light dark" />
+    <link rel="icon" href="/favicon.svg" type="image/svg+xml" />
+    <link rel="alternate icon" href="/favicon.ico" sizes="32x32" />
+    <script>
+      // Тема применяется до первой отрисовки, чтобы не было вспышки.
+      try {
+        var t = localStorage.getItem('langed:theme')
+        if (t === 'light' || t === 'dark') document.documentElement.dataset.theme = t
+      } catch (e) {}
+    </script>
+  </head>
+  <body>
+    <noscript>Для работы Langed нужен JavaScript.</noscript>
+    <div id="app"></div>
+    <script type="module" src="/src/main.js"></script>
+  </body>
+</html>

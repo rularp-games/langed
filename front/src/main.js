@@ -1,27 +1,41 @@
 import { createApp } from 'vue'
-import * as Sentry from '@sentry/vue'
+import { createPinia } from 'pinia'
+import '@fontsource-variable/inter/wght.css'
+import './styles/tokens.css'
+import './styles/base.css'
+import './styles/controls.css'
 import App from './App.vue'
 import router from './router'
+import { useAuthStore } from './stores/auth'
+import { useUiStore } from './stores/ui'
 
-const app = createApp(App)
+async function bootstrap() {
+  const app = createApp(App)
+  app.use(createPinia())
+  app.use(router)
 
-// Initialize Sentry for error tracking
-// Set SENTRY_DSN environment variable or replace with your DSN
-const SENTRY_DSN = process.env.VUE_APP_SENTRY_DSN || ''
+  // Sentry подключается, только если задан DSN (VITE_SENTRY_DSN на этапе сборки);
+  // без него библиотека не загружается вовсе.
+  const dsn = import.meta.env.VITE_SENTRY_DSN
+  if (dsn) {
+    try {
+      const Sentry = await import('@sentry/vue')
+      Sentry.init({
+        app,
+        dsn,
+        integrations: [Sentry.browserTracingIntegration({ router })],
+        tracesSampleRate: 0.1,
+        environment: import.meta.env.MODE,
+      })
+    } catch (error) {
+      console.error('Sentry не инициализирован', error)
+    }
+  }
 
-if (SENTRY_DSN) {
-  Sentry.init({
-    app,
-    dsn: SENTRY_DSN,
-    integrations: [
-      Sentry.browserTracingIntegration({ router }),
-    ],
-    // Set tracesSampleRate to capture performance data
-    // Adjust this value in production (0.0 to 1.0)
-    tracesSampleRate: 0.1,
-    // Set the environment
-    environment: process.env.NODE_ENV || 'development',
-  })
+  useUiStore() // применяет сохранённую тему
+  useAuthStore().init() // текущий пользователь + CSRF-cookie
+
+  app.mount('#app')
 }
 
-app.use(router).mount('#app')
+bootstrap()
