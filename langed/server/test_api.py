@@ -191,8 +191,8 @@ class GameApiTests(ApiTestCase):
         response = self.client.get('/api/games/')
         item = next(g for g in response.data['results'] if g['id'] == self.game.id)
         self.assertEqual(set(item), {
-            'id', 'name', 'creators', 'authors_text', 'source_url', 'poster', 'announcement_excerpt',
-            'players_min', 'players_max', 'female_roles_min', 'female_roles_max',
+            'id', 'name', 'creators', 'authors_text', 'source_url', 'age_rating', 'poster',
+            'announcement_excerpt', 'players_min', 'players_max', 'female_roles_min', 'female_roles_max',
             'male_roles_min', 'male_roles_max', 'technicians', 'can_edit',
         })
         self.assertLessEqual(len(item['announcement_excerpt']), 201)
@@ -1559,6 +1559,51 @@ class GameAuthorsAndSourceTests(ApiTestCase):
                          'https://vk.com/wall-1_3')
         self.assertEqual(self.client.get(f'/api/convention-events/{self.event.id}/schedule/').data['source_url'],
                          'https://vk.com/wall-1_3')
+
+
+class GameAgeRatingTests(ApiTestCase):
+    """Возрастной рейтинг игры: пустая строка — не указан"""
+
+    def test_default_is_not_specified(self):
+        self.assertEqual(Game.objects.create(name='Без рейтинга').age_rating, '')
+        self.login(self.master)
+        response = self.client.post('/api/games/', {'name': 'Новая'}, format='json')
+        self.assertEqual(response.status_code, 201)
+        self.assertEqual(response.data['age_rating'], '')
+
+    def test_roundtrip_and_nested_representations(self):
+        self.login(self.master)
+        response = self.client.post('/api/games/', {'name': 'Взрослая', 'age_rating': '18+'}, format='json')
+        self.assertEqual(response.status_code, 201)
+        self.assertEqual(response.data['age_rating'], '18+')
+        game_id = response.data['id']
+        self.assertEqual(self.client.get(f'/api/games/{game_id}/').data['age_rating'], '18+')
+        item = next(g for g in self.client.get('/api/games/?page_size=100').data['results'] if g['id'] == game_id)
+        self.assertEqual(item['age_rating'], '18+')
+
+        Game.objects.filter(pk=self.game.pk).update(age_rating='12+')
+        self.assertEqual(self.client.get(f'/api/runs/{self.run_soon.id}/').data['game']['age_rating'], '12+')
+
+    def test_change_clear_and_invalid(self):
+        self.login(self.master)
+        url = f'/api/games/{self.game.id}/'
+        response = self.client.patch(url, {'age_rating': '16+'}, format='json')
+        self.assertEqual(response.status_code, 200)
+        self.assertEqual(response.data['age_rating'], '16+')
+        response = self.client.patch(url, {'age_rating': ''}, format='json')
+        self.assertEqual(response.status_code, 200)
+        self.assertEqual(response.data['age_rating'], '')
+        response = self.client.patch(url, {'age_rating': '6+'}, format='multipart')
+        self.assertEqual(response.status_code, 200)
+        response = self.client.patch(url, {'age_rating': ''}, format='multipart')
+        self.assertEqual(response.status_code, 200)
+        self.assertEqual(response.data['age_rating'], '')
+        for value in ('21+', '18', None):
+            response = self.client.patch(url, {'age_rating': value}, format='json')
+            self.assertEqual(response.status_code, 400, value)
+            self.assertIn('age_rating', response.data)
+        self.game.refresh_from_db()
+        self.assertEqual(self.game.age_rating, '')
 
 
 class RunWithoutPlayerLimitTests(ApiTestCase):

@@ -110,6 +110,12 @@ class Game(models.Model):
         help_text='Авторы, ещё не зарегистрированные на портале: «Имя Фамилия (ссылка), …»'
     )
     source_url = models.URLField(max_length=500, blank=True, verbose_name='Источник')
+    age_rating = models.CharField(
+        max_length=3,
+        blank=True,
+        choices=[('0+', '0+'), ('6+', '6+'), ('12+', '12+'), ('16+', '16+'), ('18+', '18+')],
+        verbose_name='Возрастной рейтинг'
+    )
 
     # Состав игры: null — не указано (нет ограничения)
     players_min = models.PositiveIntegerField(null=True, blank=True, verbose_name='Минимум игроков')

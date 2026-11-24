@@ -1,6 +1,7 @@
 <script setup>
 import { computed } from 'vue'
 import { gameAuthorsLine, gameFacts } from '@/utils/game'
+import AppBadge from './ui/AppBadge.vue'
 import AppCard from './ui/AppCard.vue'
 import PosterImage from './PosterImage.vue'
 
@@ -22,12 +23,18 @@ const creators = computed(() => gameAuthorsLine(props.game))
       <h2 class="game-card__title">{{ game.name }}</h2>
       <p v-if="creators" class="game-card__creators">{{ creators }}</p>
       <p v-if="game.announcementExcerpt" class="game-card__excerpt">{{ game.announcementExcerpt }}</p>
-      <dl v-if="facts.length" class="game-card__facts">
-        <div v-for="fact in facts" :key="fact.key">
-          <dt>{{ fact.short || fact.label }}</dt>
-          <dd>{{ fact.value }}</dd>
-        </div>
-      </dl>
+      <div v-if="facts.length || game.ageRating" class="game-card__meta">
+        <AppBadge v-if="game.ageRating" title="Возрастной рейтинг" class="game-card__age">
+          <span class="visually-hidden">Возрастной рейтинг:</span>
+          {{ game.ageRating }}
+        </AppBadge>
+        <dl v-if="facts.length" class="game-card__facts">
+          <div v-for="fact in facts" :key="fact.key">
+            <dt>{{ fact.short || fact.label }}</dt>
+            <dd>{{ fact.value }}</dd>
+          </div>
+        </dl>
+      </div>
     </div>
   </AppCard>
 </template>
@@ -70,12 +77,21 @@ const creators = computed(() => gameAuthorsLine(props.game))
   color: var(--text-muted);
   font-size: var(--text-sm);
 }
+.game-card__meta {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--space-1) var(--space-3);
+  margin-top: auto;
+  padding-top: var(--space-2);
+}
+.game-card__age {
+  font-variant-numeric: tabular-nums;
+}
 .game-card__facts {
   display: flex;
   flex-wrap: wrap;
   gap: var(--space-1) var(--space-4);
-  margin-top: auto;
-  padding-top: var(--space-2);
   font-size: var(--text-sm);
 }
 .game-card__facts div {

@@ -87,7 +87,7 @@ class GameAdmin(admin.ModelAdmin):
     change_list_template = 'admin/server/game/change_list.html'
     fieldsets = (
         ('Основная информация', {
-            'fields': ('name', 'creators', 'authors_text', 'source_url', 'poster', 'announcement', 'red_flags')
+            'fields': ('name', 'creators', 'authors_text', 'source_url', 'age_rating', 'poster', 'announcement', 'red_flags')
         }),
         ('Количество игроков', {
             'fields': (('players_min', 'players_max'),)

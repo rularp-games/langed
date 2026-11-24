@@ -12,6 +12,7 @@ import AuthorsText from '@/components/game/AuthorsText.vue'
 import GameRuns from '@/components/game/GameRuns.vue'
 import PeopleEditor from '@/components/PeopleEditor.vue'
 import PosterImage from '@/components/PosterImage.vue'
+import AppBadge from '@/components/ui/AppBadge.vue'
 import AppButton from '@/components/ui/AppButton.vue'
 import AppSkeleton from '@/components/ui/AppSkeleton.vue'
 import ErrorState from '@/components/ui/ErrorState.vue'
@@ -98,6 +99,12 @@ async function removeGame() {
 
     <template v-else>
       <PageHeader :title="game.name" :back="back">
+        <template v-if="game.ageRating" #meta>
+          <AppBadge title="Возрастной рейтинг" class="game__age">
+            <span class="visually-hidden">Возрастной рейтинг:</span>
+            {{ game.ageRating }}
+          </AppBadge>
+        </template>
         <template #actions>
           <AppButton @click="copyLink">
             <Link :size="16" aria-hidden="true" />
@@ -182,6 +189,9 @@ async function removeGame() {
   grid-template-columns: minmax(0, 1fr) 320px;
   gap: var(--space-8) var(--space-10);
   align-items: start;
+}
+.game__age {
+  font-variant-numeric: tabular-nums;
 }
 .game__main {
   display: flex;

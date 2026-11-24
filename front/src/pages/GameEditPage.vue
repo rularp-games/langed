@@ -7,12 +7,13 @@ import { gamesApi } from '@/api/games'
 import { useAsyncData } from '@/composables/useAsyncData'
 import { usePageTitle } from '@/composables/usePageTitle'
 import { useToast } from '@/composables/useToast'
-import { safeHref } from '@/utils/game'
+import { AGE_RATINGS, safeHref } from '@/utils/game'
 import PosterField from '@/components/game/PosterField.vue'
 import RangeField from '@/components/game/RangeField.vue'
 import AppAlert from '@/components/ui/AppAlert.vue'
 import AppButton from '@/components/ui/AppButton.vue'
 import AppInput from '@/components/ui/AppInput.vue'
+import AppSelect from '@/components/ui/AppSelect.vue'
 import AppSkeleton from '@/components/ui/AppSkeleton.vue'
 import AppTextarea from '@/components/ui/AppTextarea.vue'
 import EmptyState from '@/components/ui/EmptyState.vue'
@@ -47,6 +48,7 @@ const form = reactive({
   redFlags: '',
   authorsText: '',
   sourceUrl: '',
+  ageRating: '',
   playersMin: '',
   playersMax: '',
   femaleRolesMin: '',
@@ -55,6 +57,7 @@ const form = reactive({
   maleRolesMax: '',
   technicians: '',
 })
+const ageRatingOptions = AGE_RATINGS.map((value) => ({ value, label: value }))
 const posterFile = ref(null)
 const posterRemoved = ref(false)
 const errors = ref({})
@@ -78,6 +81,7 @@ watch(game, (value) => {
     redFlags: value.redFlags,
     authorsText: value.authorsText,
     sourceUrl: value.sourceUrl,
+    ageRating: value.ageRating,
     playersMin: countField(value.playersMin),
     playersMax: countField(value.playersMax),
     femaleRolesMin: countField(value.femaleRolesMin),
@@ -134,6 +138,7 @@ function payload() {
     redFlags: form.redFlags.trim(),
     authorsText: form.authorsText.trim(),
     sourceUrl: form.sourceUrl.trim(),
+    ageRating: form.ageRating,
     playersMin: toCount(form.playersMin),
     playersMax: toCount(form.playersMax),
     femaleRolesMin: toCount(form.femaleRolesMin),
@@ -160,6 +165,7 @@ function applyError(err) {
       redFlags: err.field('redFlags'),
       authorsText: err.field('authorsText'),
       sourceUrl: err.field('sourceUrl'),
+      ageRating: err.field('ageRating'),
       poster: err.field('poster'),
       players: err.field('playersMin') || err.field('playersMax'),
       female: err.field('femaleRolesMin') || err.field('femaleRolesMax'),
@@ -265,6 +271,14 @@ async function submit() {
         </FormField>
 
         <FormField
+          label="Возрастной рейтинг"
+          :error="errors.ageRating"
+          hint="С какого возраста рассчитана игра. Показывается рядом с названием."
+        >
+          <AppSelect v-model="form.ageRating" :options="ageRatingOptions" placeholder="Не указан" class="game-form__age" />
+        </FormField>
+
+        <FormField
           label="Ссылка на источник"
           :error="errors.sourceUrl"
           hint="Пост или страница, откуда взят анонс, например запись во ВКонтакте."
@@ -320,6 +334,9 @@ async function submit() {
   flex-direction: column;
   gap: var(--space-5);
   padding-bottom: var(--space-10);
+}
+.game-form__age {
+  max-width: 12rem;
 }
 .game-form__skeleton {
   margin-bottom: var(--space-4);

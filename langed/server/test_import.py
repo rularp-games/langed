@@ -241,6 +241,117 @@ class ImportBundleTests(ImportBundleTestCase):
             call_command('import_bundle', '/nonexistent.json', stdout=io.StringIO(), stderr=io.StringIO())
 
 
+class ImportAgeRatingTests(ImportBundleTestCase):
+
+    def test_new_game_gets_age_rating(self):
+        result, _ = self.run_import({'games': [{'name': 'Взрослая', 'age_rating': '18+'},
+                                               {'name': 'Без рейтинга', 'age_rating': ''}]})
+        self.assertEqual(result['errors'], 0, result)
+        self.assertEqual(Game.objects.get(name='Взрослая').age_rating, '18+')
+        self.assertEqual(Game.objects.get(name='Без рейтинга').age_rating, '')
+
+    def test_invalid_age_rating_is_item_error(self):
+        result, _ = self.run_import({'games': [{'name': 'Неверная', 'age_rating': '21+'},
+                                               {'name': 'Без плюса', 'age_rating': '16'}]})
+        self.assertEqual(result['errors'], 2)
+        self.assertFalse(Game.objects.exists())
+        self.assertIn('age_rating', self.item(result, 'games', 'Неверная')['errors'][0])
+
+    def test_existing_game_filled_only_when_empty(self):
+        empty = Game.objects.create(name='Пустая')
+        rated = Game.objects.create(name='С рейтингом', age_rating='12+')
+        result, _ = self.run_import({'games': [{'name': 'Пустая', 'age_rating': '6+'},
+                                               {'name': 'С рейтингом', 'age_rating': '16+'}]})
+        self.assertEqual(result['errors'], 0, result)
+        empty.refresh_from_db()
+        rated.refresh_from_db()
+        self.assertEqual(empty.age_rating, '6+')
+        self.assertEqual(self.item(result, 'games', 'Пустая')['filled'], ['age_rating'])
+        self.assertEqual(rated.age_rating, '12+')
+        item = self.item(result, 'games', 'С рейтингом')
+        self.assertEqual(item['action'], 'unchanged')
+        self.assertEqual(item['conflicts']['age_rating'], {'db': '12+', 'bundle': '16+'})
+
+
+class ImportSameNameGamesTests(ImportBundleTestCase):
+
+    def setUp(self):
+        self.city = City.objects.create(name='Казань', timezone='Europe/Moscow')
+        self.start = date.today() + timedelta(days=10)
+
+    def run_entry(self, game_ref, hour=12):
+        return {'game': game_ref, 'city': 'Казань', 'date_local': f'{self.start.isoformat()}T{hour}:00'}
+
+    def test_not_ids_creates_second_game_and_rerun_is_idempotent(self):
+        old = Game.objects.create(name='Сто лет одиночества', announcement='Старая')
+        data = {
+            'games': [{'key': 'new', 'name': '«Сто лет одиночества»', 'announcement': 'Новая',
+                       'not_ids': [old.pk]}],
+            'runs': [self.run_entry('new')],
+        }
+        result, _ = self.run_import(data)
+        self.assertEqual(result['errors'], 0, result)
+        self.assertEqual(Game.objects.count(), 2)
+        new = Game.objects.exclude(pk=old.pk).get()
+        self.assertEqual(new.announcement, 'Новая')
+        self.assertEqual(self.item(result, 'games', 'new')['action'], 'created')
+        self.assertEqual(self.item(result, 'games', 'new')['id'], new.pk)
+        old.refresh_from_db()
+        self.assertEqual(old.announcement, 'Старая')
+        self.assertEqual(Run.objects.get().game, new)
+
+        # Повторный прогон находит созданную игру и ничего не создаёт
+        result, _ = self.run_import(data)
+        self.assertEqual(result['errors'], 0, result)
+        self.assertEqual(Game.objects.count(), 2)
+        self.assertEqual(Run.objects.count(), 1)
+        self.assertEqual(self.item(result, 'games', 'new')['id'], new.pk)
+        self.assertEqual({item['action'] for item in result['items']}, {'unchanged'})
+        self.assertFalse(self.item(result, 'games', 'new').get('warnings'))
+
+    def test_two_same_name_games_in_one_bundle(self):
+        old = Game.objects.create(name='Игра')
+        data = {
+            'games': [{'key': 'a', 'name': 'Игра', 'not_ids': [old.pk]},
+                      {'key': 'b', 'name': 'игра', 'not_ids': [old.pk]}],
+        }
+        result, _ = self.run_import(data)
+        # Вторая запись без исключения созданной первой сопоставляется с ней же
+        self.assertEqual(result['errors'], 0, result)
+        self.assertEqual(Game.objects.count(), 2)
+        self.assertEqual(self.item(result, 'games', 'a')['id'], self.item(result, 'games', 'b')['id'])
+
+    def test_several_candidates_take_smallest_id_with_warning(self):
+        first = Game.objects.create(name='Игра')
+        Game.objects.create(name='ИГРА')
+        result, _ = self.run_import({'games': [{'name': 'игра', 'red_flags': 'Флаги'}]})
+        self.assertEqual(result['errors'], 0, result)
+        self.assertEqual(Game.objects.count(), 2)
+        item = self.item(result, 'games', 'игра')
+        self.assertEqual(item['id'], first.pk)
+        self.assertTrue(any('not_ids' in warning for warning in item['warnings']), item)
+        first.refresh_from_db()
+        self.assertEqual(first.red_flags, 'Флаги')
+
+    def test_run_by_ambiguous_name_is_error(self):
+        first = Game.objects.create(name='Игра')
+        second = Game.objects.create(name='Игра')
+        result, _ = self.run_import({'runs': [self.run_entry('Игра', 10), self.run_entry(second.pk, 14)]})
+        self.assertEqual(result['errors'], 1)
+        error = next(item for item in result['items'] if item['action'] == 'error')['errors'][0]
+        self.assertIn('несколько игр', error)
+        self.assertIn('key', error)
+        self.assertIn(str(first.pk), error)
+        self.assertEqual(Run.objects.get().game, second)
+
+    def test_invalid_not_ids(self):
+        result, _ = self.run_import({'games': [{'name': 'Игра', 'not_ids': ['1']},
+                                               {'key': 'two', 'name': 'Игра 2', 'not_ids': 5}]})
+        self.assertEqual(result['errors'], 2)
+        self.assertFalse(Game.objects.exists())
+        self.assertIn('not_ids', self.item(result, 'games', 'Игра')['errors'][0])
+
+
 @override_settings(STORAGES={
     'default': {'BACKEND': 'django.core.files.storage.FileSystemStorage'},
     'staticfiles': {'BACKEND': 'django.contrib.staticfiles.storage.StaticFilesStorage'},

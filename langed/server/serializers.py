@@ -305,7 +305,7 @@ class GameListSerializer(serializers.ModelSerializer):
     class Meta:
         model = Game
         fields = [
-            'id', 'name', 'creators', 'authors_text', 'source_url', 'poster', 'announcement_excerpt',
+            'id', 'name', 'creators', 'authors_text', 'source_url', 'age_rating', 'poster', 'announcement_excerpt',
             'players_min', 'players_max',
             'female_roles_min', 'female_roles_max',
             'male_roles_min', 'male_roles_max',
@@ -355,7 +355,7 @@ class GameSerializer(serializers.ModelSerializer):
     class Meta:
         model = Game
         fields = [
-            'id', 'name', 'creators', 'authors_text', 'source_url',
+            'id', 'name', 'creators', 'authors_text', 'source_url', 'age_rating',
             'poster', 'poster_url', 'announcement', 'red_flags',
             'players_min', 'players_max',
             'female_roles_min', 'female_roles_max',

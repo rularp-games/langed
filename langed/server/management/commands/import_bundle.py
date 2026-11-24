@@ -14,9 +14,10 @@
     {
       "cities": [{"key", "name"*, "timezone"}],
       "venues": [{"key", "name"*, "city"*, "address", "rooms": ["Зал 1", {"name", "blackbox"}]}],
-      "games": [{"key", "name"*, "announcement", "red_flags", "authors_text", "source_url",
-                 "players_min", "players_max", "female_roles_min", "female_roles_max",
-                 "male_roles_min", "male_roles_max", "technicians", "poster_url"}],
+      "games": [{"key", "name"*, "not_ids", "announcement", "red_flags", "authors_text",
+                 "source_url", "age_rating", "players_min", "players_max", "female_roles_min",
+                 "female_roles_max", "male_roles_min", "male_roles_max", "technicians",
+                 "poster_url"}],
       "conventions": [{"key", "name"*, "description", "source_url",
                        "links": [{"type", "url"*, "title"}]}],
       "events": [{"key", "convention"*, "city"*, "venue", "date_start"*, "date_end", "source_url"}],
@@ -33,11 +34,18 @@
     duration — минуты (прогон по умолчанию 180, общее событие — 60).
     Числа состава — целые ≥ 0 или null (не указано). links.type — vk, telegram, website,
     discord, youtube, other. rooms прогона — названия помещений площадки venue прогона,
-    иначе площадки проведения. poster_url — http(s)-адрес постера.
+    иначе площадки проведения. poster_url — http(s)-адрес постера. age_rating — 0+, 6+, 12+,
+    16+, 18+ или пусто (не указан); другое значение — ошибка записи.
+    not_ids игры — список id игр в БД, с которыми запись сопоставлять нельзя: так загружается
+    другая игра с тем же названием, что и существующая. key такой записи лучше задать явно
+    и ссылаться из runs.game по нему.
 
 Сопоставление с существующими записями:
     город — название без учёта регистра; площадка — город + нормализованное название;
     игра, конвент — нормализованное название (регистр, ё/е, кавычки, пунктуация, пробелы);
+    у игры — среди одноимённых, кроме not_ids; подходящей нет — создаётся новая, несколько —
+    берётся с наименьшим id (с предупреждением). Ссылка runs.game на название существующей
+    игры, когда одноимённых в БД несколько, неоднозначна — ошибка записи (укажите key или id);
     проведение — конвент + date_start; прогон — игра + время + проведение;
     общее событие — проведение + нормализованное название + время;
     ссылка конвента — URL; помещение — название в площадке.
@@ -82,6 +90,7 @@ GAME_COUNT_FIELDS = (
     'male_roles_min', 'male_roles_max',
 )
 GAME_RANGES = ('players', 'female_roles', 'male_roles')
+GAME_AGE_RATINGS = tuple(choice for choice, _ in Game._meta.get_field('age_rating').choices)
 LINK_TYPES = {choice for choice, _ in ConventionLink.LINK_TYPE_CHOICES}
 DEFAULT_TIMEZONE = 'Europe/Moscow'
 POSTER_TIMEOUT = 20
@@ -191,9 +200,10 @@ class Importer:
         self.venue_index = {}
         for venue in Venue.objects.order_by('pk'):
             self.venue_index.setdefault((venue.city_id, normalize_name(venue.name)), venue)
-        self.game_index = {}
+        # Нормализованное название → одноимённые игры по возрастанию id
+        self.game_index = defaultdict(list)
         for game in Game.objects.order_by('pk'):
-            self.game_index.setdefault(normalize_name(game.name), game)
+            self.game_index[normalize_name(game.name)].append(game)
         self.convention_index = {}
         for convention in Convention.objects.order_by('pk'):
             self.convention_index.setdefault(normalize_name(convention.name), convention)
@@ -302,7 +312,14 @@ class Importer:
             if city is not None:
                 obj = self.venue_index.get((city.pk, normalize_name(ref)))
         elif section == 'games':
-            obj = self.game_index.get(normalize_name(ref))
+            games = self.game_index.get(normalize_name(ref)) or []
+            if len(games) > 1:
+                ids = ', '.join(str(game.pk) for game in games)
+                raise ItemError(
+                    f'{field}: в БД несколько игр «{ref}» (id {ids}) — '
+                    'укажите key записи набора или id игры'
+                )
+            obj = games[0] if games else None
         elif section == 'conventions':
             obj = self.convention_index.get(normalize_name(ref))
         if obj is None:
@@ -446,13 +463,28 @@ class Importer:
             low, high = values[f'{prefix}_min'], values[f'{prefix}_max']
             if low is not None and high is not None and low > high:
                 raise ItemError(f'{prefix}_min больше {prefix}_max')
+        values['age_rating'] = self.text(entry, 'age_rating')
+        if values['age_rating'] and values['age_rating'] not in GAME_AGE_RATINGS:
+            raise ItemError(
+                f'age_rating: «{values["age_rating"]}» — допустимы {", ".join(GAME_AGE_RATINGS)} или пусто'
+            )
+        not_ids = self._ids(entry, 'not_ids')
         poster_url = self.text(entry, 'poster_url')
 
-        game = self.game_index.get(normalize_name(name))
+        candidates = [
+            game for game in self.game_index.get(normalize_name(name), []) if game.pk not in not_ids
+        ]
+        if len(candidates) > 1:
+            ids = ', '.join(str(game.pk) for game in candidates)
+            warnings.append(
+                f'одноимённых игр в БД несколько (id {ids}) — сопоставлено с id {candidates[0].pk}; '
+                'остальные исключите через not_ids'
+            )
+        game = candidates[0] if candidates else None
         filled, conflicts = [], {}
         if game is None:
             game = Game.objects.create(name=name, technicians=technicians or 0, **values)
-            self.game_index[normalize_name(name)] = game
+            self.game_index[normalize_name(name)].append(game)
             created = True
         else:
             created = False
@@ -479,6 +511,18 @@ class Importer:
         return game, self._action(created, filled), game.name, {
             'filled': filled, 'conflicts': conflicts, 'poster': poster,
         }
+
+    @staticmethod
+    def _ids(entry, field):
+        """Список id записей БД (целые числа)"""
+        value = entry.get(field)
+        if value is None:
+            return set()
+        if not isinstance(value, list) or any(
+            isinstance(item, bool) or not isinstance(item, int) for item in value
+        ):
+            raise ItemError(f'{field}: ожидается список целых id')
+        return set(value)
 
     def _poster(self, game, poster_url, warnings):
         """Скачать постер, если его нет. Возвращает 'saved', 'planned' или ''"""
