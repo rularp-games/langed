@@ -14,7 +14,7 @@
     {
       "cities": [{"key", "name"*, "timezone"}],
       "venues": [{"key", "name"*, "city"*, "address", "rooms": ["Зал 1", {"name", "blackbox"}]}],
-      "games": [{"key", "name"*, "not_ids", "announcement", "red_flags", "authors_text",
+      "games": [{"key", "name"*, "not_ids", "kind", "announcement", "red_flags", "authors_text",
                  "source_url", "age_rating", "players_min", "players_max", "female_roles_min",
                  "female_roles_max", "male_roles_min", "male_roles_max", "technicians",
                  "poster_url"}],
@@ -36,6 +36,9 @@
     discord, youtube, other. rooms прогона — названия помещений площадки venue прогона,
     иначе площадки проведения. poster_url — http(s)-адрес постера. age_rating — 0+, 6+, 12+,
     13+, 14+, 16+, 18+, 21+ или пусто (не указан); другое значение — ошибка записи.
+    kind — тип игры: larp (КРИ), ttrpg (НРИ), other (Другое) — код или название, регистр
+    не важен; пусто — КРИ у новой игры и без изменений у существующей; другое значение —
+    ошибка записи.
     not_ids игры — список id игр в БД, с которыми запись сопоставлять нельзя: так загружается
     другая игра с тем же названием, что и существующая. key такой записи лучше задать явно
     и ссылаться из runs.game по нему.
@@ -56,6 +59,9 @@
 только если у игры постера нет; ошибка скачивания — предупреждение, импорт продолжается.
 В --dry-run постеры не скачиваются. --source-tag (по умолчанию — имя файла) попадает
 в отчёт и в additional_data записей журнала изменений (auditlog), созданных импортом.
+
+Тип игры (kind) larp — значение по умолчанию — считается незаполненным: другой тип из набора
+его заменяет (попадает в filled). ttrpg или other в БД при другом типе в наборе — конфликт.
 """
 import datetime
 import io
@@ -91,6 +97,12 @@ GAME_COUNT_FIELDS = (
 )
 GAME_RANGES = ('players', 'female_roles', 'male_roles')
 GAME_AGE_RATINGS = tuple(choice for choice, _ in Game._meta.get_field('age_rating').choices)
+# Тип игры: код или название (без учёта регистра) → код
+GAME_KINDS = {
+    alias.casefold(): choice
+    for choice, label in Game.KIND_CHOICES
+    for alias in (choice, label)
+}
 LINK_TYPES = {choice for choice, _ in ConventionLink.LINK_TYPE_CHOICES}
 DEFAULT_TIMEZONE = 'Europe/Moscow'
 POSTER_TIMEOUT = 20
@@ -468,6 +480,12 @@ class Importer:
             raise ItemError(
                 f'age_rating: «{values["age_rating"]}» — допустимы {", ".join(GAME_AGE_RATINGS)} или пусто'
             )
+        kind = self.text(entry, 'kind')
+        if kind:
+            if kind.casefold() not in GAME_KINDS:
+                allowed = ', '.join(f'{choice} ({label})' for choice, label in Game.KIND_CHOICES)
+                raise ItemError(f'kind: «{kind}» — допустимы {allowed} или пусто')
+            kind = GAME_KINDS[kind.casefold()]
         not_ids = self._ids(entry, 'not_ids')
         poster_url = self.text(entry, 'poster_url')
 
@@ -483,7 +501,9 @@ class Importer:
         game = candidates[0] if candidates else None
         filled, conflicts = [], {}
         if game is None:
-            game = Game.objects.create(name=name, technicians=technicians or 0, **values)
+            game = Game.objects.create(
+                name=name, kind=kind or Game.DEFAULT_KIND, technicians=technicians or 0, **values
+            )
             self.game_index[normalize_name(name)].append(game)
             created = True
         else:
@@ -502,6 +522,13 @@ class Importer:
                     if reverted:
                         warnings.append(f'{", ".join(reverted)}: противоречит значению в БД — не заполнено')
             self.fill(game, {'technicians': technicians}, filled, conflicts, empty=(0,))
+            # Тип по умолчанию (КРИ) уточняется набором; другой заданный тип — конфликт
+            if kind and kind != game.kind:
+                if game.kind == Game.DEFAULT_KIND:
+                    game.kind = kind
+                    filled.append('kind')
+                else:
+                    conflicts['kind'] = {'db': game.kind, 'bundle': kind}
             if filled:
                 game.save()
 

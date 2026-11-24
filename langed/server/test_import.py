@@ -273,6 +273,64 @@ class ImportAgeRatingTests(ImportBundleTestCase):
         self.assertEqual(item['conflicts']['age_rating'], {'db': '12+', 'bundle': '16+'})
 
 
+class ImportGameKindTests(ImportBundleTestCase):
+
+    def test_new_game_gets_kind(self):
+        result, _ = self.run_import({'games': [
+            {'name': 'Без типа'},
+            {'name': 'Настольная ролевая', 'kind': 'ttrpg'},
+            {'name': 'Спектакль', 'kind': 'Другое'},
+            {'name': 'Кабинетная', 'kind': 'кри'},
+            {'name': 'Ещё НРИ', 'kind': 'НРИ'},
+        ]})
+        self.assertEqual(result['errors'], 0, result)
+        kinds = dict(Game.objects.values_list('name', 'kind'))
+        self.assertEqual(kinds, {
+            'Без типа': 'larp', 'Настольная ролевая': 'ttrpg', 'Спектакль': 'other',
+            'Кабинетная': 'larp', 'Ещё НРИ': 'ttrpg',
+        })
+
+    def test_invalid_kind_is_item_error(self):
+        result, _ = self.run_import({'games': [{'name': 'Неверная', 'kind': 'board'},
+                                               {'name': 'Список', 'kind': ['larp']}]})
+        self.assertEqual(result['errors'], 2)
+        self.assertFalse(Game.objects.exists())
+        self.assertIn('kind', self.item(result, 'games', 'Неверная')['errors'][0])
+        self.assertIn('kind', self.item(result, 'games', 'Список')['errors'][0])
+
+    def test_existing_default_kind_is_filled(self):
+        game = Game.objects.create(name='Была КРИ')
+        result, _ = self.run_import({'games': [{'name': 'Была КРИ', 'kind': 'НРИ'}]})
+        self.assertEqual(result['errors'], 0, result)
+        game.refresh_from_db()
+        self.assertEqual(game.kind, 'ttrpg')
+        item = self.item(result, 'games', 'Была КРИ')
+        self.assertEqual(item['filled'], ['kind'])
+        self.assertFalse(item.get('conflicts'))
+
+    def test_same_or_missing_kind_is_unchanged(self):
+        Game.objects.create(name='КРИ')
+        Game.objects.create(name='НРИ', kind='ttrpg')
+        result, _ = self.run_import({'games': [{'name': 'КРИ', 'kind': 'larp'},
+                                               {'name': 'НРИ', 'kind': 'ttrpg'},
+                                               {'key': 'nri-again', 'name': 'НРИ'}]})
+        self.assertEqual(result['errors'], 0, result)
+        self.assertEqual({item['action'] for item in result['items']}, {'unchanged'})
+        self.assertFalse(any(item.get('conflicts') for item in result['items']), result)
+
+    def test_other_kind_is_conflict(self):
+        game = Game.objects.create(name='Настолка', kind='other')
+        result, _ = self.run_import({'games': [{'name': 'Настолка', 'kind': 'ttrpg'},
+                                               {'key': 'as-larp', 'name': 'Настолка', 'kind': 'larp'}]})
+        self.assertEqual(result['errors'], 0, result)
+        game.refresh_from_db()
+        self.assertEqual(game.kind, 'other')
+        item = self.item(result, 'games', 'Настолка')
+        self.assertEqual(item['action'], 'unchanged')
+        self.assertEqual(item['conflicts']['kind'], {'db': 'other', 'bundle': 'ttrpg'})
+        self.assertEqual(self.item(result, 'games', 'as-larp')['conflicts']['kind'], {'db': 'other', 'bundle': 'larp'})
+
+
 class ImportSameNameGamesTests(ImportBundleTestCase):
 
     def setUp(self):

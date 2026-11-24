@@ -34,6 +34,23 @@ def choice_param(request, name, choices, default):
     return value
 
 
+def choices_list_param(request, name, choices):
+    """
+    Параметр запроса — одно значение или список через запятую из фиксированного набора
+    (?kind=larp,ttrpg). None, если не передан: фильтр не применяется.
+    """
+    value = request.query_params.get(name)
+    if value is None:
+        return None
+    values = [item.strip() for item in value.split(',') if item.strip()]
+    if not values:
+        return None
+    unknown = [item for item in values if item not in choices]
+    if unknown:
+        raise ValidationError({name: f'Допустимые значения: {", ".join(choices)}'})
+    return values
+
+
 def count_subquery(queryset, outer_field):
     """
     Счётчик связанных объектов подзапросом: не размножает строки основного

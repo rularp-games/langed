@@ -305,7 +305,8 @@ class GameListSerializer(serializers.ModelSerializer):
     class Meta:
         model = Game
         fields = [
-            'id', 'name', 'creators', 'authors_text', 'source_url', 'age_rating', 'poster', 'announcement_excerpt',
+            'id', 'name', 'kind', 'creators', 'authors_text', 'source_url', 'age_rating', 'poster',
+            'announcement_excerpt',
             'players_min', 'players_max',
             'female_roles_min', 'female_roles_max',
             'male_roles_min', 'male_roles_max',
@@ -333,7 +334,7 @@ class GameCompactSerializer(serializers.ModelSerializer):
     """Компактный сериализатор игры для карточки прогона"""
     class Meta:
         model = Game
-        fields = ['id', 'name', 'poster']
+        fields = ['id', 'name', 'kind', 'poster']
 
 
 POSTER_MAX_SIZE = 5 * 1024 * 1024
@@ -355,7 +356,7 @@ class GameSerializer(serializers.ModelSerializer):
     class Meta:
         model = Game
         fields = [
-            'id', 'name', 'creators', 'authors_text', 'source_url', 'age_rating',
+            'id', 'name', 'kind', 'creators', 'authors_text', 'source_url', 'age_rating',
             'poster', 'poster_url', 'announcement', 'red_flags',
             'players_min', 'players_max',
             'female_roles_min', 'female_roles_max',
@@ -420,7 +421,7 @@ class GameBriefSerializer(serializers.ModelSerializer):
     """Краткий сериализатор игры"""
     class Meta:
         model = Game
-        fields = ['id', 'name', 'players_min', 'players_max']
+        fields = ['id', 'name', 'kind', 'players_min', 'players_max']
 
 
 class ConventionLinkSerializer(serializers.ModelSerializer):

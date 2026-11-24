@@ -88,8 +88,23 @@ class City(models.Model):
 
 class Game(models.Model):
     """Модель игры"""
+
+    # Тип игры: кабинетная ролевая, настольная ролевая или другое (настольные, карточные, спектакли)
+    KIND_CHOICES = [
+        ('larp', 'КРИ'),
+        ('ttrpg', 'НРИ'),
+        ('other', 'Другое'),
+    ]
+    DEFAULT_KIND = 'larp'
     
     name = models.CharField(max_length=255, verbose_name='Название')
+    kind = models.CharField(
+        max_length=10,
+        choices=KIND_CHOICES,
+        default=DEFAULT_KIND,
+        db_index=True,
+        verbose_name='Тип'
+    )
     creators = models.ManyToManyField(
         settings.AUTH_USER_MODEL,
         related_name='games',

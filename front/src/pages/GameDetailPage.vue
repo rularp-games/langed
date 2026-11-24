@@ -7,7 +7,7 @@ import { useAsyncData } from '@/composables/useAsyncData'
 import { useConfirm } from '@/composables/useConfirm'
 import { usePageTitle } from '@/composables/usePageTitle'
 import { useToast } from '@/composables/useToast'
-import { gameFacts, safeHref } from '@/utils/game'
+import { gameFacts, gameKind, safeHref } from '@/utils/game'
 import AuthorsText from '@/components/game/AuthorsText.vue'
 import GameRuns from '@/components/game/GameRuns.vue'
 import PeopleEditor from '@/components/PeopleEditor.vue'
@@ -34,6 +34,7 @@ const { data: game, error, reload } = useAsyncData((signal) => gamesApi.get(prop
 usePageTitle(() => game.value?.name)
 
 const facts = computed(() => (game.value ? gameFacts(game.value) : []))
+const kind = computed(() => gameKind(game.value?.kind))
 const sourceHref = computed(() => safeHref(game.value?.sourceUrl))
 const authorsTitle = computed(() =>
   game.value?.creators.length === 1 && !game.value.authorsText ? 'Автор' : 'Авторы',
@@ -99,11 +100,17 @@ async function removeGame() {
 
     <template v-else>
       <PageHeader :title="game.name" :back="back">
-        <template v-if="game.ageRating" #meta>
-          <AppBadge title="Возрастной рейтинг" class="game__age">
-            <span class="visually-hidden">Возрастной рейтинг:</span>
-            {{ game.ageRating }}
-          </AppBadge>
+        <template #meta>
+          <span class="game__badges">
+            <AppBadge tone="info" :title="kind.title">
+              <span class="visually-hidden">Тип игры:</span>
+              {{ kind.label }}
+            </AppBadge>
+            <AppBadge v-if="game.ageRating" title="Возрастной рейтинг" class="game__age">
+              <span class="visually-hidden">Возрастной рейтинг:</span>
+              {{ game.ageRating }}
+            </AppBadge>
+          </span>
         </template>
         <template #actions>
           <AppButton @click="copyLink">
@@ -189,6 +196,11 @@ async function removeGame() {
   grid-template-columns: minmax(0, 1fr) 320px;
   gap: var(--space-8) var(--space-10);
   align-items: start;
+}
+.game__badges {
+  display: inline-flex;
+  flex-wrap: wrap;
+  gap: var(--space-1) var(--space-2);
 }
 .game__age {
   font-variant-numeric: tabular-nums;

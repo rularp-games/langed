@@ -1,6 +1,6 @@
 <script setup>
 import { computed } from 'vue'
-import { gameAuthorsLine, gameFacts } from '@/utils/game'
+import { DEFAULT_GAME_KIND, gameAuthorsLine, gameFacts, gameKind } from '@/utils/game'
 import AppBadge from './ui/AppBadge.vue'
 import AppCard from './ui/AppCard.vue'
 import PosterImage from './PosterImage.vue'
@@ -13,6 +13,8 @@ const props = defineProps({
 const facts = computed(() => gameFacts(props.game))
 // Карточка целиком — ссылка, поэтому ссылки из авторов текстом здесь не показываем.
 const creators = computed(() => gameAuthorsLine(props.game))
+// Большинство игр каталога — КРИ: тип показываем только у остальных, чтобы не шуметь.
+const kind = computed(() => (props.game.kind && props.game.kind !== DEFAULT_GAME_KIND ? gameKind(props.game.kind) : null))
 </script>
 
 <template>
@@ -23,7 +25,11 @@ const creators = computed(() => gameAuthorsLine(props.game))
       <h2 class="game-card__title">{{ game.name }}</h2>
       <p v-if="creators" class="game-card__creators">{{ creators }}</p>
       <p v-if="game.announcementExcerpt" class="game-card__excerpt">{{ game.announcementExcerpt }}</p>
-      <div v-if="facts.length || game.ageRating" class="game-card__meta">
+      <div v-if="facts.length || game.ageRating || kind" class="game-card__meta">
+        <AppBadge v-if="kind" tone="info" :title="kind.title">
+          <span class="visually-hidden">Тип игры:</span>
+          {{ kind.label }}
+        </AppBadge>
         <AppBadge v-if="game.ageRating" title="Возрастной рейтинг" class="game-card__age">
           <span class="visually-hidden">Возрастной рейтинг:</span>
           {{ game.ageRating }}

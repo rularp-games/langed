@@ -62,10 +62,11 @@ from .serializers import (
     EXCERPT_SOURCE_LENGTH, can_manage_event, can_manage_run_registrations
 )
 from .oidc import SESSION_PASSWORD_LOGIN
-from .filters import bool_param, choice_param, count_subquery, int_param
+from .filters import bool_param, choice_param, choices_list_param, count_subquery, int_param
 from .pagination import StandardPagination
 
 TIME_CHOICES = ('upcoming', 'past', 'all')
+GAME_KINDS = tuple(choice for choice, _ in Game.KIND_CHOICES)
 
 
 def active_registrations_count():
@@ -222,6 +223,11 @@ class GameViewSet(viewsets.ModelViewSet):
         search = self.request.query_params.get('search', '').strip()
         if search:
             queryset = queryset.filter(name__icontains=search)
+
+        # Фильтр по типу игры: ?kind=larp или ?kind=larp,ttrpg; без параметра — все
+        kinds = choices_list_param(self.request, 'kind', GAME_KINDS)
+        if kinds is not None:
+            queryset = queryset.filter(kind__in=kinds)
 
         # Фильтр по автору
         creator_id = int_param(self.request, 'creator')
@@ -459,6 +465,11 @@ class RunViewSet(viewsets.ModelViewSet):
         game_id = int_param(self.request, 'game')
         if game_id is not None:
             queryset = queryset.filter(game_id=game_id)
+
+        # Фильтр по типу игры: ?game_kind=larp или ?game_kind=larp,ttrpg; без параметра — все
+        game_kinds = choices_list_param(self.request, 'game_kind', GAME_KINDS)
+        if game_kinds is not None:
+            queryset = queryset.filter(game__kind__in=game_kinds)
 
         # Фильтр по проведению конвента
         convention_event_id = int_param(self.request, 'convention_event')

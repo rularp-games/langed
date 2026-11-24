@@ -3,6 +3,7 @@ import { computed, onBeforeUnmount, onMounted, ref } from 'vue'
 import { CalendarX } from '@lucide/vue'
 import { useQueryParam } from '@/composables/useQueryParam'
 import { formatDate, formatTimeRange, relativeDay } from '@/utils/datetime'
+import { GAME_KINDS } from '@/utils/game'
 import AppButton from '@/components/ui/AppButton.vue'
 import AppDialog from '@/components/ui/AppDialog.vue'
 import AppSelect from '@/components/ui/AppSelect.vue'
@@ -13,8 +14,9 @@ import ScheduleList from './ScheduleList.vue'
 import { NO_ROOM, buildDay, eventDays, findConflicts, nowInZone, scheduleRooms } from './schedule'
 
 /**
- * Расписание проведения: переключатель «Сетка / Список», фильтры по дню и помещению, дни по порядку.
- * Вид и фильтры живут в адресной строке (?view=&day=&room=). На узком экране по умолчанию — список.
+ * Расписание проведения: переключатель «Сетка / Список», фильтры по дню, помещению и типу игры,
+ * дни по порядку. Вид и фильтры живут в адресной строке (?view=&day=&room=&kind=). На узком экране
+ * по умолчанию — список. Фильтр по типу по умолчанию показывает всё: на фестивале важна вся программа.
  * Используется и на странице проведения, и в редакторе расписания (editable).
  */
 const props = defineProps({
@@ -37,6 +39,7 @@ const NARROW = '(max-width: 700px)'
 const viewParam = useQueryParam('view', { replace: true })
 const dayParam = useQueryParam('day', { replace: true })
 const roomParam = useQueryParam('room', { replace: true })
+const kindParam = useQueryParam('kind', { replace: true })
 
 // Узкий экран и текущее время: обновляются, пока страница открыта.
 const narrow = ref(false)
@@ -88,6 +91,18 @@ const dayOptions = computed(() => [
 ])
 const roomOptions = computed(() => rooms.value.map((item) => ({ value: roomValue(item), label: item.name })))
 
+// Тип игры: фильтр есть, только если в расписании прогоны нескольких типов; '' — все типы.
+const kinds = computed(() => GAME_KINDS.filter((item) => props.event.runs.some((run) => run.game?.kind === item.value)))
+const kind = computed({
+  get: () => (kinds.value.some((item) => item.value === kindParam.value) ? kindParam.value : ''),
+  set: (value) => (kindParam.value = value),
+})
+const kindOptions = computed(() => kinds.value.map(({ value, label }) => ({ value, label })))
+// Общие события (открытие, обед) — не игры: остаются при любом типе.
+const shownEvent = computed(() =>
+  kind.value ? { ...props.event, runs: props.event.runs.filter((run) => run.game?.kind === kind.value) } : props.event,
+)
+
 const shownRooms = computed(() =>
   room.value ? rooms.value.filter((item) => roomValue(item) === room.value) : rooms.value,
 )
@@ -96,16 +111,17 @@ const shownRooms = computed(() =>
 const shownDays = computed(() => {
   const keys = day.value === 'all' ? days.value : [day.value]
   return keys
-    .map((key) => buildDay(props.event, key, { rooms: shownRooms.value, editable: props.editable }))
+    .map((key) => buildDay(shownEvent.value, key, { rooms: shownRooms.value, editable: props.editable }))
     .filter((item) => !item.isEmpty || day.value !== 'all' || (props.editable && view.value === 'grid'))
 })
 
 const nowFor = (item) => (item.day === now.value.day ? now.value.minutes : null)
 const relative = (key) => relativeDay(key, { timeZone: props.event.cityTimezone })
 
-/** Сбрасывает по одному условию за раз: сначала помещение (чаще всего пусто из-за него), затем день. */
+/** Сбрасывает по одному условию за раз: сначала тип игры, затем помещение (чаще всего пусто из-за него), затем день. */
 function resetFilters() {
-  if (room.value) room.value = ''
+  if (kind.value) kind.value = ''
+  else if (room.value) room.value = ''
   else day.value = 'all'
 }
 
@@ -148,6 +164,14 @@ function onCommon(item) {
             size="sm"
             aria-label="Помещение"
           />
+          <AppSelect
+            v-if="kinds.length > 1"
+            v-model="kind"
+            :options="kindOptions"
+            placeholder="Все типы"
+            size="sm"
+            aria-label="Тип игры"
+          />
         </div>
       </div>
 
@@ -159,7 +183,7 @@ function onCommon(item) {
               : 'В расписании пока ничего нет. Добавьте первый прогон или общее событие.'
           }}
         </p>
-        <AppButton v-if="hasItems && (room || day !== 'all')" size="sm" @click="resetFilters">Сбросить фильтр</AppButton>
+        <AppButton v-if="hasItems && (kind || room || day !== 'all')" size="sm" @click="resetFilters">Сбросить фильтр</AppButton>
       </div>
 
       <section v-for="item in shownDays" :key="item.day" class="schedule__day" :aria-labelledby="`day-${item.day}`">

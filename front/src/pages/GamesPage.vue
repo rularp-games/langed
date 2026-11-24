@@ -9,6 +9,7 @@ import { useQueryParam } from '@/composables/useQueryParam'
 import { useToast } from '@/composables/useToast'
 import { useAuthStore } from '@/stores/auth'
 import { plural } from '@/utils/format'
+import { DEFAULT_GAME_KIND, GAME_KINDS, gameKind } from '@/utils/game'
 import GameCard from '@/components/GameCard.vue'
 import GameImportDialog from '@/components/game/GameImportDialog.vue'
 import AppButton from '@/components/ui/AppButton.vue'
@@ -26,6 +27,8 @@ const SORT_OPTIONS = [
   { value: 'name', label: 'По названию' },
 ]
 const ORDERING = { new: '-created_at', name: 'name' }
+// Тип игры: по умолчанию каталог показывает только КРИ; «Все» — без фильтра.
+const KIND_OPTIONS = [...GAME_KINDS.map(({ value, label }) => ({ value, label })), { value: 'all', label: 'Все' }]
 
 const router = useRouter()
 const auth = useAuthStore()
@@ -41,14 +44,27 @@ const sort = computed({
   get: () => (ordering.value in ORDERING ? ordering.value : 'new'),
   set: (value) => (ordering.value = value),
 })
+// Тип: /games?kind=ttrpg, /games?kind=all; по умолчанию — КРИ.
+const kindParam = useQueryParam('kind', { default: DEFAULT_GAME_KIND, resets: ['page'] })
+const kind = computed({
+  get: () => (KIND_OPTIONS.some((option) => option.value === kindParam.value) ? kindParam.value : DEFAULT_GAME_KIND),
+  set: (value) => (kindParam.value = value),
+})
+const kindLabel = computed(() => (kind.value === 'all' ? '' : gameKind(kind.value).label))
 
 const { data, error, loading, reload } = useAsyncData(
   (signal) =>
     gamesApi.list(
-      { page: page.value, pageSize: PAGE_SIZE, search: search.value, ordering: ORDERING[sort.value] },
+      {
+        page: page.value,
+        pageSize: PAGE_SIZE,
+        search: search.value,
+        ordering: ORDERING[sort.value],
+        kind: kind.value === 'all' ? undefined : kind.value,
+      },
       { signal },
     ),
-  { watch: [page, search, sort] },
+  { watch: [page, search, sort, kind] },
 )
 
 // Страница за пределами списка (устаревшая ссылка) — возвращаемся на первую.
@@ -91,6 +107,7 @@ function addGame() {
         </AppButton>
       </template>
       <SearchInput v-model="search" label="Поиск по играм" placeholder="Название игры" />
+      <SegmentedControl v-model="kind" :options="KIND_OPTIONS" label="Тип игры" size="sm" />
       <SegmentedControl v-model="sort" :options="SORT_OPTIONS" label="Сортировка" size="sm" />
     </PageHeader>
 
@@ -107,14 +124,17 @@ function addGame() {
     <EmptyState
       v-else-if="!data.items.length"
       :icon="Dices"
-      :title="search ? 'Ничего не нашлось' : 'Игр пока нет'"
+      :title="search ? 'Ничего не нашлось' : kindLabel ? 'Игр этого типа пока нет' : 'Игр пока нет'"
       :description="
         search
-          ? `По запросу «${search}» игр нет. Проверьте написание или попробуйте другое название.`
-          : 'Добавьте первую игру в каталог.'
+          ? `По запросу «${search}»${kindLabel ? ` среди «${kindLabel}»` : ''} игр нет. Проверьте написание или попробуйте другое название.`
+          : kindLabel
+            ? `В каталоге пока нет игр типа «${kindLabel}».`
+            : 'Добавьте первую игру в каталог.'
       "
     >
       <AppButton v-if="search" @click="search = ''">Сбросить поиск</AppButton>
+      <AppButton v-if="kindLabel" @click="kind = 'all'">Показать все типы</AppButton>
     </EmptyState>
 
     <template v-else>

@@ -1,3 +1,20 @@
+/**
+ * Типы игры (как в модели Game.kind): value — код в API, label — короткое название для бейджей
+ * и фильтров, title — полное название для подсказок.
+ */
+export const GAME_KINDS = [
+  { value: 'larp', label: 'КРИ', title: 'Кабинетная ролевая игра' },
+  { value: 'ttrpg', label: 'НРИ', title: 'Настольная ролевая игра' },
+  { value: 'other', label: 'Другое', title: 'Другая игра: настольная, карточная, спектакль' },
+]
+/** Тип игры по умолчанию — КРИ. */
+export const DEFAULT_GAME_KIND = 'larp'
+
+/** Тип игры по коду: { value, label, title }; неизвестный код — тип по умолчанию. */
+export function gameKind(value) {
+  return GAME_KINDS.find((kind) => kind.value === value) ?? GAME_KINDS[0]
+}
+
 /** Возрастные рейтинги игры (как в модели Game.age_rating); '' — не указан. */
 export const AGE_RATINGS = ['0+', '6+', '12+', '13+', '14+', '16+', '18+', '21+']
 

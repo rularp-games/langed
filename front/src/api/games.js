@@ -5,12 +5,13 @@ export { normalizeGame }
 
 /**
  * Тело запроса создания/изменения игры. Поля — в camelCase, все необязательны (PATCH).
- * Числа состава: null — не указано. ageRating: '' — не указан.
+ * Числа состава: null — не указано. ageRating: '' — не указан. kind: larp | ttrpg | other.
  * poster: File — загрузить (запрос уйдёт как multipart); null — убрать постер; не задан — не менять.
  */
 function gamePayload(data) {
   const fields = compact({
     name: data.name,
+    kind: data.kind,
     announcement: data.announcement,
     red_flags: data.redFlags,
     authors_text: data.authorsText,
@@ -37,13 +38,22 @@ function gamePayload(data) {
 export const gamesApi = {
   /**
    * @param {{page?, pageSize?, search?, ordering?: 'name'|'-name'|'created_at'|'-created_at',
-   *          creator?: number, mine?: boolean}} [filters]
+   *          creator?: number, mine?: boolean, kind?: string|string[]}} [filters]
+   *   kind — тип игры (larp | ttrpg | other) или список типов; не задан — все типы.
    * @returns {Promise<{count:number, hasNext:boolean, hasPrevious:boolean, items:object[]}>}
    */
-  async list({ page = 1, pageSize = 24, search = '', ordering = '', creator, mine } = {}, options) {
+  async list({ page = 1, pageSize = 24, search = '', ordering = '', creator, mine, kind } = {}, options) {
     const data = await api.get('/api/games/', {
       ...options,
-      params: { page, page_size: pageSize, search, ordering, creator, mine: mine ? 1 : undefined },
+      params: {
+        page,
+        page_size: pageSize,
+        search,
+        ordering,
+        creator,
+        mine: mine ? 1 : undefined,
+        kind: Array.isArray(kind) ? kind.join(',') : kind,
+      },
     })
     return normalizePage(data, normalizeGame)
   },

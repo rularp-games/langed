@@ -74,17 +74,19 @@ export function normalizeVenueBrief(raw) {
 
 /**
  * Игра: полный, списочный и краткие виды.
- * {id, name, poster, playersMin, playersMax, femaleRolesMin, femaleRolesMax, maleRolesMin,
+ * {id, name, kind, poster, playersMin, playersMax, femaleRolesMin, femaleRolesMax, maleRolesMin,
  *  maleRolesMax, technicians, creators[], authorsText, sourceUrl, ageRating, announcementExcerpt,
  *  announcement, redFlags, canEdit, createdAt, updatedAt}
  * Числа состава: null — не указано. authorsText — авторы, не зарегистрированные на портале
- * (свободный текст, может содержать ссылки). ageRating — 0+, 6+, 12+, 16+, 18+; '' — не указан.
+ * (свободный текст, может содержать ссылки). kind — larp (КРИ), ttrpg (НРИ), other (другое).
+ * ageRating — 0+, 6+, 12+, 16+, 18+; '' — не указан.
  */
 export function normalizeGame(raw) {
   if (!raw) return null
   return {
     id: raw.id,
     name: raw.name ?? '',
+    kind: raw.kind ?? 'larp',
     poster: mediaPath(raw.poster ?? raw.poster_url ?? null),
     playersMin: raw.players_min ?? null,
     playersMax: raw.players_max ?? null,

@@ -191,7 +191,7 @@ class GameApiTests(ApiTestCase):
         response = self.client.get('/api/games/')
         item = next(g for g in response.data['results'] if g['id'] == self.game.id)
         self.assertEqual(set(item), {
-            'id', 'name', 'creators', 'authors_text', 'source_url', 'age_rating', 'poster',
+            'id', 'name', 'kind', 'creators', 'authors_text', 'source_url', 'age_rating', 'poster',
             'announcement_excerpt', 'players_min', 'players_max', 'female_roles_min', 'female_roles_max',
             'male_roles_min', 'male_roles_max', 'technicians', 'can_edit',
         })
@@ -359,7 +359,7 @@ class RunListTests(ApiTestCase):
             'current_user_registration', 'effective_max_players',
             'can_edit', 'can_manage_registrations',
         })
-        self.assertEqual(item['game'], {'id': self.game.id, 'name': 'Alpha Station', 'poster': None})
+        self.assertEqual(item['game'], {'id': self.game.id, 'name': 'Alpha Station', 'kind': 'larp', 'poster': None})
         self.assertEqual(item['masters'], [{'id': self.master.id, 'display_name': 'Мария Мастер'}])
         self.assertEqual(item['city'], 'Москва')
         self.assertEqual(item['city_id'], self.moscow.id)
@@ -1604,6 +1604,85 @@ class GameAgeRatingTests(ApiTestCase):
             self.assertIn('age_rating', response.data)
         self.game.refresh_from_db()
         self.assertEqual(self.game.age_rating, '')
+
+
+class GameKindTests(ApiTestCase):
+    """Тип игры: КРИ (по умолчанию), НРИ, другое; фильтры каталога и прогонов"""
+
+    def setUp(self):
+        super().setUp()
+        Game.objects.filter(pk=self.game_other.pk).update(kind='ttrpg')
+        self.game_board = Game.objects.create(name='Gamma Board', kind='other')
+
+    def id_set(self, url):
+        return set(ids(self.client.get(url)))
+
+    def test_default_is_larp(self):
+        self.assertEqual(Game.objects.create(name='Без типа').kind, 'larp')
+        self.login(self.master)
+        response = self.client.post('/api/games/', {'name': 'Новая'}, format='json')
+        self.assertEqual(response.status_code, 201)
+        self.assertEqual(response.data['kind'], 'larp')
+
+    def test_roundtrip_and_nested_representations(self):
+        self.login(self.master)
+        response = self.client.post('/api/games/', {'name': 'Настолка', 'kind': 'other'}, format='json')
+        self.assertEqual(response.status_code, 201)
+        self.assertEqual(response.data['kind'], 'other')
+        game_id = response.data['id']
+        self.assertEqual(self.client.get(f'/api/games/{game_id}/').data['kind'], 'other')
+        item = next(g for g in self.client.get('/api/games/?page_size=100').data['results'] if g['id'] == game_id)
+        self.assertEqual(item['kind'], 'other')
+
+        # Вложенная игра прогона и расписания конвента
+        self.assertEqual(self.client.get(f'/api/runs/{self.run_convention.id}/').data['game']['kind'], 'ttrpg')
+        runs = self.client.get('/api/runs/?page_size=100').data['results']
+        self.assertEqual(next(r for r in runs if r['id'] == self.run_convention.id)['game']['kind'], 'ttrpg')
+        schedule = self.client.get(f'/api/convention-events/{self.event.id}/schedule/').data
+        run = next(r for r in schedule['runs'] if r['id'] == self.run_convention.id)
+        self.assertEqual(run['game']['kind'], 'ttrpg')
+
+    def test_change_and_invalid(self):
+        self.login(self.master)
+        url = f'/api/games/{self.game.id}/'
+        response = self.client.patch(url, {'kind': 'ttrpg'}, format='json')
+        self.assertEqual(response.status_code, 200)
+        self.assertEqual(response.data['kind'], 'ttrpg')
+        response = self.client.patch(url, {'kind': 'other'}, format='multipart')
+        self.assertEqual(response.status_code, 200)
+        self.assertEqual(response.data['kind'], 'other')
+        for value in ('board', 'КРИ', '', None):
+            response = self.client.patch(url, {'kind': value}, format='json')
+            self.assertEqual(response.status_code, 400, value)
+            self.assertIn('kind', response.data)
+        self.game.refresh_from_db()
+        self.assertEqual(self.game.kind, 'other')
+
+    def test_games_filter_by_kind(self):
+        all_ids = {self.game.id, self.game_other.id, self.game_board.id}
+        self.assertEqual(self.id_set('/api/games/?page_size=100'), all_ids)
+        self.assertEqual(self.id_set('/api/games/?kind='), all_ids)
+        self.assertEqual(self.id_set('/api/games/?kind=larp'), {self.game.id})
+        self.assertEqual(self.id_set('/api/games/?kind=other'), {self.game_board.id})
+        self.assertEqual(self.id_set('/api/games/?kind=larp,ttrpg'), {self.game.id, self.game_other.id})
+        self.assertEqual(self.id_set('/api/games/?kind=ttrpg,%20other,'), {self.game_other.id, self.game_board.id})
+        for value in ('board', 'larp,board', 'LARP'):
+            response = self.client.get(f'/api/games/?kind={value}')
+            self.assertEqual(response.status_code, 400, value)
+            self.assertIn('kind', response.data)
+
+    def test_runs_filter_by_game_kind(self):
+        url = '/api/runs/?time=all'
+        self.assertEqual(self.id_set(url), {
+            self.run_soon.id, self.run_convention.id, self.run_past.id, self.run_past_old.id,
+        })
+        self.assertEqual(self.id_set(f'{url}&game_kind=larp'), {self.run_soon.id, self.run_past.id})
+        self.assertEqual(self.id_set(f'{url}&game_kind=ttrpg'), {self.run_convention.id, self.run_past_old.id})
+        self.assertEqual(self.id_set(f'{url}&game_kind=other'), set())
+        self.assertEqual(len(self.id_set(f'{url}&game_kind=larp,ttrpg')), 4)
+        response = self.client.get(f'{url}&game_kind=board')
+        self.assertEqual(response.status_code, 400)
+        self.assertIn('game_kind', response.data)
 
 
 class RunWithoutPlayerLimitTests(ApiTestCase):

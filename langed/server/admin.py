@@ -79,15 +79,15 @@ class CsvImportForm(forms.Form):
 
 @admin.register(Game)
 class GameAdmin(admin.ModelAdmin):
-    list_display = ('name', 'get_creators', 'players_min', 'players_max', 'female_roles_min', 'female_roles_max', 
+    list_display = ('name', 'kind', 'get_creators', 'players_min', 'players_max', 'female_roles_min', 'female_roles_max', 
                     'male_roles_min', 'male_roles_max', 'technicians', 'created_at')
-    list_filter = ('created_at',)
+    list_filter = ('kind', 'created_at')
     search_fields = ('name', 'announcement', 'red_flags', 'authors_text', 'creators__username', 'creators__first_name', 'creators__last_name')
     filter_horizontal = ('creators',)
     change_list_template = 'admin/server/game/change_list.html'
     fieldsets = (
         ('Основная информация', {
-            'fields': ('name', 'creators', 'authors_text', 'source_url', 'age_rating', 'poster', 'announcement', 'red_flags')
+            'fields': ('name', 'kind', 'creators', 'authors_text', 'source_url', 'age_rating', 'poster', 'announcement', 'red_flags')
         }),
         ('Количество игроков', {
             'fields': (('players_min', 'players_max'),)

@@ -7,7 +7,7 @@ import { gamesApi } from '@/api/games'
 import { useAsyncData } from '@/composables/useAsyncData'
 import { usePageTitle } from '@/composables/usePageTitle'
 import { useToast } from '@/composables/useToast'
-import { AGE_RATINGS, safeHref } from '@/utils/game'
+import { AGE_RATINGS, DEFAULT_GAME_KIND, GAME_KINDS, safeHref } from '@/utils/game'
 import PosterField from '@/components/game/PosterField.vue'
 import RangeField from '@/components/game/RangeField.vue'
 import AppAlert from '@/components/ui/AppAlert.vue'
@@ -44,6 +44,7 @@ usePageTitle(() => (game.value ? `${game.value.name} — редактирова�
 
 const form = reactive({
   name: '',
+  kind: DEFAULT_GAME_KIND,
   announcement: '',
   redFlags: '',
   authorsText: '',
@@ -58,6 +59,7 @@ const form = reactive({
   technicians: '',
 })
 const ageRatingOptions = AGE_RATINGS.map((value) => ({ value, label: value }))
+const kindOptions = GAME_KINDS.map(({ value, label }) => ({ value, label }))
 const posterFile = ref(null)
 const posterRemoved = ref(false)
 const errors = ref({})
@@ -77,6 +79,7 @@ watch(game, (value) => {
   filledFor = value.id
   Object.assign(form, {
     name: value.name,
+    kind: value.kind,
     announcement: value.announcement,
     redFlags: value.redFlags,
     authorsText: value.authorsText,
@@ -134,6 +137,7 @@ function validate() {
 function payload() {
   const data = {
     name: form.name.trim(),
+    kind: form.kind,
     announcement: form.announcement.trim(),
     redFlags: form.redFlags.trim(),
     authorsText: form.authorsText.trim(),
@@ -161,6 +165,7 @@ function applyError(err) {
   if (err.hasFieldErrors) {
     errors.value = {
       name: err.field('name'),
+      kind: err.field('kind'),
       announcement: err.field('announcement'),
       redFlags: err.field('redFlags'),
       authorsText: err.field('authorsText'),
@@ -239,6 +244,14 @@ async function submit() {
 
         <FormField label="Название" :error="errors.name" required>
           <AppInput v-model="form.name" maxlength="255" autocomplete="off" />
+        </FormField>
+
+        <FormField
+          label="Тип"
+          :error="errors.kind"
+          hint="КРИ — кабинетная ролевая игра, НРИ — настольная ролевая, «Другое» — настольные и карточные игры, спектакли. По типу фильтруется каталог."
+        >
+          <AppSelect v-model="form.kind" :options="kindOptions" class="game-form__kind" />
         </FormField>
 
         <FormField
@@ -335,6 +348,7 @@ async function submit() {
   gap: var(--space-5);
   padding-bottom: var(--space-10);
 }
+.game-form__kind,
 .game-form__age {
   max-width: 12rem;
 }
