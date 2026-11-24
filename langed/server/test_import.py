@@ -251,7 +251,7 @@ class ImportAgeRatingTests(ImportBundleTestCase):
         self.assertEqual(Game.objects.get(name='Без рейтинга').age_rating, '')
 
     def test_invalid_age_rating_is_item_error(self):
-        result, _ = self.run_import({'games': [{'name': 'Неверная', 'age_rating': '21+'},
+        result, _ = self.run_import({'games': [{'name': 'Неверная', 'age_rating': '17+'},
                                                {'name': 'Без плюса', 'age_rating': '16'}]})
         self.assertEqual(result['errors'], 2)
         self.assertFalse(Game.objects.exists())

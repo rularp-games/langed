@@ -113,7 +113,7 @@ class Game(models.Model):
     age_rating = models.CharField(
         max_length=3,
         blank=True,
-        choices=[('0+', '0+'), ('6+', '6+'), ('12+', '12+'), ('16+', '16+'), ('18+', '18+')],
+        choices=[(value, value) for value in ('0+', '6+', '12+', '13+', '14+', '16+', '18+', '21+')],
         verbose_name='Возрастной рейтинг'
     )
 

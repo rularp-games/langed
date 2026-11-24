@@ -1598,7 +1598,7 @@ class GameAgeRatingTests(ApiTestCase):
         response = self.client.patch(url, {'age_rating': ''}, format='multipart')
         self.assertEqual(response.status_code, 200)
         self.assertEqual(response.data['age_rating'], '')
-        for value in ('21+', '18', None):
+        for value in ('17+', '18', None):
             response = self.client.patch(url, {'age_rating': value}, format='json')
             self.assertEqual(response.status_code, 400, value)
             self.assertIn('age_rating', response.data)
