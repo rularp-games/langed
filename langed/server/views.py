@@ -11,6 +11,7 @@ from django.shortcuts import get_object_or_404
 from django.utils import timezone
 from django.conf import settings
 from django.views.decorators.csrf import ensure_csrf_cookie
+from .exceptions import in_use_response
 
 logger = logging.getLogger(__name__)
 
@@ -27,7 +28,12 @@ def custom_exception_handler(exc, context):
         # Добавляем код ошибки для удобства отладки
         response.data['status_code'] = response.status_code
         return response
-    
+
+    # Удаление записи, на которую ссылаются другие записи (PROTECT/RESTRICT) — 409, а не 500
+    response = in_use_response(exc)
+    if response is not None:
+        return response
+
     # Если стандартный обработчик не обработал исключение,
     # логируем его и возвращаем generic JSON ответ
     logger.exception("Unhandled exception in API view", exc_info=exc)

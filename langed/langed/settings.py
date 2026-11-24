@@ -249,6 +249,19 @@ except ImportError:
 # Use database-backed sessions to ensure consistency across workers
 SESSION_ENGINE = 'django.contrib.sessions.backends.db'
 
+# Кэш (в нём счётчики троттлинга DRF) — в БД, общий для всех процессов uWSGI и подов.
+# Таблицу создаёт `manage.py createcachetable` (в initContainer рядом с migrate;
+# для локальной разработки — один раз вручную). Тесты используют LocMem (test_settings).
+try:
+    from langed.private_settings import CACHES
+except ImportError:
+    CACHES = {
+        'default': {
+            'BACKEND': 'django.core.cache.backends.db.DatabaseCache',
+            'LOCATION': 'django_cache',
+        },
+    }
+
 # Trust X-Forwarded headers from proxy
 SECURE_PROXY_SSL_HEADER = ('HTTP_X_FORWARDED_PROTO', 'https')
 USE_X_FORWARDED_HOST = True
