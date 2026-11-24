@@ -22,6 +22,8 @@ from django.http import HttpResponse
 from django.views.decorators.cache import never_cache
 import os
 
+from server.media import serve_media
+
 
 @never_cache
 def vue_app(request):
@@ -45,6 +47,8 @@ urlpatterns = [
     path('api/', include('server.urls')),
     # Классы authenticate/callback задаются в settings (OIDC_AUTHENTICATE_CLASS, OIDC_CALLBACK_CLASS)
     path('oidc/', include('mozilla_django_oidc.urls')),
+    # Загруженные файлы: из MEDIA_ROOT или через nginx из S3 (server/media.py)
+    path('media/<path:path>', serve_media, name='media'),
 ]
 
 # Catch-all для Vue Router — добавляется последним
@@ -52,8 +56,7 @@ urlpatterns += [
     re_path(r'^(?!(admin|api|static|media|oidc|mcp)/).*$', vue_app, name='vue_app'),
 ]
 
-# Для dev-режима: отдача статики и медиа Django
+# Для dev-режима: отдача статики Django
 if settings.DEBUG:
     urlpatterns += static(settings.STATIC_URL, document_root=settings.STATIC_ROOT)
-    urlpatterns += static(settings.MEDIA_URL, document_root=settings.MEDIA_ROOT)
 

@@ -10,3 +10,5 @@ django-auditlog==3.0.0
 sentry-sdk[django]==2.19.2
 django-mcp-server==0.5.7
 mcp==1.27.2
+django-storages==1.14.6
+boto3==1.43.127

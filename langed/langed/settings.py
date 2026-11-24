@@ -129,6 +129,18 @@ MEDIA_URL = 'media/'
 
 MEDIA_ROOT = BASE_DIR / 'media'
 
+# Хранилище media: S3 (MinIO), если MEDIA_S3 задан в private_settings, иначе MEDIA_ROOT.
+# Ключи MEDIA_S3: endpoint_url, bucket_name, access_key, secret_key, region_name, location.
+# Адреса файлов в обоих случаях — MEDIA_URL + путь; из S3 их отдаёт nginx пода (server/media.py).
+from langed.media_settings import build_storages
+
+try:
+    from langed.private_settings import MEDIA_S3
+except ImportError:
+    MEDIA_S3 = None
+
+STORAGES = build_storages(MEDIA_S3)
+
 # Default primary key field type
 # https://docs.djangoproject.com/en/5.2/ref/settings/#default-auto-field
 
