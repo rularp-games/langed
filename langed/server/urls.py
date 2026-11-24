@@ -3,7 +3,7 @@ from rest_framework.routers import DefaultRouter
 from .views import (
     GameViewSet, RunViewSet, ConventionViewSet, ConventionEventViewSet,
     CityViewSet, ConventionLinkViewSet, VenueViewSet, RoomViewSet, 
-    auth_urls, search_users
+    auth_urls, client_config, search_users
 )
 from .auth_api import (
     CurrentUserView, ProvidersView, LoginView, RegisterView, PasswordResetView, PasswordChangeView, LogoutView
@@ -23,6 +23,7 @@ urlpatterns = [
     path('', include(router.urls)),
     path('auth/user/', CurrentUserView.as_view(), name='current-user'),
     path('auth/urls/', auth_urls, name='auth-urls'),
+    path('config/', client_config, name='client-config'),
     path('auth/providers/', ProvidersView.as_view(), name='auth-providers'),
     path('auth/login/', LoginView.as_view(), name='auth-login'),
     path('auth/register/', RegisterView.as_view(), name='auth-register'),

@@ -3,7 +3,7 @@
 """
 from django.contrib.auth import get_user_model
 from django.db.models import RestrictedError
-from django.test import TestCase
+from django.test import TestCase, override_settings
 from django.utils import timezone
 from rest_framework.test import APIClient
 
@@ -57,3 +57,22 @@ class InUseDeleteTests(TestCase):
         self.assertEqual(response.status_code, 409)
         self.assertEqual(response.data['code'], 'in_use')
         self.assertEqual(response.data['detail'], 'Нельзя удалить: есть связанные записи (Площадки: 1)')
+
+
+class ClientConfigTests(TestCase):
+    """GET /api/config/ — настройки фронтенда со стенда"""
+
+    @override_settings(SENTRY_DSN='https://key@sentry.example/1', SENTRY_ENVIRONMENT='production')
+    def test_returns_sentry_settings_to_anonymous(self):
+        response = APIClient().get('/api/config/')
+
+        self.assertEqual(response.status_code, 200)
+        self.assertEqual(response.data, {
+            'sentry': {'dsn': 'https://key@sentry.example/1', 'environment': 'production'},
+        })
+
+    @override_settings(SENTRY_DSN='')
+    def test_empty_dsn(self):
+        response = APIClient().get('/api/config/')
+
+        self.assertEqual(response.data['sentry']['dsn'], '')

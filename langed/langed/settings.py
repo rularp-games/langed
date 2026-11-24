@@ -308,6 +308,8 @@ try:
     from langed.private_settings import SENTRY_DSN
 except ImportError:
     SENTRY_DSN = ''
+# Общее для бэкенда и фронтенда (фронт получает DSN и окружение из /api/config/)
+SENTRY_ENVIRONMENT = 'development' if DEBUG else 'production'
 
 if SENTRY_DSN:
     sentry_sdk.init(
@@ -320,7 +322,7 @@ if SENTRY_DSN:
         # Send default PII (like user info) - set to False if not needed
         send_default_pii=True,
         # Environment name
-        environment='development' if DEBUG else 'production',
+        environment=SENTRY_ENVIRONMENT,
     )
 
 # MCP Server (Model Context Protocol) for AI agents

@@ -170,6 +170,18 @@ def auth_urls(request):
     })
 
 
+@api_view(['GET'])
+@permission_classes([AllowAny])
+def client_config(request):
+    """Настройки фронтенда, зависящие от стенда: образ один на dev и prod, поэтому не при сборке"""
+    return Response({
+        'sentry': {
+            'dsn': settings.SENTRY_DSN,
+            'environment': settings.SENTRY_ENVIRONMENT,
+        },
+    })
+
+
 class CityViewSet(viewsets.ModelViewSet):
     """API для городов"""
     queryset = City.objects.all()
