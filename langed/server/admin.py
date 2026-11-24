@@ -45,7 +45,7 @@ class ConventionEventForm(forms.ModelForm):
 
     class Meta:
         model = ConventionEvent
-        fields = ['convention', 'city', 'date_start', 'date_end']
+        fields = ['convention', 'city', 'date_start', 'date_end', 'source_url']
 
 
 @admin.register(Region)
@@ -82,12 +82,12 @@ class GameAdmin(admin.ModelAdmin):
     list_display = ('name', 'get_creators', 'players_min', 'players_max', 'female_roles_min', 'female_roles_max', 
                     'male_roles_min', 'male_roles_max', 'technicians', 'created_at')
     list_filter = ('created_at',)
-    search_fields = ('name', 'announcement', 'red_flags', 'creators__username', 'creators__first_name', 'creators__last_name')
+    search_fields = ('name', 'announcement', 'red_flags', 'authors_text', 'creators__username', 'creators__first_name', 'creators__last_name')
     filter_horizontal = ('creators',)
     change_list_template = 'admin/server/game/change_list.html'
     fieldsets = (
         ('Основная информация', {
-            'fields': ('name', 'creators', 'poster', 'announcement', 'red_flags')
+            'fields': ('name', 'creators', 'authors_text', 'source_url', 'poster', 'announcement', 'red_flags')
         }),
         ('Количество игроков', {
             'fields': (('players_min', 'players_max'),)
@@ -155,14 +155,14 @@ class GameAdmin(admin.ModelAdmin):
                         'red_flags': row.get('Красные флаги', '').strip(),
                     }
                     
-                    # Числовые поля с значениями по умолчанию
+                    # Числовые поля и значения для пустой ячейки (None — не указано)
                     int_fields = {
-                        'Мин. игроков': ('players_min', 1),
-                        'Макс. игроков': ('players_max', 10),
-                        'Мин. женских ролей': ('female_roles_min', 0),
-                        'Макс. женских ролей': ('female_roles_max', 0),
-                        'Мин. мужских ролей': ('male_roles_min', 0),
-                        'Макс. мужских ролей': ('male_roles_max', 0),
+                        'Мин. игроков': ('players_min', None),
+                        'Макс. игроков': ('players_max', None),
+                        'Мин. женских ролей': ('female_roles_min', None),
+                        'Макс. женских ролей': ('female_roles_max', None),
+                        'Мин. мужских ролей': ('male_roles_min', None),
+                        'Макс. мужских ролей': ('male_roles_max', None),
                         'Игротехники': ('technicians', 0),
                     }
                     
@@ -247,7 +247,7 @@ class ConventionAdmin(admin.ModelAdmin):
     inlines = [ConventionLinkInline]
     fieldsets = (
         ('Основная информация', {
-            'fields': ('name', 'organizers', 'description')
+            'fields': ('name', 'organizers', 'description', 'source_url')
         }),
     )
     
@@ -285,6 +285,9 @@ class ConventionEventAdmin(admin.ModelAdmin):
             }),
             ('Даты', {
                 'fields': (('date_start', 'date_end'),)
+            }),
+            ('Источник', {
+                'fields': ('source_url',)
             }),
             ('Создание прогонов', {
                 'fields': ('selected_games',),

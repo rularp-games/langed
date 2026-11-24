@@ -7,6 +7,7 @@ import { gamesApi } from '@/api/games'
 import { useAsyncData } from '@/composables/useAsyncData'
 import { usePageTitle } from '@/composables/usePageTitle'
 import { useToast } from '@/composables/useToast'
+import { safeHref } from '@/utils/game'
 import PosterField from '@/components/game/PosterField.vue'
 import RangeField from '@/components/game/RangeField.vue'
 import AppAlert from '@/components/ui/AppAlert.vue'
@@ -44,8 +45,10 @@ const form = reactive({
   name: '',
   announcement: '',
   redFlags: '',
-  playersMin: 1,
-  playersMax: 10,
+  authorsText: '',
+  sourceUrl: '',
+  playersMin: '',
+  playersMax: '',
   femaleRolesMin: '',
   femaleRolesMax: '',
   maleRolesMin: '',
@@ -59,7 +62,9 @@ const formError = ref('')
 const saving = ref(false)
 const formEl = ref(null)
 
-/** Ноль в необязательных числовых полях показываем пустым: «не задано». */
+/** Число состава в поле формы: null (не указано) — пустое поле, 0 — ноль. */
+const countField = (value) => (value === null || value === undefined ? '' : Number(value))
+/** Игротехники не бывают «не указаны»: 0 показываем пустым. */
 const optional = (value) => (Number(value) > 0 ? Number(value) : '')
 
 // Форму заполняем один раз: повторная загрузка (вход/выход) не должна стирать введённое.
@@ -71,12 +76,14 @@ watch(game, (value) => {
     name: value.name,
     announcement: value.announcement,
     redFlags: value.redFlags,
-    playersMin: value.playersMin ?? '',
-    playersMax: value.playersMax ?? '',
-    femaleRolesMin: optional(value.femaleRolesMin),
-    femaleRolesMax: optional(value.femaleRolesMax),
-    maleRolesMin: optional(value.maleRolesMin),
-    maleRolesMax: optional(value.maleRolesMax),
+    authorsText: value.authorsText,
+    sourceUrl: value.sourceUrl,
+    playersMin: countField(value.playersMin),
+    playersMax: countField(value.playersMax),
+    femaleRolesMin: countField(value.femaleRolesMin),
+    femaleRolesMax: countField(value.femaleRolesMax),
+    maleRolesMin: countField(value.maleRolesMin),
+    maleRolesMax: countField(value.maleRolesMax),
     technicians: optional(value.technicians),
   })
   posterFile.value = null
@@ -90,9 +97,9 @@ function toCount(value) {
   return Number.isInteger(number) && number >= 0 ? number : Number.NaN
 }
 
-function rangeError(min, max, { required = false } = {}) {
+function rangeError(min, max, { positive = false } = {}) {
   if (Number.isNaN(min) || Number.isNaN(max)) return 'Укажите целые неотрицательные числа'
-  if (required && (!min || !max)) return 'Укажите число игроков: от и до, не меньше 1'
+  if (positive && (min === 0 || max === 0)) return 'Число игроков — не меньше 1'
   if (min !== null && max !== null && min > max) return '«От» не может быть больше «до»'
   return ''
 }
@@ -102,7 +109,12 @@ function validate() {
   if (!form.name.trim()) result.name = 'Укажите название игры'
   else if (form.name.trim().length > 255) result.name = 'Название длиннее 255 символов'
 
-  const players = rangeError(toCount(form.playersMin), toCount(form.playersMax), { required: true })
+  const sourceUrl = form.sourceUrl.trim()
+  if (sourceUrl && (!safeHref(sourceUrl) || sourceUrl.length > 500)) {
+    result.sourceUrl = 'Укажите адрес целиком, начиная с http:// или https://'
+  }
+
+  const players = rangeError(toCount(form.playersMin), toCount(form.playersMax), { positive: true })
   if (players) result.players = players
   const female = rangeError(toCount(form.femaleRolesMin), toCount(form.femaleRolesMax))
   if (female) result.female = female
@@ -114,26 +126,20 @@ function validate() {
   return Object.keys(result).length === 0
 }
 
-/** Незаполненная граница диапазона: «от 3» → 3–3, «до 5» → 0–5, пусто → 0–0. */
-function rangePayload(minValue, maxValue) {
-  const min = toCount(minValue)
-  const max = toCount(maxValue)
-  return [min ?? 0, max ?? min ?? 0]
-}
-
+/** Пустое поле состава — null («не указано»). */
 function payload() {
-  const [femaleRolesMin, femaleRolesMax] = rangePayload(form.femaleRolesMin, form.femaleRolesMax)
-  const [maleRolesMin, maleRolesMax] = rangePayload(form.maleRolesMin, form.maleRolesMax)
   const data = {
     name: form.name.trim(),
     announcement: form.announcement.trim(),
     redFlags: form.redFlags.trim(),
+    authorsText: form.authorsText.trim(),
+    sourceUrl: form.sourceUrl.trim(),
     playersMin: toCount(form.playersMin),
     playersMax: toCount(form.playersMax),
-    femaleRolesMin,
-    femaleRolesMax,
-    maleRolesMin,
-    maleRolesMax,
+    femaleRolesMin: toCount(form.femaleRolesMin),
+    femaleRolesMax: toCount(form.femaleRolesMax),
+    maleRolesMin: toCount(form.maleRolesMin),
+    maleRolesMax: toCount(form.maleRolesMax),
     technicians: toCount(form.technicians) ?? 0,
   }
   if (posterFile.value) data.poster = posterFile.value
@@ -152,6 +158,8 @@ function applyError(err) {
       name: err.field('name'),
       announcement: err.field('announcement'),
       redFlags: err.field('redFlags'),
+      authorsText: err.field('authorsText'),
+      sourceUrl: err.field('sourceUrl'),
       poster: err.field('poster'),
       players: err.field('playersMin') || err.field('playersMax'),
       female: err.field('femaleRolesMin') || err.field('femaleRolesMax'),
@@ -227,6 +235,14 @@ async function submit() {
           <AppInput v-model="form.name" maxlength="255" autocomplete="off" />
         </FormField>
 
+        <FormField
+          label="Авторы (текстом)"
+          :error="errors.authorsText"
+          hint="Для авторов, которых ещё нет на портале: «Имя Фамилия (ссылка на профиль)» через запятую — ссылки станут кликабельными. Зарегистрированных авторов добавляйте на странице игры: они смогут её редактировать."
+        >
+          <AppTextarea v-model="form.authorsText" rows="2" />
+        </FormField>
+
         <div>
           <PosterField v-model:file="posterFile" v-model:removed="posterRemoved" :current="game?.poster" :disabled="saving" />
           <p v-if="errors.poster" class="game-form__error" role="alert">{{ errors.poster }}</p>
@@ -248,6 +264,14 @@ async function submit() {
           <AppTextarea v-model="form.redFlags" rows="4" />
         </FormField>
 
+        <FormField
+          label="Ссылка на источник"
+          :error="errors.sourceUrl"
+          hint="Пост или страница, откуда взят анонс, например запись во ВКонтакте."
+        >
+          <AppInput v-model="form.sourceUrl" type="url" inputmode="url" maxlength="500" autocomplete="off" placeholder="https://" />
+        </FormField>
+
         <fieldset class="game-form__numbers">
           <legend>Состав</legend>
           <div class="game-form__grid">
@@ -256,7 +280,6 @@ async function submit() {
               v-model:max="form.playersMax"
               label="Игроки"
               :error="errors.players"
-              required
             />
             <RangeField
               v-model:min="form.femaleRolesMin"
@@ -275,7 +298,8 @@ async function submit() {
             </FormField>
           </div>
           <p class="game-form__note">
-            Роли и игротехников можно не указывать — незаполненные параметры на странице игры не показываются.
+            Любое поле можно оставить пустым — «не указано», такие параметры на странице игры не показываются.
+            0 в ролях означает, что ролей этого типа нет.
           </p>
         </fieldset>
 

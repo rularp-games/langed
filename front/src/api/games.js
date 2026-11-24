@@ -5,6 +5,7 @@ export { normalizeGame }
 
 /**
  * Тело запроса создания/изменения игры. Поля — в camelCase, все необязательны (PATCH).
+ * Числа состава: null — не указано.
  * poster: File — загрузить (запрос уйдёт как multipart); null — убрать постер; не задан — не менять.
  */
 function gamePayload(data) {
@@ -12,6 +13,8 @@ function gamePayload(data) {
     name: data.name,
     announcement: data.announcement,
     red_flags: data.redFlags,
+    authors_text: data.authorsText,
+    source_url: data.sourceUrl,
     players_min: data.playersMin,
     players_max: data.playersMax,
     female_roles_min: data.femaleRolesMin,

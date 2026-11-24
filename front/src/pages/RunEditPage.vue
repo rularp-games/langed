@@ -148,7 +148,7 @@ const durationHint = computed(() => {
 const maxPlayersHint = computed(() =>
   form.game?.playersMax
     ? `Пусто — по игре: до ${form.game.playersMax}`
-    : 'Пусто — максимум игроков берётся из игры',
+    : form.game ? 'Пусто — без ограничения: у игры максимум не указан' : 'Пусто — максимум игроков берётся из игры',
 )
 
 // --- Новый город ---

@@ -1,13 +1,14 @@
 <script setup>
 import { computed, ref } from 'vue'
 import { useRouter } from 'vue-router'
-import { Link, Pencil, Trash2 } from '@lucide/vue'
+import { ExternalLink, Link, Pencil, Trash2 } from '@lucide/vue'
 import { gamesApi } from '@/api/games'
 import { useAsyncData } from '@/composables/useAsyncData'
 import { useConfirm } from '@/composables/useConfirm'
 import { usePageTitle } from '@/composables/usePageTitle'
 import { useToast } from '@/composables/useToast'
-import { gameFacts } from '@/utils/game'
+import { gameFacts, safeHref } from '@/utils/game'
+import AuthorsText from '@/components/game/AuthorsText.vue'
 import GameRuns from '@/components/game/GameRuns.vue'
 import PeopleEditor from '@/components/PeopleEditor.vue'
 import PosterImage from '@/components/PosterImage.vue'
@@ -32,6 +33,10 @@ const { data: game, error, reload } = useAsyncData((signal) => gamesApi.get(prop
 usePageTitle(() => game.value?.name)
 
 const facts = computed(() => (game.value ? gameFacts(game.value) : []))
+const sourceHref = computed(() => safeHref(game.value?.sourceUrl))
+const authorsTitle = computed(() =>
+  game.value?.creators.length === 1 && !game.value.authorsText ? 'Автор' : 'Авторы',
+)
 const deleting = ref(false)
 
 async function copyLink() {
@@ -140,11 +145,11 @@ async function removeGame() {
             </dl>
           </section>
 
-          <section v-if="game.creators.length || game.canEdit" aria-labelledby="game-creators">
-            <h2 id="game-creators" class="game__aside-title">
-              {{ game.creators.length === 1 ? 'Автор' : 'Авторы' }}
-            </h2>
+          <section v-if="game.creators.length || game.authorsText || game.canEdit" aria-labelledby="game-creators">
+            <h2 id="game-creators" class="game__aside-title">{{ authorsTitle }}</h2>
+            <!-- Сначала пользователи портала (могут редактировать игру), затем авторы текстом. -->
             <PeopleEditor
+              v-if="game.creators.length || game.canEdit"
               :people="game.creators"
               :editable="game.canEdit"
               :min="1"
@@ -152,9 +157,19 @@ async function removeGame() {
               :remove="removeCreator"
               add-label="Добавить автора"
               remove-title="Убрать автора?"
-              empty-text="Авторы не указаны"
+              :empty-text="game.authorsText ? 'Пользователи портала не привязаны' : 'Авторы не указаны'"
+            />
+            <AuthorsText
+              v-if="game.authorsText"
+              :text="game.authorsText"
+              :class="{ 'game__authors-text--after': game.creators.length || game.canEdit }"
             />
           </section>
+
+          <a v-if="sourceHref" :href="sourceHref" target="_blank" rel="noopener noreferrer nofollow" class="game__source">
+            <ExternalLink :size="16" aria-hidden="true" />
+            Источник
+          </a>
         </aside>
       </article>
     </template>
@@ -211,6 +226,16 @@ async function removeGame() {
 }
 .game__facts {
   border-top: 1px solid var(--border);
+}
+.game__authors-text--after {
+  margin-top: var(--space-3);
+}
+.game__source {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--space-2);
+  align-self: flex-start;
+  min-height: 1.75rem;
 }
 .game__facts div {
   display: flex;

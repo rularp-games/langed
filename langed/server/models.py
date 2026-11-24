@@ -104,16 +104,23 @@ class Game(models.Model):
     )
     announcement = models.TextField(blank=True, verbose_name='Анонс')
     red_flags = models.TextField(blank=True, verbose_name='Красные флаги')
-    
-    players_min = models.PositiveIntegerField(default=1, verbose_name='Минимум игроков')
-    players_max = models.PositiveIntegerField(default=10, verbose_name='Максимум игроков')
-    
-    female_roles_min = models.PositiveIntegerField(default=0, verbose_name='Минимум женских ролей')
-    female_roles_max = models.PositiveIntegerField(default=0, verbose_name='Максимум женских ролей')
-    
-    male_roles_min = models.PositiveIntegerField(default=0, verbose_name='Минимум мужских ролей')
-    male_roles_max = models.PositiveIntegerField(default=0, verbose_name='Максимум мужских ролей')
-    
+    authors_text = models.TextField(
+        blank=True,
+        verbose_name='Авторы (текстом)',
+        help_text='Авторы, ещё не зарегистрированные на портале: «Имя Фамилия (ссылка), …»'
+    )
+    source_url = models.URLField(max_length=500, blank=True, verbose_name='Источник')
+
+    # Состав игры: null — не указано (нет ограничения)
+    players_min = models.PositiveIntegerField(null=True, blank=True, verbose_name='Минимум игроков')
+    players_max = models.PositiveIntegerField(null=True, blank=True, verbose_name='Максимум игроков')
+
+    female_roles_min = models.PositiveIntegerField(null=True, blank=True, verbose_name='Минимум женских ролей')
+    female_roles_max = models.PositiveIntegerField(null=True, blank=True, verbose_name='Максимум женских ролей')
+
+    male_roles_min = models.PositiveIntegerField(null=True, blank=True, verbose_name='Минимум мужских ролей')
+    male_roles_max = models.PositiveIntegerField(null=True, blank=True, verbose_name='Максимум мужских ролей')
+
     technicians = models.PositiveIntegerField(default=0, verbose_name='Игротехники')
     
     created_at = models.DateTimeField(auto_now_add=True, verbose_name='Дата создания')
@@ -128,12 +135,17 @@ class Game(models.Model):
         return self.name
 
     def clean(self):
-        if self.players_min > self.players_max:
-            raise ValidationError('Минимум игроков не может быть больше максимума')
-        if self.female_roles_min > self.female_roles_max:
-            raise ValidationError('Минимум женских ролей не может быть больше максимума')
-        if self.male_roles_min > self.male_roles_max:
-            raise ValidationError('Минимум мужских ролей не может быть больше максимума')
+        # Сравниваем только заполненные границы: null — не указано
+        ranges = (
+            ('players', 'Минимум игроков не может быть больше максимума'),
+            ('female_roles', 'Минимум женских ролей не может быть больше максимума'),
+            ('male_roles', 'Минимум мужских ролей не может быть больше максимума'),
+        )
+        for prefix, message in ranges:
+            low = getattr(self, f'{prefix}_min')
+            high = getattr(self, f'{prefix}_max')
+            if low is not None and high is not None and low > high:
+                raise ValidationError(message)
 
 
 class Convention(models.Model):
@@ -147,6 +159,7 @@ class Convention(models.Model):
         blank=True
     )
     description = models.TextField(blank=True, verbose_name='Описание')
+    source_url = models.URLField(max_length=500, blank=True, verbose_name='Источник')
     
     created_at = models.DateTimeField(auto_now_add=True, verbose_name='Дата создания')
     updated_at = models.DateTimeField(auto_now=True, verbose_name='Дата обновления')
@@ -251,6 +264,7 @@ class ConventionEvent(models.Model):
         default=False,
         verbose_name='Регистрация открыта'
     )
+    source_url = models.URLField(max_length=500, blank=True, verbose_name='Источник')
     
     created_at = models.DateTimeField(auto_now_add=True, verbose_name='Дата создания')
     updated_at = models.DateTimeField(auto_now=True, verbose_name='Дата обновления')
@@ -416,7 +430,10 @@ class Run(models.Model):
                 raise ValidationError(error)
     
     def get_max_players(self):
-        """Возвращает максимальное количество игроков для этого прогона"""
+        """
+        Максимальное количество игроков для этого прогона: лимит прогона, иначе максимум игры.
+        None — лимита нет (в игре максимум не указан).
+        """
         if self.max_players is not None:
             return self.max_players
         return self.game.players_max
@@ -429,13 +446,15 @@ class Run(models.Model):
         ).count()
     
     def get_available_slots(self):
-        """Возвращает количество свободных мест"""
+        """Возвращает количество свободных мест (None, если лимита нет)"""
         max_players = self.get_max_players()
+        if max_players is None:
+            return None
         registered = self.get_registered_count()
         return max(0, max_players - registered)
     
     def is_full(self):
-        """Проверяет, заполнен ли прогон"""
+        """Проверяет, заполнен ли прогон (без лимита — никогда)"""
         return self.get_available_slots() == 0
 
 

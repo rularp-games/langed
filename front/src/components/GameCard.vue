@@ -1,6 +1,6 @@
 <script setup>
 import { computed } from 'vue'
-import { gameFacts } from '@/utils/game'
+import { gameAuthorsLine, gameFacts } from '@/utils/game'
 import AppCard from './ui/AppCard.vue'
 import PosterImage from './PosterImage.vue'
 
@@ -10,7 +10,8 @@ const props = defineProps({
 })
 
 const facts = computed(() => gameFacts(props.game))
-const creators = computed(() => props.game.creators.map((creator) => creator.displayName).join(', '))
+// Карточка целиком — ссылка, поэтому ссылки из авторов текстом здесь не показываем.
+const creators = computed(() => gameAuthorsLine(props.game))
 </script>
 
 <template>

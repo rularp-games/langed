@@ -151,15 +151,18 @@ class RunCountersMixin:
         return self._registered(obj)
 
     def get_available_slots(self, obj):
-        """Количество свободных мест"""
-        return max(0, obj.get_max_players() - self._registered(obj))
+        """Количество свободных мест (None — лимита нет)"""
+        max_players = obj.get_max_players()
+        if max_players is None:
+            return None
+        return max(0, max_players - self._registered(obj))
 
     def get_is_full(self, obj):
-        """Заполнен ли прогон"""
+        """Заполнен ли прогон (без лимита — никогда)"""
         return self.get_available_slots(obj) == 0
 
     def get_effective_max_players(self, obj):
-        """Эффективный максимум игроков"""
+        """Эффективный максимум игроков (None — лимита нет)"""
         return obj.get_max_players()
 
 
@@ -302,7 +305,7 @@ class GameListSerializer(serializers.ModelSerializer):
     class Meta:
         model = Game
         fields = [
-            'id', 'name', 'creators', 'poster', 'announcement_excerpt',
+            'id', 'name', 'creators', 'authors_text', 'source_url', 'poster', 'announcement_excerpt',
             'players_min', 'players_max',
             'female_roles_min', 'female_roles_max',
             'male_roles_min', 'male_roles_max',
@@ -352,7 +355,8 @@ class GameSerializer(serializers.ModelSerializer):
     class Meta:
         model = Game
         fields = [
-            'id', 'name', 'creators', 'poster', 'poster_url', 'announcement', 'red_flags',
+            'id', 'name', 'creators', 'authors_text', 'source_url',
+            'poster', 'poster_url', 'announcement', 'red_flags',
             'players_min', 'players_max',
             'female_roles_min', 'female_roles_max',
             'male_roles_min', 'male_roles_max',
@@ -390,18 +394,22 @@ class GameSerializer(serializers.ModelSerializer):
         return value
 
     def validate(self, attrs):
-        """Минимум не больше максимума — для игроков, женских и мужских ролей"""
+        """
+        Минимум не больше максимума — для игроков, женских и мужских ролей.
+        Незаполненная граница (null — не указано) не сравнивается.
+        """
         def current(field_name):
-            # Значение из запроса, иначе сохранённое, иначе значение модели по умолчанию
+            # Значение из запроса, иначе сохранённое (у новой игры — не указано)
             if field_name in attrs:
                 return attrs[field_name]
             if self.instance is not None:
                 return getattr(self.instance, field_name)
-            return Game._meta.get_field(field_name).default
+            return None
 
         errors = {}
         for prefix, message in RANGE_ERRORS.items():
-            if current(f'{prefix}_min') > current(f'{prefix}_max'):
+            low, high = current(f'{prefix}_min'), current(f'{prefix}_max')
+            if low is not None and high is not None and low > high:
                 errors[f'{prefix}_max'] = [message]
         if errors:
             raise serializers.ValidationError(errors)
@@ -443,7 +451,7 @@ class ConventionSerializer(serializers.ModelSerializer):
     class Meta:
         model = Convention
         fields = [
-            'id', 'name', 'organizers', 'description', 'events_count', 'links',
+            'id', 'name', 'organizers', 'description', 'source_url', 'events_count', 'links',
             'can_edit', 'created_at', 'updated_at'
         ]
         read_only_fields = ['id', 'organizers', 'created_at', 'updated_at', 'can_edit']
@@ -717,7 +725,7 @@ class ConventionScheduleSerializer(EventCountersMixin, serializers.ModelSerializ
             'city', 'city_name', 'city_timezone', 'date_start', 'date_end',
             'venue', 'venue_name', 'venue_rooms',
             'organizers', 'convention_organizers', 'links',
-            'runs', 'common_events', 'venues', 'games', 'can_edit',
+            'runs', 'common_events', 'venues', 'games', 'can_edit', 'source_url',
             # Поля регистрации
             'registration_open', 'capacity', 'registrations_count', 
             'pending_registrations_count', 'available_slots', 'is_full',
@@ -840,7 +848,7 @@ class ConventionEventSerializer(EventCountersMixin, serializers.ModelSerializer)
             'id', 'convention', 'convention_id', 'convention_name', 
             'city', 'city_name', 'city_id',
             'venue', 'venue_name', 'venue_id',
-            'date_start', 'date_end', 'description', 'links',
+            'date_start', 'date_end', 'description', 'links', 'source_url',
             'capacity', 'registration_open',
             'organizers', 'games', 'runs', 'runs_count',
             'registrations_count', 'pending_registrations_count', 

@@ -75,8 +75,10 @@ export function normalizeVenueBrief(raw) {
 /**
  * Игра: полный, списочный и краткие виды.
  * {id, name, poster, playersMin, playersMax, femaleRolesMin, femaleRolesMax, maleRolesMin,
- *  maleRolesMax, technicians, creators[], announcementExcerpt, announcement, redFlags,
- *  canEdit, createdAt, updatedAt}
+ *  maleRolesMax, technicians, creators[], authorsText, sourceUrl, announcementExcerpt,
+ *  announcement, redFlags, canEdit, createdAt, updatedAt}
+ * Числа состава: null — не указано. authorsText — авторы, не зарегистрированные на портале
+ * (свободный текст, может содержать ссылки).
  */
 export function normalizeGame(raw) {
   if (!raw) return null
@@ -92,6 +94,8 @@ export function normalizeGame(raw) {
     maleRolesMax: raw.male_roles_max ?? null,
     technicians: raw.technicians ?? null,
     creators: normalizePeople(raw.creators),
+    authorsText: raw.authors_text ?? '',
+    sourceUrl: raw.source_url ?? '',
     announcementExcerpt: raw.announcement_excerpt ?? '',
     announcement: raw.announcement ?? '',
     redFlags: raw.red_flags ?? '',

@@ -191,7 +191,7 @@ class GameApiTests(ApiTestCase):
         response = self.client.get('/api/games/')
         item = next(g for g in response.data['results'] if g['id'] == self.game.id)
         self.assertEqual(set(item), {
-            'id', 'name', 'creators', 'poster', 'announcement_excerpt',
+            'id', 'name', 'creators', 'authors_text', 'source_url', 'poster', 'announcement_excerpt',
             'players_min', 'players_max', 'female_roles_min', 'female_roles_max',
             'male_roles_min', 'male_roles_max', 'technicians', 'can_edit',
         })
@@ -1306,10 +1306,10 @@ class GameValidationTests(ApiTestCase):
         }, format='json')
         self.assertEqual(response.status_code, 400)
         self.assertEqual({'players_max', 'female_roles_max'}, set(response.data) - {'status_code'})
-        # Значение по умолчанию для второго конца диапазона (players_max = 10)
+        # Незаполненная граница (null — не указано) не сравнивается
         response = self.client.post('/api/games/', {'name': 'Много игроков', 'players_min': 11}, format='json')
-        self.assertEqual(response.status_code, 400)
-        self.assertIn('players_max', response.data)
+        self.assertEqual(response.status_code, 201)
+        self.assertEqual((response.data['players_min'], response.data['players_max']), (11, None))
         response = self.client.post('/api/games/', {'name': 'Равные', 'players_min': 3, 'players_max': 3}, format='json')
         self.assertEqual(response.status_code, 201)
 
@@ -1500,3 +1500,98 @@ class ModelCleanTimezoneTests(ApiTestCase):
         common_event.date = self.local_midnight_plus(self.event.date_end + timedelta(days=1), 30)
         with self.assertRaises(ValidationError):
             common_event.clean()
+
+
+class GameAuthorsAndSourceTests(ApiTestCase):
+    """Авторы текстом, ссылка на источник и незаполненный состав игры"""
+
+    def test_authors_text_and_source_url_roundtrip(self):
+        self.login(self.master)
+        response = self.client.post('/api/games/', {
+            'name': 'Из ВК', 'authors_text': 'Анна Смирнова (https://vk.com/anna), Иван',
+            'source_url': 'https://vk.com/wall-1_2',
+        }, format='json')
+        self.assertEqual(response.status_code, 201)
+        self.assertEqual(response.data['authors_text'], 'Анна Смирнова (https://vk.com/anna), Иван')
+        self.assertEqual(response.data['source_url'], 'https://vk.com/wall-1_2')
+        game_id = response.data['id']
+        item = next(g for g in self.client.get('/api/games/?page_size=100').data['results'] if g['id'] == game_id)
+        self.assertEqual(item['authors_text'], 'Анна Смирнова (https://vk.com/anna), Иван')
+        self.assertEqual(item['source_url'], 'https://vk.com/wall-1_2')
+        response = self.client.patch(f'/api/games/{game_id}/', {'source_url': 'не ссылка'}, format='json')
+        self.assertEqual(response.status_code, 400)
+        self.assertIn('source_url', response.data)
+
+    def test_new_game_counts_are_not_specified(self):
+        self.login(self.master)
+        response = self.client.post('/api/games/', {'name': 'Пустой состав'}, format='json')
+        self.assertEqual(response.status_code, 201)
+        for field in ('players_min', 'players_max', 'female_roles_min', 'female_roles_max',
+                      'male_roles_min', 'male_roles_max'):
+            self.assertIsNone(response.data[field], field)
+        self.assertEqual(response.data['technicians'], 0)
+
+    def test_counts_can_be_cleared(self):
+        self.login(self.master)
+        url = f'/api/games/{self.game.id}/'
+        response = self.client.patch(url, {'players_max': None, 'female_roles_min': 0, 'female_roles_max': 2},
+                                     format='json')
+        self.assertEqual(response.status_code, 200)
+        self.assertIsNone(response.data['players_max'])
+        self.assertEqual((response.data['female_roles_min'], response.data['female_roles_max']), (0, 2))
+        # Пустые поля формы (multipart) — тоже «не указано»
+        response = self.client.patch(url, {'female_roles_min': '', 'female_roles_max': ''}, format='multipart')
+        self.assertEqual(response.status_code, 200)
+        self.assertIsNone(response.data['female_roles_max'])
+
+    def test_convention_and_event_source_url(self):
+        self.login(self.conv_organizer)
+        response = self.client.patch(f'/api/conventions/{self.convention.id}/',
+                                     {'source_url': 'https://vk.com/con'}, format='json')
+        self.assertEqual(response.status_code, 200)
+        self.assertEqual(response.data['source_url'], 'https://vk.com/con')
+        self.assertEqual(self.client.get(f'/api/conventions/{self.convention.id}/').data['source_url'],
+                         'https://vk.com/con')
+        response = self.client.patch(f'/api/convention-events/{self.event.id}/',
+                                     {'source_url': 'https://vk.com/wall-1_3'}, format='json')
+        self.assertEqual(response.status_code, 200)
+        self.assertEqual(self.client.get(f'/api/convention-events/{self.event.id}/').data['source_url'],
+                         'https://vk.com/wall-1_3')
+        self.assertEqual(self.client.get(f'/api/convention-events/{self.event.id}/schedule/').data['source_url'],
+                         'https://vk.com/wall-1_3')
+
+
+class RunWithoutPlayerLimitTests(ApiTestCase):
+    """Без максимума в игре и в прогоне лимита нет: запись идёт, прогон не бывает заполнен"""
+
+    def setUp(self):
+        super().setUp()
+        self.game_free = Game.objects.create(name='Без лимита')
+        self.run_free = Run.objects.create(game=self.game_free, date=timezone.now() + timedelta(days=3),
+                                           city=self.moscow)
+
+    def test_counters_and_registration(self):
+        self.assertIsNone(self.run_free.get_max_players())
+        self.assertIsNone(self.run_free.get_available_slots())
+        self.assertFalse(self.run_free.is_full())
+        response = self.client.get(f'/api/runs/{self.run_free.id}/')
+        self.assertIsNone(response.data['effective_max_players'])
+        self.assertIsNone(response.data['available_slots'])
+        self.assertFalse(response.data['is_full'])
+        item = next(r for r in self.client.get('/api/runs/?page_size=100').data['results']
+                    if r['id'] == self.run_free.id)
+        self.assertIsNone(item['available_slots'])
+        self.login(self.player)
+        response = self.client.post(f'/api/runs/{self.run_free.id}/register/', {})
+        self.assertEqual(response.status_code, 201)
+        self.assertEqual(response.data['registration']['status'], 'pending')
+        self.assertIsNone(response.data['run']['available_slots'])
+
+    def test_run_limit_applies_without_game_limit(self):
+        self.run_free.max_players = 1
+        self.run_free.save()
+        Registration.objects.create(run=self.run_free, user=self.stranger, status='confirmed')
+        self.login(self.player)
+        response = self.client.post(f'/api/runs/{self.run_free.id}/register/', {})
+        self.assertEqual(response.status_code, 201)
+        self.assertEqual(response.data['registration']['status'], 'waitlist')
